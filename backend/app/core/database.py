@@ -1,15 +1,13 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import MetaData
-import os
-from dotenv import load_dotenv
+from app.core.config import get_settings
 
-load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")  # z.B. postgresql+asyncpg://user:pass@localhost:5432/fhir_verity
+settings = get_settings() 
 
 engine = create_async_engine(
-    DATABASE_URL,
+    settings.DATABASE_URL,
     echo=False,                    # auf True nur im Dev
     pool_pre_ping=True,
     pool_size=10,
