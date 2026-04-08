@@ -1,6 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import MetaData
 from app.core.config import get_settings
 
 
@@ -8,12 +7,13 @@ settings = get_settings()
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=False,                    # auf True nur im Dev
+    echo= settings.ENVIRONMENT == "development",                      
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,
 )
 
+# Async Session Local
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
