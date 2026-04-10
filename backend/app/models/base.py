@@ -8,5 +8,5 @@ class Base(DeclarativeBase):
 
 class TimestampMixin:
     """ Mixin for timestamp columns."""
-    created_at = Column(DateTime(timezone=True), default=datetime.utc, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utc, onupdate=datetime.utc, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now, nullable=False)

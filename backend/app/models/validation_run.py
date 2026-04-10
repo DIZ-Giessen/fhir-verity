@@ -20,7 +20,7 @@ class ValidationRun(Base, TimestampMixin):
     total_processed = Column(Integer, default=0)
     total_invalid = Column(Integer, default=0)
     status = Column(SQLEnum(ValidationStatus), default=ValidationStatus.RUNNING)
-    started_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utc)
+    started_at = Column(DateTime(timezone=True), nullable=False, default=datetime.now)
     finished_at = Column(DateTime(timezone=True), nullable=True)
     verification_result = Column(JSON, nullable=True)
     test_report = Column(JSON, nullable=True)

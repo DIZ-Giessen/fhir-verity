@@ -1,4 +1,4 @@
-import fastapi, APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
@@ -23,7 +23,7 @@ async def create_fhir_server(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="FHIR Server with this base URL already exists")
     new_server = FhirServer(
         name=server_in.name,
-        base_url=server_in.base_url,
+        base_url=str(server_in.base_url),  # HttpUrl to string conversion
         project_id=server_in.project_id,
         auth_config=server_in.auth_config,
         is_active=True
