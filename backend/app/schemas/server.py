@@ -1,6 +1,6 @@
 
 from pydantic import BaseModel, HttpUrl
-from typing import Optional, Dict 
+from typing import Optional, Dict, Any 
 
 from uuid import UUID 
 
@@ -9,7 +9,7 @@ class FhirServerCreate(BaseModel):
     name: str
     base_url: HttpUrl
     project_id: Optional[UUID] = None
-    auth_config: Optional[Dict] = None
+    auth_config: Optional[Dict[str, Any]] = None
 
 class FhirServerRead(BaseModel):
     """Schema for reading a FHIR server."""
@@ -20,7 +20,6 @@ class FhirServerRead(BaseModel):
     is_active: bool
     created_at: str
     updated_at: str
-
-class Config:
-    from_attributes = True # Konvertiere SQLAlchemy Models zu Pydantic Models
+    class Config:
+        from_attributes = True # Konvertiere SQLAlchemy Models zu Pydantic Models
 

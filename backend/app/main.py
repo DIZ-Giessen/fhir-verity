@@ -49,4 +49,4 @@ async def root():
 
 # Include Routers
 app.include_router(servers.router, prefix="/api/v1", tags=["servers"])
-# app.include_router(validation.router, prefix="/api/v1", tags=["validation"])
+app.include_router(validation.router, prefix="/api/v1", tags=["validation"])
