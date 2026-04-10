@@ -35,7 +35,7 @@ async def create_fhir_server(
 
     return new_server
 
-@router.get("/servers", response_model=List[FhirServerRead])
+@router.get("/servers", response_model=list[FhirServerRead])
 async def list_fhir_servers(
     db: AsyncSession = Depends(get_db),
     skip: int = 0,

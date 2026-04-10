@@ -4,14 +4,14 @@ from typing import Optional, Dict
 
 from uuid import UUID 
 
-class FhirserverCreate(BaseModel):
+class FhirServerCreate(BaseModel):
     """Schema for creating a new FHIR server."""
     name: str
     base_url: HttpUrl
     project_id: Optional[UUID] = None
     auth_config: Optional[Dict] = None
 
-class FhirserverRead(BaseModel):
+class FhirServerRead(BaseModel):
     """Schema for reading a FHIR server."""
     id: UUID
     name: str

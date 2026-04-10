@@ -3,6 +3,9 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    PROJECT_NAME: str = "FHIR Verity"
+    PROJECT_DESCRIPTION: str
+    PROJECT_VERSION: str = "1.0.0"
     DATABASE_URL: str
     ENVIRONMENT: str = "development"
     BACKEND_HOST: str = "0.0.0.0"

@@ -21,7 +21,7 @@ app = FastAPI(
 )
 
 # CORS // Frontend Communication 
-app.middleware(
+app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
@@ -42,5 +42,5 @@ async def root():
     return {"message": "Welcome to the FHIR Verity API", "version": settings.PROJECT_VERSION}
 
 # Include Routers
-app.include_router(servers.router, prefix="/api/v1/", tags=["servers"])
-app.include_router(validation.router, prefix="/api/v1/", tags=["validation"])
+app.include_router(servers.router, prefix="/api/v1", tags=["servers"])
+# app.include_router(validation.router, prefix="/api/v1", tags=["validation"])
