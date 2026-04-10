@@ -29,12 +29,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+""" 
 @app.on_event("startup")
 async def startup_event():
     if settings.ENVIRONMENT == "development":
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-            print("Database tables created")
+        try: 
+            from app.models import Base, FhirServer, ValidationRun, InvalidResource
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+                print("Database tables created")
+        except Exception as e:
+            print(f"Error creating database tables: {e}")
+"""
 
 
 @app.get("/")
