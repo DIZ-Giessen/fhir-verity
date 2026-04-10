@@ -31,13 +31,16 @@ app.middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    async with engine.begin() as conn:
-        if settings.ENVIRONMENT == "development":
+    if settings.ENVIRONMENT == "development":
+        async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            print("Database tables created")
 
-app.include_router(servers.router, prefix="/api/v1/", tags=["servers"])
-app.include_router(validation.router, prefix="/api/v1/", tags=["validation"])
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to the FHIR Verity API"}
+    return {"message": "Welcome to the FHIR Verity API", "version": settings.PROJECT_VERSION}
+
+# Include Routers
+app.include_router(servers.router, prefix="/api/v1/", tags=["servers"])
+app.include_router(validation.router, prefix="/api/v1/", tags=["validation"])
