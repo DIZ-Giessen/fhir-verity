@@ -1,4 +1,4 @@
-
+from datetime import datetime
 from pydantic import BaseModel, HttpUrl
 from typing import Optional, Dict, Any 
 
@@ -8,7 +8,7 @@ class FhirServerCreate(BaseModel):
     """Schema for creating a new FHIR server."""
     name: str
     base_url: HttpUrl
-    project_id: Optional[UUID] = None
+    project_id: str = None
     auth_config: Optional[Dict[str, Any]] = None
 
 class FhirServerRead(BaseModel):
@@ -16,10 +16,11 @@ class FhirServerRead(BaseModel):
     id: UUID
     name: str
     base_url: str
-    project_id: Optional[UUID] = None 
+    project_id: str = None 
     is_active: bool
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
     class Config:
         from_attributes = True # Konvertiere SQLAlchemy Models zu Pydantic Models
 
+    

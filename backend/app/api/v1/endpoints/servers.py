@@ -13,9 +13,9 @@ async def create_fhir_server(
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new FHIR server."""
-
+    base_url_str = str(server_in.base_url)
     #Prüfen ob Base-Url schon existiert.
-    stmt = select(FhirServer).where(FhirServer.base_url == server_in.base_url)
+    stmt = select(FhirServer).where(FhirServer.base_url == base_url_str)
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
 
@@ -23,7 +23,7 @@ async def create_fhir_server(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="FHIR Server with this base URL already exists")
     new_server = FhirServer(
         name=server_in.name,
-        base_url=str(server_in.base_url),  # HttpUrl to string conversion
+        base_url=base_url_str, 
         project_id=server_in.project_id,
         auth_config=server_in.auth_config,
         is_active=True
@@ -33,7 +33,15 @@ async def create_fhir_server(
     await db.commit() 
     await db.refresh(new_server)
 
-    return new_server
+    return FhirServerRead(
+        id=new_server.id,
+        name=new_server.name,
+        base_url=new_server.base_url,
+        project_id=new_server.project_id,
+        is_active=new_server.is_active,
+        created_at=new_server.created_at.isoformat(),
+        updated_at=new_server.updated_at.isoformat()
+    )
 
 @router.get("/servers", response_model=list[FhirServerRead])
 async def list_fhir_servers(

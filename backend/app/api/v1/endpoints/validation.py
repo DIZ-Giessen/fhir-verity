@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -30,10 +30,10 @@ async def start_validation(
     # create validation run
     new_run = ValidationRun(
         server_id=request.server_id,
-        resource_type=request.resource_types,
+        resource_types=request.resource_types,
         status=ValidationStatus.RUNNING,
         started_at=datetime.now()
-    )
+    ) 
 
     db.add(new_run)
     await db.commit()

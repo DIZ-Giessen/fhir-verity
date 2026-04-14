@@ -15,8 +15,11 @@ class ValidationRun(Base, TimestampMixin):
 
     __tablename__ = "validation_runs"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    run_id = Column(String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    
     server_id = Column(UUID(as_uuid=True), ForeignKey("fhir_servers.id"), nullable=False)
-    resource_type = Column(JSON, nullable=False)
+    resource_types = Column(JSON, nullable=False)
     total_processed = Column(Integer, default=0)
     total_invalid = Column(Integer, default=0)
     status = Column(SQLEnum(ValidationStatus), default=ValidationStatus.RUNNING)
