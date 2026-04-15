@@ -2,11 +2,15 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import httpx
+
 from uuid import UUID
 from app.core.database import get_db
 from app.models.fhir_server import FhirServer
 from app.models.validation_run import ValidationRun, ValidationStatus
 from app.schemas.validation import ValidationStartRequest, ValidationRunRead
+
+from app.services.validation_rules import VALIDATORS
 
 
 router = APIRouter() 
@@ -40,21 +44,38 @@ async def start_validation(
     await db.refresh(new_run)
 
     # start background task
-    background_tasks.add_task(run_validation_task, new_run.id, str(server.base_url), request.resource_types, db)
+    background_tasks.add_task(run_validation_task, new_run.id, str(server.base_url), request.resource_types,request.server_id, db)
 
     return new_run
 
 
-async def run_validation_task(run_id: UUID, base_url: str, resource_types: list, db: AsyncSession):
+async def run_validation_task(run_id: UUID, base_url: str, resource_types: list,server_id: UUID, db: AsyncSession):
     """Background task to run the validation."""
 
     try: 
         print(f"Starting validation run {run_id} for {base_url} with resource types {resource_types}")
 
-        # TODO: Implement the validation logic here
+        # fetch server mit config 
+        stmt = select(FhirServer).where(FhirServer.id == server_id)
+        result = await db.execute(stmt)
+        server = result.scalar_one_or_none()
+
+        auth_config = server.auth_config if server else {}
 
 
-        # Vorläufige Implementierung
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            # get all bundles
+            to_validate = resource_types if "All" not in resource_types else ["Patient", "Encounter", "Medication", "MedicationAdministration", "MedicationRequest"]
+
+            for res_type in to_validate:
+                validator_class = VALIDATORS.get(res_type)
+                if validator_class:
+                    validator = validator_class(client, base_url, auth_config)
+                    await validator.validate_and_save(run_id,db)
+                else:
+                    print(f"Not Validator Resource for: {res_type}")
+
+
         stmt = select(ValidationRun).where(ValidationRun.id == run_id)
         result = await db.execute(stmt)
         run = result.scalar_one_or_none()
