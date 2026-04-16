@@ -44,7 +44,7 @@ async def start_validation(
     await db.refresh(new_run)
 
     # start background task
-    background_tasks.add_task(run_validation_task, new_run.id, str(server.base_url), request.resource_types,request.server_id, db)
+    background_tasks.add_task(run_validation_task, new_run.id, str(server.base_url), request.resource_types, request.server_id, db)
 
     return new_run
 

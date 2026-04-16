@@ -10,11 +10,13 @@ from typing import List, Dict, Any
 from app.models.invalid_resource import InvalidResource
 from app.models.validation_run import ValidationRun, ValidationStatus
 
-class BaseValidators:
+class BaseValidator:
     def __init__(self, client: httpx.AsyncClient, base_url: str, auth_config: dict = None):
         self.client = client
         self.base_url = base_url.rstrip("/")
         self.auth_config = auth_config or {}
+
+
     async def fetch_bundle(self, url: str) -> dict:
         """Fetch a bundle from the FHIR server."""
 
@@ -35,20 +37,25 @@ class BaseValidators:
 
     async def save_invalid(self, run_id: UUID, resource_type: str, resource_id: str, issues: List[str], metrics: Dict[str, Any], db: AsyncSession):
         """Save an invalid resource to the database."""
-        invalid = InvalidResource(
-            run_id=run_id,
-            server_base_url=self.base_url,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            issues=issues,
-            metrics=metrics
-        )
-        db.add(invalid)
-        await db.commit()
+        try: 
 
+            invalid = InvalidResource(
+                run_id=str(run_id),
+                server_base_url=self.base_url,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                issues=issues,
+                metrics=metrics
+            )
+            db.add(invalid)
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            if "uq_run_resource" not in str(e):
+               print(f"Save error for {resource_type}/{resource_id}: {e}")
 
 # =========================== Patient Validator ===========================
-class PatientValidator(BaseValidators):
+class PatientValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         """Validate and save the resources."""
         url = f"{self.base_url}/Patient?_count=1000"
@@ -128,7 +135,7 @@ class PatientValidator(BaseValidators):
                     break
         print(f"Patient validation finished: {processed} processed, {invalid_count} invalid")
 
-class EncounterValidator(BaseValidators):
+class EncounterValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         """Validate and save the resources."""
         url = f"{self.base_url}/Encounter?_count=1000"
@@ -158,12 +165,12 @@ class EncounterValidator(BaseValidators):
                     metrics["has_patient"] = False
                 
                 # 3. Pseudonym
-                def is_valid_patient_id(id_str: str) -> bool:
+                def is_valid_enc_id(id_str: str) -> bool:
                     if not id_str:
                         return False
                     return not (id_str.startswith("20") and len(id_str) == 10)
                 
-                if not is_valid_patient_id(eid):
+                if not is_valid_enc_id(eid):
                     issues.append("Encounter ID is not pseudonymized")
                     metrics["is_pseudonym"] = False
                 
@@ -173,7 +180,9 @@ class EncounterValidator(BaseValidators):
             
             url = next((link["url"] for link in bundle.get("link", []) if link.get("relation") == "next"), None)
 
-class MedicationValidator(BaseValidators):
+
+# =============================== MEDICATION ============================================
+class MedicationValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         """Validate and save the resources."""
         url = f"{self.base_url}/Medication?_count=1000"
@@ -225,7 +234,7 @@ class MedicationValidator(BaseValidators):
 # ====================== MEDICATIONREQUEST ======================
 
 
-class MedicationRequestValidator(BaseValidators):
+class MedicationRequestValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         url = f"{self.base_url}/MedicationRequest?_count=1000"
         while url:
@@ -281,7 +290,7 @@ class MedicationRequestValidator(BaseValidators):
             url = next((link["url"] for link in bundle.get("link", []) if link.get("relation") == "next"), None)
 
 # ====================== MEDICATIONADMINISTRATION ======================
-class MedicationAdministrationValidator(BaseValidators):
+class MedicationAdministrationValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         url = f"{self.base_url}/MedicationAdministration?_count=1000"
         while url:

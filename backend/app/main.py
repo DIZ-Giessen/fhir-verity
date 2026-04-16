@@ -10,11 +10,6 @@ app = FastAPI(
     title = settings.PROJECT_NAME,
     description=settings.PROJECT_DESCRIPTION,
     version=settings.PROJECT_VERSION,
-    contact={
-        "name": "Vocs Pouani",
-        "url": "https://github.com/itsvocs",
-        "email": "vocs.pouani@uniKlinikum-giessen.de",
-    },
     license_info={
         "name": "MIT License",
     }
