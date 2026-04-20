@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.api.v1.endpoints.websocket import broadcast_progress
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -55,7 +56,7 @@ async def run_validation_task(run_id: UUID, base_url: str, resource_types: list,
     try: 
         print(f"Starting validation run {run_id} for {base_url} with resource types {resource_types}")
 
-        # fetch server mit config 
+        # fetch server with config 
         stmt = select(FhirServer).where(FhirServer.id == server_id)
         result = await db.execute(stmt)
         server = result.scalar_one_or_none()
@@ -63,14 +64,28 @@ async def run_validation_task(run_id: UUID, base_url: str, resource_types: list,
         auth_config = server.auth_config if server else {}
 
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=90.0) as client:
             # get all bundles
             to_validate = resource_types if "All" not in resource_types else ["Patient", "Encounter", "Medication", "MedicationAdministration", "MedicationRequest"]
+
+            total_resources = 0
 
             for res_type in to_validate:
                 validator_class = VALIDATORS.get(res_type)
                 if validator_class:
+
+                    print(f"→ Validierung läuft für: {res_type}")
+
+                    # Sent Progress 
+                    await broadcast_progress(str(run_id), { 
+                        "run_id": str(run_id),
+                        "status": "running",
+                        "current_resource": res_type,
+                        "progress": "in_progress"
+                    })
+
                     validator = validator_class(client, base_url, auth_config)
+
                     await validator.validate_and_save(run_id,db)
                 else:
                     print(f"Not Validator Resource for: {res_type}")
@@ -85,6 +100,16 @@ async def run_validation_task(run_id: UUID, base_url: str, resource_types: list,
             run.finished_at = datetime.now()
             await db.commit()
             print(f"Validation run {run_id} completed successfully")
+
+            #sent finale progress
+
+            await broadcast_progress(str(run_id), {
+                "run_id": str(run_id),
+                "status": "completed",
+                "total_resources": run.total_processed if run else 0,
+                "total_invalid": run.total_invalid if run else 0 
+
+            })
     except Exception as e:
         print(f"Error running validation task: {e}")
 
@@ -96,4 +121,10 @@ async def run_validation_task(run_id: UUID, base_url: str, resource_types: list,
             run.status = ValidationStatus.FAILED
             run.error_message = str(e)
             await db.commit()
+
+        await broadcast_progress(str(run_id), {
+            "run_id": str(run_id),
+            "status": "failed",
+            "error": str(e)
+        })
         

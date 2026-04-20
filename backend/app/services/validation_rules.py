@@ -1,7 +1,7 @@
 import httpx 
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import update
 from uuid import UUID
 import json
 from datetime import datetime
@@ -31,9 +31,16 @@ class BaseValidator:
         else:
             auth = None
 
-        resp = await self.client.get(url, headers=headers, auth=auth)
-        resp.raise_for_status()
-        return resp.json()
+        try: 
+            resp = await self.client.get(url, headers=headers, auth=auth)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as exc:
+            print(f"HTTP {exc.response.status_code} bei {url}: {exc.response.text[:300]}")
+            raise
+        except Exception as e:
+            print(f"Request-Fehler bei {url}: {e}")
+            raise
 
     async def save_invalid(self, run_id: UUID, resource_type: str, resource_id: str, issues: List[str], metrics: Dict[str, Any], db: AsyncSession):
         """Save an invalid resource to the database."""
@@ -48,7 +55,33 @@ class BaseValidator:
                 metrics=metrics
             )
             db.add(invalid)
+
+            # Stats
+            """stmt = select(ValidationRun).where(ValidationRun.id == run_id)
+            result = await db.execute(stmt)
+            run = result.scalar_one_or_none()
+
+            if run:
+                run.total_processed += 1
+                run.total_invalid += 1
+            else: 
+                print(f"Run Id nicht gleicht {ValidationRun.id} und {run_id}")
+
+
             await db.commit()
+            """
+
+            stmt = (
+                update(ValidationRun)
+                .where(ValidationRun.id == run_id)
+                .values(
+                    total_processed=ValidationRun.total_processed + 1,
+                    total_invalid=ValidationRun.total_invalid + 1
+                )
+            )
+            await db.execute(stmt)
+            await db.commit()
+            
         except Exception as e:
             await db.rollback()
             if "uq_run_resource" not in str(e):
@@ -58,7 +91,7 @@ class BaseValidator:
 class PatientValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         """Validate and save the resources."""
-        url = f"{self.base_url}/Patient?_count=1000"
+        url = f"{self.base_url}/Patient?_count=500"
         processed = 0
         invalid_count = 0
 
@@ -135,6 +168,8 @@ class PatientValidator(BaseValidator):
                     break
         print(f"Patient validation finished: {processed} processed, {invalid_count} invalid")
 
+
+#=========================== Encounter ====================================
 class EncounterValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         """Validate and save the resources."""
@@ -154,7 +189,7 @@ class EncounterValidator(BaseValidator):
                 }
 
                 # 1. Period 
-                if not encounter.get("period") or encounter["period"].get("start"):
+                if not encounter.get("period") or not encounter["period"].get("start"):
                     issues.append("Encounter period is missing or invalid")
                     metrics["has_period"] = False
                 

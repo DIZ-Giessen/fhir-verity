@@ -1,8 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
-from app.core.database import Base, engine
-from app.api.v1.endpoints import servers, validation 
+from app.api.v1.endpoints import servers, validation, websocket 
 
 settings = get_settings()
 
@@ -45,3 +44,4 @@ async def root():
 # Include Routers
 app.include_router(servers.router, prefix="/api/v1", tags=["servers"])
 app.include_router(validation.router, prefix="/api/v1", tags=["validation"])
+app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
