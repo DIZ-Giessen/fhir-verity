@@ -75,7 +75,6 @@ class BaseValidator:
                 update(ValidationRun)
                 .where(ValidationRun.id == run_id)
                 .values(
-                    total_processed=ValidationRun.total_processed + 1,
                     total_invalid=ValidationRun.total_invalid + 1
                 )
             )
@@ -155,6 +154,19 @@ class PatientValidator(BaseValidator):
                         issues.append("Address contains forbidden fields !.")
                         metrics["has_address"] = True
 
+                # Count total Processed 
+                stmt = (
+                    update(ValidationRun)
+                    .where(ValidationRun.id == run_id)
+                    .values(
+                        total_processed=ValidationRun.total_processed + 1,
+                    )
+                )
+                
+                await db.execute(stmt)
+                await db.commit()
+
+
                 # save invalid resource
                 if issues:
                     invalid_count += 1
@@ -173,7 +185,7 @@ class PatientValidator(BaseValidator):
 class EncounterValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         """Validate and save the resources."""
-        url = f"{self.base_url}/Encounter?_count=1000"
+        url = f"{self.base_url}/Encounter?_count=500"
 
         while url:
             bundle = await self.fetch_bundle(url)
@@ -220,7 +232,7 @@ class EncounterValidator(BaseValidator):
 class MedicationValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         """Validate and save the resources."""
-        url = f"{self.base_url}/Medication?_count=1000"
+        url = f"{self.base_url}/Medication?_count=500"
 
         while url:
             bundle = await self.fetch_bundle(url)
@@ -271,7 +283,7 @@ class MedicationValidator(BaseValidator):
 
 class MedicationRequestValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
-        url = f"{self.base_url}/MedicationRequest?_count=1000"
+        url = f"{self.base_url}/MedicationRequest?_count=500"
         while url:
             bundle = await self.fetch_bundle(url)
             for entry in bundle.get("entry", []):
@@ -327,7 +339,7 @@ class MedicationRequestValidator(BaseValidator):
 # ====================== MEDICATIONADMINISTRATION ======================
 class MedicationAdministrationValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
-        url = f"{self.base_url}/MedicationAdministration?_count=1000"
+        url = f"{self.base_url}/MedicationAdministration?_count=500"
         while url:
             bundle = await self.fetch_bundle(url)
             for entry in bundle.get("entry", []):
