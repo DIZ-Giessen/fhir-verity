@@ -339,50 +339,64 @@ class MedicationRequestValidator(BaseValidator):
 # ====================== MEDICATIONADMINISTRATION ======================
 class MedicationAdministrationValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
-        url = f"{self.base_url}/MedicationAdministration?_count=500"
-        while url:
-            bundle = await self.fetch_bundle(url)
-            for entry in bundle.get("entry", []):
-                ma = entry.get("resource", {})
-                maid = ma.get("id", "")
-                issues = []
-                metrics = {
-                    "has_medication": True, "has_patient": True, "has_timestamp": True,
-                    "is_correct_effective_period": True, "has_status": True, "is_pseudonym": True
-                }
+        url = f"{self.base_url}/MedicationAdministration?_count=300"   # stark reduziert
+        page = 0
+        max_pages = 50   # max. 5000 Einträge pro Lauf (zur Sicherheit)
 
-                # Medication Reference
-                if not (ma.get("medicationReference") or ma.get("medicationCodeableConcept")):
-                    issues.append("medication reference missing")
-                    metrics["has_medication"] = False
+        while url and page < max_pages:
+            try:
+                bundle = await self.fetch_bundle(url)
+                page += 1
 
-                # Patient Reference
-                if not ma.get("subject") or "Patient" not in str(ma.get("subject")):
-                    issues.append("patient reference missing")
-                    metrics["has_patient"] = False
+                for entry in bundle.get("entry", []):
+                    ma = entry.get("resource", {})
+                    maid = ma.get("id", "")
+                    issues = []
+                    metrics = {
+                        "has_medication": True, 
+                        "has_patient": True, 
+                        "has_timestamp": True,
+                        "has_status": True, 
+                        "is_pseudonym": True
+                    }
 
-                # Status
-                if not ma.get("status"):
-                    issues.append("status missing")
-                    metrics["has_status"] = False
+                    if not (ma.get("medicationReference") or ma.get("medicationCodeableConcept")):
+                        issues.append("medication reference missing")
+                        metrics["has_medication"] = False
 
-                # Effective DateTime or Period
-                if not ma.get("effectiveDateTime") and not ma.get("effectivePeriod"):
-                    issues.append("timestamp missing (neither effectiveDateTime nor effectivePeriod)")
-                    metrics["has_timestamp"] = False
+                    if not ma.get("subject") or "Patient" not in str(ma.get("subject")):
+                        issues.append("patient reference missing")
+                        metrics["has_patient"] = False
 
-                # Pseudonym
-                if ma.get("identifier"):
-                    for ident in ma["identifier"]:
-                        if ident.get("value") and ident["value"].startswith("MED"):
-                            issues.append("Resource is not pseudonym (contains MED identifier)")
-                            metrics["is_pseudonym"] = False
-                            break
+                    if not ma.get("status"):
+                        issues.append("status missing")
+                        metrics["has_status"] = False
 
-                if issues:
-                    await self.save_invalid(run_id, "MedicationAdministration", maid, issues, metrics, db)
+                    if not ma.get("effectiveDateTime") and not ma.get("effectivePeriod"):
+                        issues.append("timestamp missing")
+                        metrics["has_timestamp"] = False
 
-            url = next((link["url"] for link in bundle.get("link", []) if link.get("relation") == "next"), None)
+                    if ma.get("identifier"):
+                        for ident in ma["identifier"]:
+                            if ident.get("value") and ident["value"].startswith("MED"):
+                                issues.append("Resource is not pseudonym")
+                                metrics["is_pseudonym"] = False
+                                break
+
+                    if issues:
+                        await self.save_invalid(run_id, "MedicationAdministration", maid, issues, metrics, db)
+
+                # Nextlink
+                url = next((link["url"] for link in bundle.get("link", []) if link.get("relation") == "next"), None)
+
+                if page % 10 == 0:
+                    print(f"MedicationAdministration → Seite {page} verarbeitet")
+
+            except Exception as e:
+                print(f"Fehler bei MedicationAdministration Seite {page}: {e}")
+                break   # bei Fehler abbrechen, nicht den ganzen Task killen
+
+        print(f"MedicationAdministration validation finished after {page} pages")
 
 
 # Registry
