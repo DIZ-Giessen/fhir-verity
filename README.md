@@ -19,5 +19,4 @@ Das Tool validiert FHIR-Ressourcen (Patient, Encounter, Medication, Observation,
 - Bringt echte Data-Science-Elemente (ML + LLM) in die tägliche DIZ-Arbeit
 - Liefert sofort nutzbaren Mehrwert für alle MIRACUM/MII-Use-Cases (GeMTeX, INTERPOLAR, OMI etc.)
 - Perfekte Vorbereitung auf den Data-Science-Master
-
-**Status:** In Planung / Umsetzung durch [Dein Name] als Hiwi & Praxisphase
+  

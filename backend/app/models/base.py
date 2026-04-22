@@ -1,12 +1,25 @@
-from datetime import datetime
-from sqlalchemy import Column, DateTime, Integer
+"""Base Model"""
+
+from datetime import datetime, timezone
+from sqlalchemy import Column, DateTime
 from sqlalchemy.orm import DeclarativeBase
+
 
 class Base(DeclarativeBase):
     """Abstract base for all models."""
-    pass
+
 
 class TimestampMixin:
-    """ Mixin for timestamp columns."""
-    created_at = Column(DateTime(timezone=True), default=datetime.now, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now, nullable=False)
+    """Mixin for timestamp columns."""
+
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )

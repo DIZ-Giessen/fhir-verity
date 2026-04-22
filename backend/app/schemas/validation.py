@@ -1,19 +1,24 @@
-from pydantic import BaseModel
+"""The Schemas for Validation"""
+
 from typing import Optional
-from uuid import UUID 
+from uuid import UUID
 from datetime import datetime
+
+from pydantic import BaseModel
 from app.models.validation_run import ValidationStatus
 
 
 class ValidationStartRequest(BaseModel):
     """Schema for starting a validation run."""
+
     server_id: UUID
     resource_types: list[str] = ["All"]
-    
+
+
 class ValidationRunRead(BaseModel):
     """Schema for reading a validation run."""
+
     id: UUID
-    run_id: str
     server_id: UUID
     resource_types: list[str]
     status: ValidationStatus
@@ -24,4 +29,6 @@ class ValidationRunRead(BaseModel):
     error_message: Optional[str] = None
 
     class Config:
+        """Enable population from ORM attributes"""
+
         from_attributes = True
