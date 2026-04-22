@@ -1,40 +1,40 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
-
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>WebSocket Test - FHIR Verity</title>
-</head>
+  </head>
 
-<body>
+  <body>
     <h1>WebSocket Test für Run</h1>
     <div id="log"></div>
 
     <script>
-        const runId = "c2f00d4d-50c8-45bf-b8ea-15d6651b9035";  
-        const ws = new WebSocket(`ws://localhost:8000/api/v1/ws/validation/${runId}`);
+      const runId = "1606ccfb-6ba2-4cdb-a28c-c5e067a85eb6";
+      const ws = new WebSocket(
+        `ws://localhost:8000/api/v1/ws/validation/${runId}`,
+      );
 
-        const log = document.getElementById('log');
+      const log = document.getElementById("log");
 
-        ws.onopen = () => {
-            log.innerHTML += "<p style='color:green'>✅ WebSocket verbunden</p>";
-            ws.send("ping");
-        };
+      ws.onopen = () => {
+        log.innerHTML += "<p style='color:green'>✅ WebSocket verbunden</p>";
+        ws.send("ping");
+      };
 
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            log.innerHTML += `<p>📨 Nachricht: ${JSON.stringify(data)}</p>`;
-        };
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        log.innerHTML += `<p>📨 Nachricht: ${JSON.stringify(data)}</p>`;
+      };
 
-        ws.onerror = (error) => {
-            log.innerHTML += "<p style='color:red'>❌ WebSocket Fehler</p>";
-            console.error(error);
-        };
+      ws.onerror = (error) => {
+        log.innerHTML += "<p style='color:red'>❌ WebSocket Fehler</p>";
+        console.error(error);
+      };
 
-        ws.onclose = () => {
-            log.innerHTML += "<p style='color:orange'>⚠️ WebSocket geschlossen</p>";
-        };
+      ws.onclose = () => {
+        log.innerHTML += "<p style='color:orange'>⚠️ WebSocket geschlossen</p>";
+      };
     </script>
-</body>
-
+  </body>
 </html>

@@ -32,4 +32,7 @@ async def get_db() -> AsyncSession:
         try:
             yield session
         finally:
-            await session.close()
+            try:
+                await session.close()
+            except Exception:
+                pass
