@@ -10,7 +10,12 @@ from app.core.config import get_settings
 from app.models.base import Base
 
 # Alle Models importieren damit Base.metadata sie kennt
-from app.models import fhir_server, validation_run, invalid_resource  # noqa: F401
+from app.models import (
+    fhir_server,
+    validation_run,
+    invalid_resource,
+    validation_config,
+)  # noqa: F401 # noqa: F401
 
 config = context.config
 settings = get_settings()

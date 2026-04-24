@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.config import get_settings
 
 # pyright: ignore[reportUnusedImport]
-from app.models.base import Base
+from app.models.base import Base  # pyright: ignore[reportUnusedImport]
 
 settings = get_settings()
 

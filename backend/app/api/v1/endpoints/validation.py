@@ -66,6 +66,7 @@ async def start_validation(
         str(server.base_url),
         request.resource_types,
         server.auth_config or {},
+        server.id,
     )
 
     return new_run
@@ -76,6 +77,7 @@ async def run_validation_task(
     base_url: str,
     resource_types: list[str],
     auth_config: dict,
+    server_id: UUID,
 ):
     """Asynchronous Background task"""
 
@@ -105,7 +107,9 @@ async def run_validation_task(
                         },
                     )
 
-                    validator = validator_class(client, base_url, auth_config)
+                    validator = validator_class(
+                        client, base_url, auth_config, server_id=server_id
+                    )
                     await validator.validate_and_save(run_id, db)
 
             # Run als abgeschlossen markieren

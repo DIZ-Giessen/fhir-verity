@@ -1,35 +1,45 @@
-"""Validation Logik for all Resources"""
-
-from uuid import UUID
-from typing import List, Dict, Any
+"""
+Validation logic for all supported FHIR resource types.
+"""
 
 import asyncio
 import logging
+from datetime import datetime, timezone
+from typing import Any
+from uuid import UUID
+
+import re
 import httpx
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.invalid_resource import InvalidResource
 from app.models.validation_run import ValidationRun
-from app.utils.functions import is_valid_enc_id, is_valid_patient_id
+from app.services.config_service import get_config_for_run, rule_enabled
 
 logger = logging.getLogger(__name__)
 
 
 class BaseValidator:
-    """Initial Basis Validator for Resources"""
-
-    def __init__(
-        self, client: httpx.AsyncClient, base_url: str, auth_config: dict = None
-    ):
-        self.client = client
-        self.base_url = base_url.rstrip("/")
-        self.auth_config = auth_config or {}
+    """Base class for all resource validators."""
 
     PAGE_SIZE = 500
     MAX_RETRIES = 3
 
+    def __init__(
+        self,
+        client: httpx.AsyncClient,
+        base_url: str,
+        auth_config: dict = None,
+        server_id: UUID = None,
+    ):
+        self.client = client
+        self.base_url = base_url.rstrip("/")
+        self.auth_config = auth_config or {}
+        self.server_id = server_id
+
     async def fetch_bundle(self, url: str) -> dict:
-        """Fetch a bundle from the FHIR server."""
+        """Fetch a FHIR bundle with retry logic."""
 
         headers = {"Accept": "application/fhir+json"}
 
@@ -41,24 +51,18 @@ class BaseValidator:
                 password=self.auth_config["password"],
             )
 
-        # Other Auths Methods Checking: FixMe
+        # Other Auth Methods later checken: FixME
 
-        # Fetch the Fhir Bunlde
+        # Fetching the FHIR Bundle
         last_exc = None
-
         for attempt in range(1, self.MAX_RETRIES + 1):
             try:
                 resp = await self.client.get(url, headers=headers, auth=auth)
                 resp.raise_for_status()
                 return resp.json()
-            except (
-                httpx.httpx.ReadError,
-                httpx.httpx.ConnectError,
-                httpx.TimeoutException,
-            ) as e:
+            except (httpx.ReadError, httpx.ConnectError, httpx.TimeoutException) as e:
                 last_exc = e
                 wait = 2**attempt
-
                 logger.warning(
                     "Attempt %s/%s failed for %s: %s. Retrying in %ss...",
                     attempt,
@@ -69,7 +73,6 @@ class BaseValidator:
                 )
                 await asyncio.sleep(wait)
             except httpx.HTTPStatusError as exc:
-                # logger.error("Http %s at %s.", {exc.response.status_code}, {url})
                 logger.error("HTTP %s at %s", exc.response.status_code, url)
                 raise
 
@@ -80,40 +83,91 @@ class BaseValidator:
         run_id: UUID,
         resource_type: str,
         resource_id: str,
-        issues: List[str],
-        metrics: Dict[str, Any],
+        issues: list[dict],
+        metrics: dict[str, Any],
         db: AsyncSession,
     ):
-        """Save an invalid resource to the database."""
-        try:
+        """
+        Save an invalid resource to the database.
 
+        issues: list of dicts with keys: rule, severity, message
+        """
+        try:
             invalid = InvalidResource(
                 run_id=str(run_id),
                 server_base_url=self.base_url,
                 resource_type=resource_type,
-                resource_id=resource_id,
-                issues=issues,
-                metrics=metrics,
+                resource_id=str(resource_id),
+                issues=[i["message"] for i in issues],
+                metrics={
+                    **metrics,
+                    "issues_detail": issues,
+                },
             )
-            db.add(invalid)
 
+            db.add(invalid)
             await db.commit()
 
         except Exception as e:
             await db.rollback()
-            if "uq_run_resource" not in str(e):
-                print(f"Save error for {resource_type}/{resource_id}: {e}")
+            if "uq_resource_type_id" not in str(e):
+                logger.error("Save error for %s/%s: %s", resource_type, resource_id, e)
+
+    async def _update_run_counters(
+        self,
+        run_id: UUID,
+        page_processed: int,
+        page_invalid: int,
+        db: AsyncSession,
+    ):
+        """Batch update of run counters once per bundle page."""
+
+        if page_processed == 0:
+            return
+
+        await db.execute(
+            update(ValidationRun)
+            .where(ValidationRun.id == run_id)
+            .values(
+                total_processed=ValidationRun.total_processed + page_processed,
+                total_invalid=ValidationRun.total_invalid + page_invalid,
+            )
+        )
+        await db.commit()
+
+    @staticmethod
+    def _is_future(date_str: str) -> bool:
+        if not date_str:
+            return False
+        try:
+            dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt > datetime.now(timezone.utc)
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _is_reference_format(reference: str, resource_type: str) -> bool:
+        """Check if a reference follows the 'ResourceType/id' format."""
+
+        return bool(reference) and reference.startswith(f"{resource_type}/")
+
+    def _build_metrics(self, config: dict) -> dict:
+        """Initialize metrics from config: all enabled rules start as True."""
+        return {key: True for key in config if config[key].get("enabled", False)}
 
 
-# =========================== Patient Validator ===========================
+# =============================================================================
+# PATIENT
+# =============================================================================
 class PatientValidator(BaseValidator):
-    """Validate and save the resources."""
+    """Patient Validator Class"""
 
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
-        """
-        Validates all Patient resources and saves invalid entries to the database.
-        """
+        """Validation and save for patients resources"""
 
+        config = await get_config_for_run(self.server_id, "Patient", db)
         url = f"{self.base_url}/Patient?_count={self.PAGE_SIZE}"
 
         while url:
@@ -124,90 +178,200 @@ class PatientValidator(BaseValidator):
 
             for entry in entries:
                 page_processed += 1
-                patient = entry.get("resource", {})
-                pid = patient.get("id")
+                resource = entry.get("resource", {})
+                rid = resource.get("id", "")
                 issues = []
-                metrics = {
-                    "has_birthdate": True,
-                    "has_gender": True,
-                    "has_name": False,
-                    "has_address": False,
-                    "is_pseudonym": True,
-                    "has_observation": True,
-                    "has_condition": True,
-                }
+                metrics = self._build_metrics(config)
 
-                # 1. Birthdate
-                if not patient.get("birthDate"):
-                    issues.append("Birthdate missing")
-                    metrics["has_birthdate"] = False
+                # privacy: name_forbidden
+                if rule_enabled(config, "name_forbidden"):
+                    if resource.get("name"):
+                        issues.append(
+                            {
+                                "rule": "name_forbidden",
+                                "severity": config["name_forbidden"]["severity"],
+                                "message": "Patient.name is present. Cleartext names are forbidden in pseudonymized data.",
+                            }
+                        )
+                        metrics["name_forbidden"] = False
 
-                # 2. Gender
-                if not patient.get("gender"):
-                    issues.append("Gender missing")
-                    metrics["has_gender"] = False
+                # privacy: address_forbidden
+                if rule_enabled(config, "address_forbidden"):
+                    addr_list = resource.get("address", [])
+                    if addr_list:
+                        addr = addr_list[0]
+                        if addr.get("line") or addr.get("city") or addr.get("text"):
+                            issues.append(
+                                {
+                                    "rule": "address_forbidden",
+                                    "severity": config["address_forbidden"]["severity"],
+                                    "message": """Patient.address
+                                                     contains forbidden fields
+                                                      (line, city, or text).
+                                                """,
+                                }
+                            )
+                            metrics["address_forbidden"] = False
 
-                # 3. Pseudonym
-                if not is_valid_patient_id(pid):
-                    issues.append("Patien ID ist not pseudonymized")
-                    metrics["is_pseudonym"] = False
+                # privacy: telecom_forbidden
+                if rule_enabled(config, "telecom_forbidden"):
+                    if resource.get("telecom"):
+                        issues.append(
+                            {
+                                "rule": "telecom_forbidden",
+                                "severity": config["telecom_forbidden"]["severity"],
+                                "message": "Patient.telecom is present. Contact data is forbidden in pseudonymized data.",
+                            }
+                        )
+                        metrics["telecom_forbidden"] = False
 
-                if patient.get("identifier"):
-                    for identifier in patient["identifier"]:
-                        # Maybe check the System of the identifier later
+                # privacy: photo_forbidden
+                if rule_enabled(config, "photo_forbidden"):
+                    if resource.get("photo"):
+                        issues.append(
+                            {
+                                "rule": "photo_forbidden",
+                                "severity": config["photo_forbidden"]["severity"],
+                                "message": "Patient.photo is present and must be removed.",
+                            }
+                        )
+                        metrics["photo_forbidden"] = False
 
-                        if identifier.get("value") and not is_valid_patient_id(
-                            identifier["value"]
-                        ):
-                            issues.append("Identifier is not pseudonymized")
-                            metrics["is_pseudonym"] = False
-                            break
+                # privacy: pseudonym_format_check (Patient.id)
+                if rule_enabled(config, "pseudonym_format_check"):
+                    pattern = config["pseudonym_format_check"].get("pattern")
+                    if pattern:
+                        if re.match(pattern, rid):
+                            issues.append(
+                                {
+                                    "rule": "pseudonym_format_check",
+                                    "severity": config["pseudonym_format_check"][
+                                        "severity"
+                                    ],
+                                    "message": f"Patient.id '{rid}' is not pseudonymized.",
+                                }
+                            )
+                            metrics["pseudonym_format_check"] = False
 
-                # 4. Name
-                if patient.get("name"):
-                    issues.append("Patient name is present.")
-                    metrics["has_name"] = True
+                # privacy: identifier_pseudonym_check
+                if rule_enabled(config, "identifier_pseudonym_check"):
+                    pattern = config["identifier_pseudonym_check"].get("pattern")
+                    if pattern:
+                        for ident in resource.get("identifier", []):
+                            value = ident.get("value", "")
+                            if value and re.match(pattern, value):
+                                issues.append(
+                                    {
+                                        "rule": "identifier_pseudonym_check",
+                                        "severity": config[
+                                            "identifier_pseudonym_check"
+                                        ]["severity"],
+                                        "message": f"Patient.identifier value '{value}' not pseudonymized.",
+                                    }
+                                )
+                                metrics["identifier_pseudonym_check"] = False
+                                break
 
-                # 5. Address
-                if patient.get("address"):
-                    addr = patient["address"][0]
-                    if addr.get("line") or addr.get("city") or addr.get("text"):
-                        issues.append("Address contains forbidden fields !.")
-                        metrics["has_address"] = True
+                # ============================= completeness  ==============================
+                if rule_enabled(config, "identifier_required"):
+                    if not resource.get("identifier"):
+                        issues.append(
+                            {
+                                "rule": "identifier_required",
+                                "severity": config["identifier_required"]["severity"],
+                                "message": """Patient.identifier is missing. 
+                                                At least one identifier is required.
+                                           """,
+                            }
+                        )
+                        metrics["identifier_required"] = False
 
-                # save invalid resource
+                # birthdate_required
+                if rule_enabled(config, "birthdate_required"):
+                    if not resource.get("birthDate"):
+                        issues.append(
+                            {
+                                "rule": "birthdate_required",
+                                "severity": config["birthdate_required"]["severity"],
+                                "message": "Patient.birthDate is missing.",
+                            }
+                        )
+                        metrics["has_birthdate"] = False
+
+                # gender_required
+                if rule_enabled(config, "gender_required"):
+                    if not resource.get("gender"):
+                        issues.append(
+                            {
+                                "rule": "gender_required",
+                                "severity": config["gender_required"]["severity"],
+                                "message": "Patient.gender is missing.",
+                            }
+                        )
+                        metrics["gender_required"] = False
+
+                # ======================= plausibility:================================
+                # birthdate_not_future
+                if rule_enabled(config, "birthdate_not_future"):
+                    bd = resource.get("birthDate", "")
+                    if bd and self._is_future(bd):
+                        issues.append(
+                            {
+                                "rule": "birthdate_not_future",
+                                "severity": config["birthdate_not_future"]["severity"],
+                                "message": f"Patient.birthDate '{bd}' is in the future.",
+                            }
+                        )
+                        metrics["birthdate_not_future"] = False
+
+                # plausibility: birthdate_plausible_range
+                if rule_enabled(config, "birthdate_plausible_range"):
+                    bd = resource.get("birthDate", "")
+                    if bd:
+                        try:
+                            bd_year = int(bd[:4])
+                            if datetime.now().year - bd_year > 150:
+                                issues.append(
+                                    {
+                                        "rule": "birthdate_plausible_range",
+                                        "severity": config["birthdate_plausible_range"][
+                                            "severity"
+                                        ],
+                                        "message": f"""Patient.birthDate '{bd}'
+                                                         is more than 150 years in the past.
+                                                    """,
+                                    }
+                                )
+                                metrics["birthdate_plausible_range"] = False
+                        except ValueError:
+                            pass
+
                 if issues:
                     page_invalid += 1
-                    await self.save_invalid(run_id, "Patient", pid, issues, metrics, db)
+                    await self.save_invalid(run_id, "Patient", rid, issues, metrics, db)
 
-            if page_processed > 0:
-                await db.execute(
-                    update(ValidationRun)
-                    .where(ValidationRun.id == run_id)
-                    .values(
-                        total_processed=ValidationRun.total_processed + page_processed,
-                        total_invalid=ValidationRun.total_invalid + page_invalid,
-                    )
-                )
-
-                await db.commit()
-            # update url for next batch
+            await self._update_run_counters(run_id, page_processed, page_invalid, db)
             url = next(
                 (
-                    link["url"]
-                    for link in bundle.get("link", [])
-                    if link.get("relation") == "next"
+                    l["url"]
+                    for l in bundle.get("link", [])
+                    if l.get("relation") == "next"
                 ),
                 None,
             )
 
+        logger.info("Patient validation complete for run %s", run_id)
 
-# =========================== Encounter ====================================
+
+# =============================================================================
+# ENCOUNTER
+# =============================================================================
 class EncounterValidator(BaseValidator):
     """Encounter Validator"""
 
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         """Validate and save the Fall resources."""
+        config = await get_config_for_run(self.server_id, "Encounter", db)
         url = f"{self.base_url}/Encounter?_count={self.PAGE_SIZE}"
 
         while url:
@@ -218,70 +382,354 @@ class EncounterValidator(BaseValidator):
 
             for entry in entries:
                 page_processed += 1
-                encounter = entry.get("resource", {})
-                eid = encounter.get("id", "")
+                resource = entry.get("resource", {})
+                rid = resource.get("id", "")
                 issues = []
-                metrics = {
-                    "has_period": True,
-                    "has_patient": True,
-                    "is_pseudonym": True,
-                }
+                metrics = {}
 
-                # 1. Period
-                if not encounter.get("period") or not encounter["period"].get("start"):
-                    issues.append("Encounter period is missing or invalid")
-                    metrics["has_period"] = False
+                # ============ privacy: =====================
+                if rule_enabled(config, "pseudonym_format_check"):
+                    pattern = config["pseudonym_format_check"].get("pattern")
+                    if pattern:
+                        if not re.match(pattern, rid):
+                            issues.append(
+                                {
+                                    "rule": "pseudonym_format_check",
+                                    "severity": config["pseudonym_format_check"][
+                                        "severity"
+                                    ],
+                                    "message": f"Encounter.id '{rid}' does not match pseudonym pattern.",
+                                }
+                            )
 
-                # 2. Patient Reference
-                subject = encounter.get("subject", {})
-                if (
-                    not subject
-                    or not subject.get("reference")
-                    or not subject["reference"].startswith("Patient/")
-                ):
-                    issues.append("Encounter patient reference is missing")
-                    metrics["has_patient"] = False
+                # ============== completeness: ==================
+                #
+                # status_required
+                if rule_enabled(config, "status_required"):
+                    if not resource.get("status"):
+                        issues.append(
+                            {
+                                "rule": "status_required",
+                                "severity": config["status_required"]["severity"],
+                                "message": "Encounter.status is missing.",
+                            }
+                        )
 
-                # 3. Pseudonym
+                # class_required
+                if rule_enabled(config, "class_required"):
+                    if not resource.get("class"):
+                        issues.append(
+                            {
+                                "rule": "class_required",
+                                "severity": config["class_required"]["severity"],
+                                "message": "Encounter.class is missing.",
+                            }
+                        )
 
-                if not is_valid_enc_id(eid):
-                    issues.append("Encounter ID is not pseudonymized")
-                    metrics["is_pseudonym"] = False
+                # subject_required
+                if rule_enabled(config, "subject_required"):
+                    if not resource.get("subject"):
+                        issues.append(
+                            {
+                                "rule": "subject_required",
+                                "severity": config["subject_required"]["severity"],
+                                "message": "Encounter.subject is missing.",
+                            }
+                        )
 
-                # save invalid resource
+                # period_start_required
+                if rule_enabled(config, "period_start_required"):
+                    period = resource.get("period", {})
+                    if not period or not period.get("start"):
+                        issues.append(
+                            {
+                                "rule": "period_start_required",
+                                "severity": config["period_start_required"]["severity"],
+                                "message": "Encounter.period.start is missing.",
+                            }
+                        )
+
+                # ========= plausibility: =================
+                #
+                # period_end_after_start
+                if rule_enabled(config, "period_end_after_start"):
+                    period = resource.get("period", {})
+                    start = period.get("start")
+                    end = period.get("end")
+                    if start and end:
+                        try:
+                            start_dt = datetime.fromisoformat(
+                                start.replace("Z", "+00:00")
+                            )
+                            end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
+                            if end_dt <= start_dt:
+                                issues.append(
+                                    {
+                                        "rule": "period_end_after_start",
+                                        "severity": config["period_end_after_start"][
+                                            "severity"
+                                        ],
+                                        "message": f"""
+                                            Encounter.period.end '{end}'
+                                            is not 
+                                            after period.start '{start}'.
+                                            """,
+                                    }
+                                )
+                        except ValueError:
+                            pass
+
+                #  period_plausible_duration
+                if rule_enabled(config, "period_plausible_duration"):
+                    period = resource.get("period", {})
+                    start = period.get("start")
+                    end = period.get("end")
+                    if start and end:
+                        try:
+                            start_dt = datetime.fromisoformat(
+                                start.replace("Z", "+00:00")
+                            )
+                            end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
+                            duration_days = (end_dt - start_dt).days
+                            if duration_days > 730:
+                                issues.append(
+                                    {
+                                        "rule": "period_plausible_duration",
+                                        "severity": config["period_plausible_duration"][
+                                            "severity"
+                                        ],
+                                        "message": f"""
+                                            Encounter duration is {duration_days} days,
+                                            which exceeds 730 days.
+                                            """,
+                                    }
+                                )
+                        except ValueError:
+                            pass
+
+                # ========= integrity: ===============
+                #
+                # subject_reference_format
+                if rule_enabled(config, "subject_reference_format"):
+                    ref = resource.get("subject", {}).get("reference", "")
+                    if ref and not self._is_reference_format(ref, "Patient"):
+                        issues.append(
+                            {
+                                "rule": "subject_reference_format",
+                                "severity": config["subject_reference_format"][
+                                    "severity"
+                                ],
+                                "message": f"""
+                                Encounter.subject.reference '{ref}'
+                                 must follow 'Patient/{{id}}' format.
+                                """,
+                            }
+                        )
+
                 if issues:
                     page_invalid += 1
                     await self.save_invalid(
-                        run_id, "Encounter", eid, issues, metrics, db
+                        run_id, "Encounter", rid, issues, metrics, db
                     )
 
-            if page_processed > 0:
-                await db.execute(
-                    update(ValidationRun)
-                    .where(ValidationRun.id == run_id)
-                    .values(
-                        total_processed=ValidationRun.total_processed + page_processed,
-                        total_invalid=ValidationRun.total_invalid + page_invalid,
-                    )
-                )
-                await db.commit()
-
+            await self._update_run_counters(run_id, page_processed, page_invalid, db)
             url = next(
                 (
-                    link["url"]
-                    for link in bundle.get("link", [])
-                    if link.get("relation") == "next"
+                    l["url"]
+                    for l in bundle.get("link", [])
+                    if l.get("relation") == "next"
                 ),
                 None,
             )
 
+        logger.info("Encounter validation complete for run %s", run_id)
 
-# =============================== MEDICATION ============================================
-class MedicationValidator(BaseValidator):
-    """Medications Validators"""
+
+# =============================================================================
+# OBSERVATION
+# =============================================================================
+class ObservationValidator(BaseValidator):
+    """Observation Validators"""
 
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
-        """Validate and save the resources Medications."""
+        """Validate and save the resources Observations."""
+
+        config = await get_config_for_run(self.server_id, "Observation", db)
+        url = f"{self.base_url}/Observation?_count={self.PAGE_SIZE}"
+
+        while url:
+            bundle = await self.fetch_bundle(url)
+            entries = bundle.get("entry", [])
+            page_processed = 0
+            page_invalid = 0
+
+            for entry in entries:
+                page_processed += 1
+                resource = entry.get("resource", {})
+                rid = resource.get("id", "")
+                issues = []
+                metrics = {}
+
+                # ======== privacy: ===========
+                #
+                # value_string_cleartext_forbidden
+                if rule_enabled(config, "value_string_cleartext_forbidden"):
+                    value_string = resource.get("valueString", "")
+                    if value_string and len(value_string) > 50:
+                        issues.append(
+                            {
+                                "rule": "value_string_cleartext_forbidden",
+                                "severity": config["value_string_cleartext_forbidden"][
+                                    "severity"
+                                ],
+                                "message": """
+                                    Observation.valueString contains
+                                     a long string that may include
+                                      personal data.""",
+                            }
+                        )
+
+                # ========== completeness:  =========
+                #
+                # status_required
+                if rule_enabled(config, "status_required"):
+                    if not resource.get("status"):
+                        issues.append(
+                            {
+                                "rule": "status_required",
+                                "severity": config["status_required"]["severity"],
+                                "message": "Observation.status is missing.",
+                            }
+                        )
+
+                # code_required
+                if rule_enabled(config, "code_required"):
+                    if not resource.get("code"):
+                        issues.append(
+                            {
+                                "rule": "code_required",
+                                "severity": config["code_required"]["severity"],
+                                "message": "Observation.code is missing.",
+                            }
+                        )
+
+                # subject_required
+                if rule_enabled(config, "subject_required"):
+                    if not resource.get("subject"):
+                        issues.append(
+                            {
+                                "rule": "subject_required",
+                                "severity": config["subject_required"]["severity"],
+                                "message": "Observation.subject is missing.",
+                            }
+                        )
+
+                # effective_required
+                if rule_enabled(config, "effective_required"):
+                    has_effective = (
+                        resource.get("effectiveDateTime")
+                        or resource.get("effectivePeriod")
+                        or resource.get("effectiveInstant")
+                    )
+                    if not has_effective:
+                        issues.append(
+                            {
+                                "rule": "effective_required",
+                                "severity": config["effective_required"]["severity"],
+                                "message": "Observation.effective[x] is missing.",
+                            }
+                        )
+
+                # value_present
+                if rule_enabled(config, "value_present"):
+                    has_value = any(
+                        resource.get(f)
+                        for f in [
+                            "valueQuantity",
+                            "valueCodeableConcept",
+                            "valueString",
+                            "valueBoolean",
+                            "valueInteger",
+                            "valueRange",
+                            "valueRatio",
+                            "valueSampledData",
+                            "valueTime",
+                            "valueDateTime",
+                            "valuePeriod",
+                            "dataAbsentReason",
+                        ]
+                    )
+                    if not has_value:
+                        issues.append(
+                            {
+                                "rule": "value_present",
+                                "severity": config["value_present"]["severity"],
+                                "message": "Observation has no value[x] and no dataAbsentReason.",
+                            }
+                        )
+
+                # ========= plausibility: ==========
+                #
+                #  effective_not_future
+                if rule_enabled(config, "effective_not_future"):
+                    eff = resource.get("effectiveDateTime") or resource.get(
+                        "effectiveInstant"
+                    )
+                    if eff and self._is_future(eff):
+                        issues.append(
+                            {
+                                "rule": "effective_not_future",
+                                "severity": config["effective_not_future"]["severity"],
+                                "message": f"Observation.effectiveDateTime '{eff}' is in the future.",
+                            }
+                        )
+
+                # ========= integrity: =============
+                #
+                # subject_reference_format
+                if rule_enabled(config, "subject_reference_format"):
+                    ref = resource.get("subject", {}).get("reference", "")
+                    if ref and not self._is_reference_format(ref, "Patient"):
+                        issues.append(
+                            {
+                                "rule": "subject_reference_format",
+                                "severity": config["subject_reference_format"][
+                                    "severity"
+                                ],
+                                "message": f"""Observation.subject.reference
+                                 '{ref}' must follow 
+                                 'Patient/{{id}}' format.""",
+                            }
+                        )
+
+                if issues:
+                    page_invalid += 1
+                    await self.save_invalid(
+                        run_id, "Observation", rid, issues, metrics, db
+                    )
+
+            await self._update_run_counters(run_id, page_processed, page_invalid, db)
+            url = next(
+                (
+                    l["url"]
+                    for l in bundle.get("link", [])
+                    if l.get("relation") == "next"
+                ),
+                None,
+            )
+
+        logger.info("Observation validation complete for run %s", run_id)
+
+
+# =============================================================================
+# MEDICATION
+# =============================================================================
+class MedicationValidator(BaseValidator):
+    """Medication Validatin Class"""
+
+    async def validate_and_save(self, run_id: UUID, db: AsyncSession):
+        """Validate and Saving Medication"""
+        config = await get_config_for_run(self.server_id, "Medication", db)
         url = f"{self.base_url}/Medication?_count={self.PAGE_SIZE}"
 
         while url:
@@ -292,75 +740,93 @@ class MedicationValidator(BaseValidator):
 
             for entry in entries:
                 page_processed += 1
-                medication = entry.get("resource", {})
-                mid = medication.get("id", "")
+                resource = entry.get("resource", {})
+                rid = resource.get("id", "")
                 issues = []
-                metrics = {
-                    "has_code": True,
-                    "is_pseudonym": True,
-                    "has_ingredient": True,
-                }
+                metrics = {}
 
-                # 1. Code
-                if not medication.get("code") or not (
-                    medication["code"].get("coding") or medication["code"].get("text")
-                ):
-                    issues.append("code field missing or invalid")
-                    metrics["has_code"] = False
+                # ========== completeness: ============
+                #
+                # code_required
+                if rule_enabled(config, "code_required"):
+                    code = resource.get("code", {})
+                    if not code or (not code.get("coding") and not code.get("text")):
+                        issues.append(
+                            {
+                                "rule": "code_required",
+                                "severity": config["code_required"]["severity"],
+                                "message": """Medication.code is
+                                    missing or has neither 
+                                    coding nor text.""",
+                            }
+                        )
 
-                # 2. Pseudonym
-                if medication.get("identifier"):
-                    for ident in medication["identifier"]:
-                        if ident.get("value") and ident["value"].startswith("MID"):
-                            issues.append("Medication is not pseudonym")
-                            metrics["is_pseudonym"] = False
+                # code_coding_present
+                if rule_enabled(config, "code_coding_present"):
+                    code = resource.get("code", {})
+                    if code and not code.get("coding"):
+                        issues.append(
+                            {
+                                "rule": "code_coding_present",
+                                "severity": config["code_coding_present"]["severity"],
+                                "message": """Medication.code.coding 
+                                            is missing. Structured coding
+                                            is preferred over text only.
+                                        """,
+                            }
+                        )
+
+                # ======= plausibility: =======
+                #
+                # ingredient_item_check
+                if rule_enabled(config, "ingredient_item_check"):
+                    for ingredient in resource.get("ingredient", []):
+                        has_codeable = ingredient.get("itemCodeableConcept")
+                        has_reference = ingredient.get("itemReference")
+                        if not has_codeable and not has_reference:
+                            issues.append(
+                                {
+                                    "rule": "ingredient_item_check",
+                                    "severity": config["ingredient_item_check"][
+                                        "severity"
+                                    ],
+                                    "message": """Medication.ingredient
+                                                    has no itemCodeableConcept
+                                                    or itemReference.
+                                                """,
+                                }
+                            )
                             break
 
-                # 3 Ingredient
-                if medication.get("ingredient"):
-                    for ingredient in medication["ingredient"]:
-                        if not ingredient.get(
-                            "itemCodeableConcept"
-                        ) and not ingredient.get("itemReference"):
-                            issues.append("Ingredient is missing or invalid")
-                            metrics["has_ingredient"] = False
-                            break
-
-                # save invalid resource
                 if issues:
                     page_invalid += 1
                     await self.save_invalid(
-                        run_id, "Medication", mid, issues, metrics, db
+                        run_id, "Medication", rid, issues, metrics, db
                     )
 
-            if page_processed > 0:
-                await db.execute(
-                    update(ValidationRun)
-                    .where(ValidationRun.id == run_id)
-                    .values(
-                        total_processed=ValidationRun.total_processed + page_processed,
-                        total_invalid=ValidationRun.total_invalid + page_invalid,
-                    )
-                )
-                await db.commit()
-
+            await self._update_run_counters(run_id, page_processed, page_invalid, db)
             url = next(
                 (
-                    link["url"]
-                    for link in bundle.get("link", [])
-                    if link.get("relation") == "next"
+                    l["url"]
+                    for l in bundle.get("link", [])
+                    if l.get("relation") == "next"
                 ),
                 None,
             )
 
+        logger.info("Medication validation complete for run %s", run_id)
 
-# ====================== MEDICATIONREQUEST ======================
+
+# =============================================================================
+# MEDICATIONREQUEST
+# =============================================================================
 class MedicationRequestValidator(BaseValidator):
     "MedicationRequest Validator."
 
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         "Validate and save the resources Medicationrequests."
 
+        config = await get_config_for_run(self.server_id, "MedicationRequest", db)
         url = f"{self.base_url}/MedicationRequest?_count={self.PAGE_SIZE}"
 
         while url:
@@ -371,88 +837,132 @@ class MedicationRequestValidator(BaseValidator):
 
             for entry in entries:
                 page_processed += 1
-                mr = entry.get("resource", {})
-                mrid = mr.get("id", "")
+                resource = entry.get("resource", {})
+                rid = resource.get("id", "")
                 issues = []
-                metrics = {
-                    "has_medication": True,
-                    "has_patient": True,
-                    "has_timestamp": True,
-                    "is_correct_boundperiod": True,
-                    "has_status": True,
-                    "is_pseudonym": True,
-                }
+                metrics = {}
 
-                # 1. Medication Reference
-                med_ref = mr.get("medicationReference") or mr.get(
-                    "medicationCodeableConcept"
-                )
-                if not med_ref:
-                    issues.append("medication reference missing")
-                    metrics["has_medication"] = False
+                # =========  completeness: ===========
+                #
+                # status_required
+                if rule_enabled(config, "status_required"):
+                    if not resource.get("status"):
+                        issues.append(
+                            {
+                                "rule": "status_required",
+                                "severity": config["status_required"]["severity"],
+                                "message": "MedicationRequest.status is missing.",
+                            }
+                        )
 
-                # 2. Patient Reference
-                if not mr.get("subject") or "Patient" not in str(mr.get("subject")):
-                    issues.append("patient reference missing")
-                    metrics["has_patient"] = False
+                # intent_required
+                if rule_enabled(config, "intent_required"):
+                    if not resource.get("intent"):
+                        issues.append(
+                            {
+                                "rule": "intent_required",
+                                "severity": config["intent_required"]["severity"],
+                                "message": "MedicationRequest.intent is missing.",
+                            }
+                        )
 
-                # 3. Status
-                if not mr.get("status"):
-                    issues.append("status missing")
-                    metrics["has_status"] = False
+                # medication_required
+                if rule_enabled(config, "medication_required"):
+                    if not resource.get("medicationReference") and not resource.get(
+                        "medicationCodeableConcept"
+                    ):
+                        issues.append(
+                            {
+                                "rule": "medication_required",
+                                "severity": config["medication_required"]["severity"],
+                                "message": "MedicationRequest.medication[x] is missing.",
+                            }
+                        )
 
-                # 4. Timestamp (authoredOn or boundsPeriod)
-                if not mr.get("authoredOn") and not any(
-                    d.get("timing", {}).get("repeat", {}).get("boundsPeriod")
-                    for d in mr.get("dosageInstruction", [])
-                ):
-                    issues.append("timestamp missing")
-                    metrics["has_timestamp"] = False
+                #  subject_required
+                if rule_enabled(config, "subject_required"):
+                    if not resource.get("subject"):
+                        issues.append(
+                            {
+                                "rule": "subject_required",
+                                "severity": config["subject_required"]["severity"],
+                                "message": "MedicationRequest.subject is missing.",
+                            }
+                        )
 
-                # 5. Pseudonym
-                if mr.get("identifier"):
-                    for ident in mr["identifier"]:
-                        if ident.get("value") and ident["value"].startswith("MO"):
-                            issues.append(
-                                "Resource is not pseudonym (contains MO identifier)"
-                            )
-                            metrics["is_pseudonym"] = False
-                            break
+                #  authored_on_required
+                if rule_enabled(config, "authored_on_required"):
+                    has_authored = resource.get("authoredOn")
+                    has_bounds = any(
+                        d.get("timing", {}).get("repeat", {}).get("boundsPeriod")
+                        for d in resource.get("dosageInstruction", [])
+                    )
+                    if not has_authored and not has_bounds:
+                        issues.append(
+                            {
+                                "rule": "authored_on_required",
+                                "severity": config["authored_on_required"]["severity"],
+                                "message": "MedicationRequest.authoredOn is missing and no boundsPeriod in dosageInstruction.",
+                            }
+                        )
+
+                # plausibility: authored_not_future
+                if rule_enabled(config, "authored_not_future"):
+                    authored = resource.get("authoredOn", "")
+                    if authored and self._is_future(authored):
+                        issues.append(
+                            {
+                                "rule": "authored_not_future",
+                                "severity": config["authored_not_future"]["severity"],
+                                "message": f"MedicationRequest.authoredOn '{authored}' is in the future.",
+                            }
+                        )
+
+                # integrity: subject_reference_format
+                if rule_enabled(config, "subject_reference_format"):
+                    ref = resource.get("subject", {}).get("reference", "")
+                    if ref and not self._is_reference_format(ref, "Patient"):
+                        issues.append(
+                            {
+                                "rule": "subject_reference_format",
+                                "severity": config["subject_reference_format"][
+                                    "severity"
+                                ],
+                                "message": f"MedicationRequest.subject.reference '{ref}' must follow 'Patient/{{id}}' format.",
+                            }
+                        )
 
                 if issues:
                     page_invalid += 1
                     await self.save_invalid(
-                        run_id, "MedicationRequest", mrid, issues, metrics, db
+                        run_id, "MedicationRequest", rid, issues, metrics, db
                     )
 
-            if page_processed > 0:
-                await db.execute(
-                    update(ValidationRun)
-                    .where(ValidationRun.id == run_id)
-                    .values(
-                        total_processed=ValidationRun.total_processed + page_processed,
-                        total_invalid=ValidationRun.total_invalid + page_invalid,
-                    )
-                )
-                await db.commit()
-
+            await self._update_run_counters(run_id, page_processed, page_invalid, db)
             url = next(
                 (
-                    link["url"]
-                    for link in bundle.get("link", [])
-                    if link.get("relation") == "next"
+                    l["url"]
+                    for l in bundle.get("link", [])
+                    if l.get("relation") == "next"
                 ),
                 None,
             )
 
+        logger.info("MedicationRequest validation complete for run %s", run_id)
 
-# ====================== MEDICATIONADMINISTRATION ======================
+
+# =============================================================================
+# MEDICATIONADMINISTRATION
+# =============================================================================
 class MedicationAdministrationValidator(BaseValidator):
     """Medication Administration Validator"""
 
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         """Validate and save the resources Medicationadministrations"""
 
+        config = await get_config_for_run(
+            self.server_id, "MedicationAdministration", db
+        )
         url = f"{self.base_url}/MedicationAdministration?_count={self.PAGE_SIZE}"
 
         while url:
@@ -463,82 +973,135 @@ class MedicationAdministrationValidator(BaseValidator):
 
             for entry in entries:
                 page_processed += 1
-                ma = entry.get("resource", {})
-                maid = ma.get("id", "")
+                resource = entry.get("resource", {})
+                rid = resource.get("id", "")
                 issues = []
-                metrics = {
-                    "has_medication": True,
-                    "has_patient": True,
-                    "has_timestamp": True,
-                    "is_correct_effective_period": True,
-                    "has_status": True,
-                    "is_pseudonym": True,
-                }
+                metrics = {}
 
-                # Medication Reference
-                if not (
-                    ma.get("medicationReference") or ma.get("medicationCodeableConcept")
-                ):
-                    issues.append("medication reference missing")
-                    metrics["has_medication"] = False
+                # completeness: status_required
+                if rule_enabled(config, "status_required"):
+                    if not resource.get("status"):
+                        issues.append(
+                            {
+                                "rule": "status_required",
+                                "severity": config["status_required"]["severity"],
+                                "message": "MedicationAdministration.status is missing.",
+                            }
+                        )
 
-                # Patient Reference
-                if not ma.get("subject") or "Patient" not in str(ma.get("subject")):
-                    issues.append("patient reference missing")
-                    metrics["has_patient"] = False
+                # completeness: medication_required
+                if rule_enabled(config, "medication_required"):
+                    if not resource.get("medicationReference") and not resource.get(
+                        "medicationCodeableConcept"
+                    ):
+                        issues.append(
+                            {
+                                "rule": "medication_required",
+                                "severity": config["medication_required"]["severity"],
+                                "message": "MedicationAdministration.medication[x] is missing.",
+                            }
+                        )
 
-                # Status
-                if not ma.get("status"):
-                    issues.append("status missing")
-                    metrics["has_status"] = False
+                # completeness: subject_required
+                if rule_enabled(config, "subject_required"):
+                    if not resource.get("subject"):
+                        issues.append(
+                            {
+                                "rule": "subject_required",
+                                "severity": config["subject_required"]["severity"],
+                                "message": "MedicationAdministration.subject is missing.",
+                            }
+                        )
 
-                # Effective DateTime or Period
-                if not ma.get("effectiveDateTime") and not ma.get("effectivePeriod"):
-                    issues.append(
-                        "timestamp missing (neither effectiveDateTime nor effectivePeriod)"
-                    )
-                    metrics["has_timestamp"] = False
+                # completeness: effective_required
+                if rule_enabled(config, "effective_required"):
+                    if not resource.get("effectiveDateTime") and not resource.get(
+                        "effectivePeriod"
+                    ):
+                        issues.append(
+                            {
+                                "rule": "effective_required",
+                                "severity": config["effective_required"]["severity"],
+                                "message": "MedicationAdministration.effective[x] is missing.",
+                            }
+                        )
 
-                # Pseudonym
-                if ma.get("identifier"):
-                    for ident in ma["identifier"]:
-                        if ident.get("value") and ident["value"].startswith("MED"):
-                            issues.append(
-                                "Resource is not pseudonym (contains MED identifier)"
+                # plausibility: effective_not_future
+                if rule_enabled(config, "effective_not_future"):
+                    eff = resource.get("effectiveDateTime", "")
+                    if eff and self._is_future(eff):
+                        issues.append(
+                            {
+                                "rule": "effective_not_future",
+                                "severity": config["effective_not_future"]["severity"],
+                                "message": f"MedicationAdministration.effectiveDateTime '{eff}' is in the future.",
+                            }
+                        )
+
+                # plausibility: effective_period_end_after_start
+                if rule_enabled(config, "effective_period_end_after_start"):
+                    period = resource.get("effectivePeriod", {})
+                    start = period.get("start")
+                    end = period.get("end")
+                    if start and end:
+                        try:
+                            start_dt = datetime.fromisoformat(
+                                start.replace("Z", "+00:00")
                             )
-                            metrics["is_pseudonym"] = False
-                            break
+                            end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
+                            if end_dt <= start_dt:
+                                issues.append(
+                                    {
+                                        "rule": "effective_period_end_after_start",
+                                        "severity": config[
+                                            "effective_period_end_after_start"
+                                        ]["severity"],
+                                        "message": "MedicationAdministration.effectivePeriod.end is not after start.",
+                                    }
+                                )
+                        except ValueError:
+                            pass
+
+                # integrity: subject_reference_format
+                if rule_enabled(config, "subject_reference_format"):
+                    ref = resource.get("subject", {}).get("reference", "")
+                    if ref and not self._is_reference_format(ref, "Patient"):
+                        issues.append(
+                            {
+                                "rule": "subject_reference_format",
+                                "severity": config["subject_reference_format"][
+                                    "severity"
+                                ],
+                                "message": f"MedicationAdministration.subject.reference '{ref}' must follow 'Patient/{{id}}' format.",
+                            }
+                        )
 
                 if issues:
                     page_invalid += 1
                     await self.save_invalid(
-                        run_id, "MedicationAdministration", maid, issues, metrics, db
+                        run_id, "MedicationAdministration", rid, issues, metrics, db
                     )
 
-            if page_processed > 0:
-                await db.execute(
-                    update(ValidationRun)
-                    .where(ValidationRun.id == run_id)
-                    .values(
-                        total_processed=ValidationRun.total_processed + page_processed,
-                        total_invalid=ValidationRun.total_invalid + page_invalid,
-                    )
-                )
-                await db.commit()
+            await self._update_run_counters(run_id, page_processed, page_invalid, db)
             url = next(
                 (
-                    link["url"]
-                    for link in bundle.get("link", [])
-                    if link.get("relation") == "next"
+                    l["url"]
+                    for l in bundle.get("link", [])
+                    if l.get("relation") == "next"
                 ),
                 None,
             )
 
+        logger.info("MedicationAdministration validation complete for run %s", run_id)
 
-# Registry
-VALIDATORS = {
+
+# =============================================================================
+# VALIDATORS REGISTRY
+# =============================================================================
+VALIDATORS: dict[str, type[BaseValidator]] = {
     "Patient": PatientValidator,
     "Encounter": EncounterValidator,
+    "Observation": ObservationValidator,
     "Medication": MedicationValidator,
     "MedicationRequest": MedicationRequestValidator,
     "MedicationAdministration": MedicationAdministrationValidator,
