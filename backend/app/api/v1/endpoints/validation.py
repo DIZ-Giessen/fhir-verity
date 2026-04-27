@@ -38,7 +38,6 @@ async def start_validation(
         FhirServer.is_active.is_(True),
     )
 
-    print(f" Hier der Server ID {request.server_id} ")
     result = await db.execute(stmt)
     server = result.scalar_one_or_none()
 

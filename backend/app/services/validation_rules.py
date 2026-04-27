@@ -135,6 +135,41 @@ class BaseValidator:
         )
         await db.commit()
 
+    async def _check_linked_resources(
+        self,
+        patient_ids: list[str],
+        resource_type: str,
+    ) -> set[str]:
+        """
+        Check which patients have at least one linked resource.
+        Uses individual _summary=count requests fired concurrently.
+        Semaphore limits to 20 parallel requests to avoid overloading the server.
+        """
+        patients_with_resource: set[str] = set()
+        semaphore = asyncio.Semaphore(20)
+
+        async def check_single(pid: str):
+            url = (
+                f"{self.base_url}/{resource_type}"
+                f"?subject=Patient/{pid}"
+                f"&_summary=count"
+            )
+            async with semaphore:
+                try:
+                    bundle = await self.fetch_bundle(url)
+                    if bundle.get("total", 0) > 0:
+                        patients_with_resource.add(pid)
+                except Exception as e:
+                    logger.warning(
+                        "%s count check failed for Patient/%s: %s",
+                        resource_type,
+                        pid,
+                        e,
+                    )
+
+        await asyncio.gather(*[check_single(pid) for pid in patient_ids])
+        return patients_with_resource
+
     @staticmethod
     def _is_future(date_str: str) -> bool:
         if not date_str:
@@ -173,6 +208,26 @@ class PatientValidator(BaseValidator):
         while url:
             bundle = await self.fetch_bundle(url)
             entries = bundle.get("entry", [])
+
+            page_patient_ids = [
+                e.get("resource", {}).get("id", "")
+                for e in entries
+                if e.get("resource", {}).get("id")
+            ]
+            # Batch-query: wich patient are mindestens one obesertation or condition
+            patients_with_observation: set[str] = set()
+            patients_with_condition: set[str] = set()
+
+            if rule_enabled(config, "has_observation"):
+                patients_with_observation = await self._check_linked_resources(
+                    page_patient_ids, "Observation"
+                )
+
+            if rule_enabled(config, "has_condition"):
+                patients_with_condition = await self._check_linked_resources(
+                    page_patient_ids, "Condition"
+                )
+
             page_processed = 0
             page_invalid = 0
 
@@ -205,10 +260,7 @@ class PatientValidator(BaseValidator):
                                 {
                                     "rule": "address_forbidden",
                                     "severity": config["address_forbidden"]["severity"],
-                                    "message": """Patient.address
-                                                     contains forbidden fields
-                                                      (line, city, or text).
-                                                """,
+                                    "message": "Patient.address contains forbidden fields (line, city, or text).",
                                 }
                             )
                             metrics["address_forbidden"] = False
@@ -273,15 +325,39 @@ class PatientValidator(BaseValidator):
                                 break
 
                 # ============================= completeness  ==============================
+
+                # completeness: has_observation
+                if rule_enabled(config, "has_observation"):
+                    if rid not in patients_with_observation:
+                        issues.append(
+                            {
+                                "rule": "has_observation",
+                                "severity": config["has_observation"]["severity"],
+                                "message": f"Patient/{rid} has no linked Observation.",
+                            }
+                        )
+                        metrics["has_observation"] = False
+
+                # completeness: has_condition
+                if rule_enabled(config, "has_condition"):
+                    if rid not in patients_with_condition:
+                        issues.append(
+                            {
+                                "rule": "has_condition",
+                                "severity": config["has_condition"]["severity"],
+                                "message": f"Patient/{rid} has no linked Condition.",
+                            }
+                        )
+                        metrics["has_condition"] = False
+
+                # Identifier Required
                 if rule_enabled(config, "identifier_required"):
                     if not resource.get("identifier"):
                         issues.append(
                             {
                                 "rule": "identifier_required",
                                 "severity": config["identifier_required"]["severity"],
-                                "message": """Patient.identifier is missing. 
-                                                At least one identifier is required.
-                                           """,
+                                "message": "Patient.identifier is missing. At least one identifier is required. ",
                             }
                         )
                         metrics["identifier_required"] = False
@@ -296,7 +372,7 @@ class PatientValidator(BaseValidator):
                                 "message": "Patient.birthDate is missing.",
                             }
                         )
-                        metrics["has_birthdate"] = False
+                        metrics["birthdate_required"] = False
 
                 # gender_required
                 if rule_enabled(config, "gender_required"):
@@ -337,9 +413,7 @@ class PatientValidator(BaseValidator):
                                         "severity": config["birthdate_plausible_range"][
                                             "severity"
                                         ],
-                                        "message": f"""Patient.birthDate '{bd}'
-                                                         is more than 150 years in the past.
-                                                    """,
+                                        "message": f"Patient.birthDate '{bd}' is more than 150 years in the past. ",
                                     }
                                 )
                                 metrics["birthdate_plausible_range"] = False
@@ -359,8 +433,6 @@ class PatientValidator(BaseValidator):
                 ),
                 None,
             )
-
-        logger.info("Patient validation complete for run %s", run_id)
 
 
 # =============================================================================
@@ -385,9 +457,10 @@ class EncounterValidator(BaseValidator):
                 resource = entry.get("resource", {})
                 rid = resource.get("id", "")
                 issues = []
-                metrics = {}
+                metrics = self._build_metrics(config)
 
-                # ============ privacy: =====================
+                # ! ============= privacy =====================
+
                 if rule_enabled(config, "pseudonym_format_check"):
                     pattern = config["pseudonym_format_check"].get("pattern")
                     if pattern:
@@ -401,9 +474,10 @@ class EncounterValidator(BaseValidator):
                                     "message": f"Encounter.id '{rid}' does not match pseudonym pattern.",
                                 }
                             )
+                            metrics["pseudonym_format_check"] = False
 
-                # ============== completeness: ==================
-                #
+                #  ============== completeness: ==================
+
                 # status_required
                 if rule_enabled(config, "status_required"):
                     if not resource.get("status"):
@@ -414,6 +488,7 @@ class EncounterValidator(BaseValidator):
                                 "message": "Encounter.status is missing.",
                             }
                         )
+                        metrics["status_required"] = False
 
                 # class_required
                 if rule_enabled(config, "class_required"):
@@ -425,6 +500,7 @@ class EncounterValidator(BaseValidator):
                                 "message": "Encounter.class is missing.",
                             }
                         )
+                        metrics["class_required"] = False
 
                 # subject_required
                 if rule_enabled(config, "subject_required"):
@@ -436,6 +512,7 @@ class EncounterValidator(BaseValidator):
                                 "message": "Encounter.subject is missing.",
                             }
                         )
+                        metrics["subject_required"] = False
 
                 # period_start_required
                 if rule_enabled(config, "period_start_required"):
@@ -448,9 +525,10 @@ class EncounterValidator(BaseValidator):
                                 "message": "Encounter.period.start is missing.",
                             }
                         )
+                        metrics["period_start_required"] = False
 
-                # ========= plausibility: =================
-                #
+                #  ================ plausibility: ==================
+
                 # period_end_after_start
                 if rule_enabled(config, "period_end_after_start"):
                     period = resource.get("period", {})
@@ -498,17 +576,15 @@ class EncounterValidator(BaseValidator):
                                         "severity": config["period_plausible_duration"][
                                             "severity"
                                         ],
-                                        "message": f"""
-                                            Encounter duration is {duration_days} days,
-                                            which exceeds 730 days.
-                                            """,
+                                        "message": f"Encounter duration is {duration_days} days, which exceeds 730 days.",
                                     }
                                 )
+                                metrics["period_plausible_duration"] = False
                         except ValueError:
                             pass
 
                 # ========= integrity: ===============
-                #
+
                 # subject_reference_format
                 if rule_enabled(config, "subject_reference_format"):
                     ref = resource.get("subject", {}).get("reference", "")
@@ -519,12 +595,10 @@ class EncounterValidator(BaseValidator):
                                 "severity": config["subject_reference_format"][
                                     "severity"
                                 ],
-                                "message": f"""
-                                Encounter.subject.reference '{ref}'
-                                 must follow 'Patient/{{id}}' format.
-                                """,
+                                "message": f"Encounter.subject.reference '{ref}'must follow 'Patient/{{id}}' format.",
                             }
                         )
+                        metrics["subject_reference_format"] = False
 
                 if issues:
                     page_invalid += 1
@@ -541,8 +615,6 @@ class EncounterValidator(BaseValidator):
                 ),
                 None,
             )
-
-        logger.info("Encounter validation complete for run %s", run_id)
 
 
 # =============================================================================
@@ -583,11 +655,10 @@ class ObservationValidator(BaseValidator):
                                     "severity"
                                 ],
                                 "message": """
-                                    Observation.valueString contains
-                                     a long string that may include
-                                      personal data.""",
+                                    Observation.valueString containsa long string that may include personal data.""",
                             }
                         )
+                        metrics["value_string_cleartext_forbidden"] = False
 
                 # ========== completeness:  =========
                 #
@@ -601,6 +672,7 @@ class ObservationValidator(BaseValidator):
                                 "message": "Observation.status is missing.",
                             }
                         )
+                        metrics["status_required"] = False
 
                 # code_required
                 if rule_enabled(config, "code_required"):
@@ -612,6 +684,7 @@ class ObservationValidator(BaseValidator):
                                 "message": "Observation.code is missing.",
                             }
                         )
+                        metrics["code_required"] = False
 
                 # subject_required
                 if rule_enabled(config, "subject_required"):
@@ -623,6 +696,7 @@ class ObservationValidator(BaseValidator):
                                 "message": "Observation.subject is missing.",
                             }
                         )
+                        metrics["subject_required"] = False
 
                 # effective_required
                 if rule_enabled(config, "effective_required"):
@@ -639,6 +713,7 @@ class ObservationValidator(BaseValidator):
                                 "message": "Observation.effective[x] is missing.",
                             }
                         )
+                        metrics["effective_required"] = False
 
                 # value_present
                 if rule_enabled(config, "value_present"):
@@ -667,6 +742,7 @@ class ObservationValidator(BaseValidator):
                                 "message": "Observation has no value[x] and no dataAbsentReason.",
                             }
                         )
+                        metrics["value_present"] = False
 
                 # ========= plausibility: ==========
                 #
@@ -683,6 +759,7 @@ class ObservationValidator(BaseValidator):
                                 "message": f"Observation.effectiveDateTime '{eff}' is in the future.",
                             }
                         )
+                        metrics["effective_not_future"] = False
 
                 # ========= integrity: =============
                 #
@@ -701,6 +778,7 @@ class ObservationValidator(BaseValidator):
                                  'Patient/{{id}}' format.""",
                             }
                         )
+                        metrics["subject_reference_format"] = False
 
                 if issues:
                     page_invalid += 1

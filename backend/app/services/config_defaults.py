@@ -70,7 +70,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "enabled": True,
             "severity": "error",
             "category": "privacy",
-            "pattern": None,
+            "pattern": "^20[0-9]{7}$",
             "description": (
                 "Prüft ob die Patient.id dem erwarteten Pseudonym-Format entspricht. "
                 "pattern=null deaktiviert die Regex-Prüfung (nur Anwesenheit wird geprüft). "
@@ -80,7 +80,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "enabled": True,
             "severity": "error",
             "category": "privacy",
-            "pattern": None,
+            "pattern": "^20[0-9]{7}$",
             "description": (
                 "Prüft ob Patient.identifier-Werte dem Pseudonym-Format entsprechen. "
             ),
@@ -115,6 +115,24 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "category": "completeness",
             "description": ("Referenz auf die behandelnde Einrichtung. "),
         },
+        "has_observation": {
+            "enabled": True,
+            "severity": "warning",
+            "category": "completeness",
+            "description": (
+                "Jeder Patient sollte mindestens eine verknüpfte Observation haben. "
+                "Patienten ohne Observations deuten auf unvollständige Datenmigration hin."
+            ),
+        },
+        "has_condition": {
+            "enabled": True,
+            "severity": "warning",
+            "category": "completeness",
+            "description": (
+                "Jeder Patient sollte mindestens eine verknüpfte Condition (Diagnose) haben. "
+                "Patienten ohne Conditions deuten auf unvollständige Datenmigration hin."
+            ),
+        },
         # --- Plausibility ---
         "birthdate_not_future": {
             "enabled": True,
@@ -146,7 +164,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "enabled": True,
             "severity": "error",
             "category": "privacy",
-            "pattern": None,
+            "pattern": "^20[0-9]{8}$",
             "description": (
                 "Prüft ob die Encounter.id dem erwarteten Pseudonym-Format entspricht. "
                 "pattern=null deaktiviert die Regex-Prüfung."
@@ -322,7 +340,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
     "Observation": {
         # --- Privacy & Pseudonymization ---
         "value_string_cleartext_forbidden": {
-            "enabled": True,
+            "enabled": False,
             "severity": "error",
             "category": "privacy",
             "description": (
