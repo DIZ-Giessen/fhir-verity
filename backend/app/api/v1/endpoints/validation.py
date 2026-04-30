@@ -17,6 +17,7 @@ from app.models.validation_run import ValidationRun, ValidationStatus
 from app.schemas.validation import ValidationStartRequest, ValidationRunRead
 
 from app.services.validation_rules import VALIDATORS
+from app.services.fhir_report_service import generate_and_post_reports
 
 
 router = APIRouter()
@@ -122,6 +123,16 @@ async def run_validation_task(
                 run.status = ValidationStatus.COMPLETED
                 run.finished_at = datetime.now()
                 await db.commit()
+                await db.refresh(run)
+
+                # FHIR Reports generieren und posten
+                await generate_and_post_reports(
+                    run=run,
+                    server_base_url=base_url,
+                    server_id=str(server_id),
+                    auth_config=auth_config,
+                    db=db,
+                )
 
             await broadcast_progress(
                 str(run_id),
