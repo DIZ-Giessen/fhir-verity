@@ -100,9 +100,11 @@ async def run_validation_task(
                     await broadcast_progress(
                         str(run_id),
                         {
+                            "type": "resource_start",
                             "run_id": str(run_id),
                             "status": "running",
-                            "current_resource": res_type,
+                            "resource_type": res_type,
+                            "message": f"Starting validation for {res_type}",
                         },
                     )
 
@@ -124,10 +126,12 @@ async def run_validation_task(
             await broadcast_progress(
                 str(run_id),
                 {
+                    "type": "completed",
                     "run_id": str(run_id),
                     "status": "completed",
                     "total_processed": run.total_processed if run else 0,
                     "total_invalid": run.total_invalid if run else 0,
+                    "message": "Validation run completed successfully",
                 },
             )
 
@@ -152,6 +156,7 @@ async def run_validation_task(
             await broadcast_progress(
                 str(run_id),
                 {
+                    "type": "failled",
                     "run_id": str(run_id),
                     "status": "failed",
                     "error": str(e),

@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FHIR Verity — WebSocket Monitor</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0a0c10;
+        --surface: #111318;
+        --border: #1e2330;
+        --accent: #00d4aa;
+        --accent-dim: rgba(0, 212, 170, 0.12);
+        --warn: #f59e0b;
+        --error: #ef4444;
+        --success: #10b981;
+        --text: #e2e8f0;
+        --muted: #64748b;
+        --mono: "JetBrains Mono", monospace;
+        --sans: "Syne", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 13px;
+        min-height: 100vh;
+        padding: 24px;
+      }
+
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+        margin-bottom: 28px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 16px;
+      }
+
+      header h1 {
+        font-family: var(--sans);
+        font-size: 20px;
+        font-weight: 800;
+        color: var(--accent);
+        letter-spacing: -0.5px;
+      }
+
+      header span {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .controls {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      input {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 12px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        outline: none;
+        width: 320px;
+        transition: border-color 0.2s;
+      }
+      input:focus {
+        border-color: var(--accent);
+      }
+      input::placeholder {
+        color: var(--muted);
+      }
+
+      button {
+        background: var(--accent-dim);
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      button:hover {
+        background: rgba(0, 212, 170, 0.22);
+      }
+      button.danger {
+        border-color: var(--error);
+        color: var(--error);
+        background: rgba(239, 68, 68, 0.08);
+      }
+      button.danger:hover {
+        background: rgba(239, 68, 68, 0.18);
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+        display: inline-block;
+        margin-right: 6px;
+        transition: background 0.3s;
+      }
+      .status-dot.connected {
+        background: var(--success);
+        box-shadow: 0 0 6px var(--success);
+        animation: pulse 2s infinite;
+      }
+      .status-dot.error {
+        background: var(--error);
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+      }
+
+      .card-label {
+        color: var(--muted);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        margin-bottom: 8px;
+      }
+
+      .card-value {
+        font-family: var(--sans);
+        font-size: 32px;
+        font-weight: 800;
+        color: var(--text);
+        line-height: 1;
+      }
+
+      .card-value.accent {
+        color: var(--accent);
+      }
+      .card-value.warn {
+        color: var(--warn);
+      }
+      .card-value.error {
+        color: var(--error);
+      }
+      .card-value.success {
+        color: var(--success);
+      }
+
+      .progress-block {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 14px;
+      }
+
+      .progress-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .resource-badge {
+        background: var(--accent-dim);
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 4px;
+      }
+
+      .eta-text {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .progress-bar-bg {
+        height: 6px;
+        background: var(--border);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+
+      .progress-bar-fill {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 3px;
+        transition: width 0.4s ease;
+        width: 0%;
+      }
+
+      .progress-stats {
+        display: flex;
+        gap: 20px;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .progress-stats span {
+        color: var(--text);
+      }
+
+      .log-container {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        height: 280px;
+        overflow-y: auto;
+        padding: 12px;
+      }
+
+      .log-entry {
+        display: flex;
+        gap: 10px;
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(30, 35, 48, 0.5);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .log-entry:last-child {
+        border-bottom: none;
+      }
+
+      .log-time {
+        color: var(--muted);
+        flex-shrink: 0;
+        width: 80px;
+      }
+
+      .log-type {
+        flex-shrink: 0;
+        width: 90px;
+        font-weight: 600;
+      }
+      .log-type.progress {
+        color: var(--accent);
+      }
+      .log-type.completed {
+        color: var(--success);
+      }
+      .log-type.failed {
+        color: var(--error);
+      }
+      .log-type.resource_start {
+        color: var(--warn);
+      }
+      .log-type.pong {
+        color: var(--muted);
+      }
+      .log-type.raw {
+        color: var(--muted);
+      }
+
+      .log-msg {
+        color: var(--text);
+        word-break: break-all;
+      }
+
+      .section-label {
+        color: var(--muted);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        margin-bottom: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>FHIR Verity</h1>
+      <span>WebSocket Monitor</span>
+      <span style="margin-left: auto; display: flex; align-items: center">
+        <span class="status-dot" id="dot"></span>
+        <span id="connStatus" style="color: var(--muted)">Getrennt</span>
+      </span>
+    </header>
+
+    <div class="controls">
+      <input id="runInput" type="text" placeholder="Run ID eingeben..." />
+      <button onclick="connect()">Verbinden</button>
+      <button class="danger" onclick="disconnect()">Trennen</button>
+      <button
+        onclick="clearLog()"
+        style="
+          border-color: var(--muted);
+          color: var(--muted);
+          background: transparent;
+        "
+      >
+        Log leeren
+      </button>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-label">Verarbeitet</div>
+        <div class="card-value accent" id="statProcessed">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Invalide</div>
+        <div class="card-value warn" id="statInvalid">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Ressourcen/s</div>
+        <div class="card-value" id="statRps">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Elapsed</div>
+        <div class="card-value" id="statElapsed">—</div>
+      </div>
+    </div>
+
+    <div class="progress-block">
+      <div class="progress-header">
+        <div>
+          <div class="card-label" style="margin: 0 0 4px">Aktuell</div>
+          <span class="resource-badge" id="currentResource">—</span>
+        </div>
+        <div style="text-align: right">
+          <div class="card-label" style="margin: 0 0 4px">Fortschritt</div>
+          <span class="eta-text" id="etaText">—</span>
+        </div>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressBar"></div>
+      </div>
+      <div class="progress-stats">
+        Seiten: <span id="statPages">—</span> &nbsp;·&nbsp; Prozent:
+        <span id="statPercent">—</span> &nbsp;·&nbsp; ETA:
+        <span id="statEta">—</span>
+      </div>
+    </div>
+
+    <div class="section-label">Event-Log</div>
+    <div class="log-container" id="log"></div>
+
+    <script>
+      let ws = null;
+
+      function connect() {
+        const runId = document.getElementById("runInput").value.trim();
+        if (!runId) {
+          alert("Run ID fehlt");
+          return;
+        }
+        if (ws) ws.close();
+
+        ws = new WebSocket(`ws://localhost:8000/api/v1/ws/validation/${runId}`);
+
+        ws.onopen = () => {
+          setStatus("connected");
+          addLog("system", "Verbunden mit Run " + runId);
+          ws.send("ping");
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          handleMessage(data);
+        };
+
+        ws.onerror = () => {
+          setStatus("error");
+          addLog("error", "WebSocket Fehler");
+        };
+
+        ws.onclose = () => {
+          setStatus("disconnected");
+          addLog("system", "Verbindung getrennt");
+        };
+      }
+
+      function disconnect() {
+        if (ws) {
+          ws.close();
+          ws = null;
+        }
+      }
+
+      function clearLog() {
+        document.getElementById("log").innerHTML = "";
+      }
+
+      function setStatus(state) {
+        const dot = document.getElementById("dot");
+        const txt = document.getElementById("connStatus");
+        dot.className = "status-dot";
+        if (state === "connected") {
+          dot.classList.add("connected");
+          txt.textContent = "Verbunden";
+          txt.style.color = "var(--success)";
+        } else if (state === "error") {
+          dot.classList.add("error");
+          txt.textContent = "Fehler";
+          txt.style.color = "var(--error)";
+        } else {
+          txt.textContent = "Getrennt";
+          txt.style.color = "var(--muted)";
+        }
+      }
+
+      function handleMessage(data) {
+        const type = data.type || "raw";
+
+        if (type === "progress") {
+          document.getElementById("statProcessed").textContent = fmt(
+            data.total_processed,
+          );
+          document.getElementById("statInvalid").textContent = fmt(
+            data.total_invalid,
+          );
+          document.getElementById("statRps").textContent =
+            data.resources_per_second ?? "—";
+          document.getElementById("statElapsed").textContent =
+            data.elapsed_seconds != null ? data.elapsed_seconds + "s" : "—";
+          document.getElementById("currentResource").textContent =
+            data.resource_type ?? "—";
+          document.getElementById("statPages").textContent =
+            data.pages_done ?? "—";
+
+          const pct = data.progress_percent;
+          document.getElementById("statPercent").textContent =
+            pct != null ? pct + "%" : "—";
+          document.getElementById("progressBar").style.width =
+            pct != null ? pct + "%" : "0%";
+
+          const eta = data.eta_seconds;
+          const etaStr = eta != null ? fmtTime(eta) : "unbekannt";
+          document.getElementById("statEta").textContent = etaStr;
+          document.getElementById("etaText").textContent =
+            pct != null ? pct + "%" : "";
+
+          addLog(
+            type,
+            `${data.resource_type} — ${fmt(data.total_processed)} verarbeitet / ${fmt(data.total_invalid)} invalide — ${pct ?? "?"}% — ETA ${etaStr}`,
+          );
+        } else if (type === "completed") {
+          document.getElementById("statProcessed").textContent = fmt(
+            data.total_processed,
+          );
+          document.getElementById("statInvalid").textContent = fmt(
+            data.total_invalid,
+          );
+          document.getElementById("progressBar").style.width = "100%";
+          document.getElementById("statPercent").textContent = "100%";
+          document.getElementById("etaText").textContent = "100%";
+          addLog(
+            type,
+            `Abgeschlossen — ${fmt(data.total_processed)} verarbeitet / ${fmt(data.total_invalid)} invalide`,
+          );
+        } else if (type === "resource_start") {
+          document.getElementById("currentResource").textContent =
+            data.resource_type ?? "—";
+          document.getElementById("progressBar").style.width = "0%";
+          addLog(type, `Starte ${data.resource_type}`);
+        } else if (type === "failed") {
+          addLog("failed", `Fehler: ${data.error ?? "unbekannt"}`);
+        } else {
+          addLog(type, JSON.stringify(data));
+        }
+      }
+
+      function addLog(type, msg) {
+        const container = document.getElementById("log");
+        const now = new Date().toLocaleTimeString("de-DE");
+        const entry = document.createElement("div");
+        entry.className = "log-entry";
+        entry.innerHTML = `
+      <span class="log-time">${now}</span>
+      <span class="log-type ${type}">${type}</span>
+      <span class="log-msg">${msg}</span>
+    `;
+        container.appendChild(entry);
+        container.scrollTop = container.scrollHeight;
+      }
+
+      function fmt(n) {
+        if (n == null) return "—";
+        return Number(n).toLocaleString("de-DE");
+      }
+
+      function fmtTime(seconds) {
+        if (seconds < 60) return seconds + "s";
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}m ${s}s`;
+      }
+
+      // Run-ID aus URL-Parameter laden falls vorhanden
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("run_id")) {
+        document.getElementById("runInput").value = params.get("run_id");
+        connect();
+      }
+    </script>
+  </body>
+</html>

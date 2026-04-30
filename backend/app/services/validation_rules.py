@@ -6,6 +6,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any
+from time import monotonic
 from uuid import UUID
 
 import re
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.invalid_resource import InvalidResource
 from app.models.validation_run import ValidationRun
 from app.services.config_service import get_config_for_run, rule_enabled
+from app.api.v1.endpoints.websocket import broadcast_progress
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +172,65 @@ class BaseValidator:
         await asyncio.gather(*[check_single(pid) for pid in patient_ids])
         return patients_with_resource
 
+    async def _emit_progress(
+        self,
+        run_id: UUID,
+        resource_type: str,
+        total_processed: int,
+        total_invalid: int,
+        pages_done: int,
+        estimated_total: int,
+        start_time: float,
+    ):
+        """
+        Broadcast per-page progress via WebSocket.
+        Imported here to avoid circular imports at module level.
+        """
+
+        elapsed = monotonic() - start_time
+        percent = (
+            round((total_processed / estimated_total) * 100, 1)
+            if estimated_total > 0
+            else 0.0
+        )
+        rps = round(total_processed / elapsed, 1) if elapsed > 0 else 0.0
+        eta_seconds = (
+            round((estimated_total - total_processed) / rps)
+            if rps > 0 and estimated_total > total_processed
+            else None
+        )
+
+        await broadcast_progress(
+            str(run_id),
+            {
+                "type": "progress",
+                "run_id": str(run_id),
+                "status": "running",
+                "resource_type": resource_type,
+                "pages_done": pages_done,
+                "total_processed": total_processed,
+                "total_invalid": total_invalid,
+                "estimated_total": estimated_total,
+                "progress_percent": percent,
+                "elapsed_seconds": round(elapsed, 1),
+                "resources_per_second": rps,
+                "eta_seconds": eta_seconds,
+            },
+        )
+
+    async def _fetch_total(self, resource_type: str) -> int:
+        """
+        Fetch total resource count via _summary=count.
+        Returns 0 if not available or on error.
+        """
+        url = f"{self.base_url}/{resource_type}?_summary=count"
+        try:
+            bundle = await self.fetch_bundle(url)
+            return bundle.get("total", 0)
+        except Exception as e:
+            logger.warning("Could not fetch total for %s: %s", resource_type, e)
+            return 0
+
     @staticmethod
     def _is_future(date_str: str) -> bool:
         if not date_str:
@@ -203,17 +264,27 @@ class PatientValidator(BaseValidator):
         """Validation and save for patients resources"""
 
         config = await get_config_for_run(self.server_id, "Patient", db)
+
+        start_time = monotonic()
+        pages_done = 0
+        cumulative_processed = 0
+        cumulative_invalid = 0
+
+        estimated_total = await self._fetch_total("Patient")
+
         url = f"{self.base_url}/Patient?_count={self.PAGE_SIZE}"
 
         while url:
             bundle = await self.fetch_bundle(url)
             entries = bundle.get("entry", [])
+            pages_done += 1
 
             page_patient_ids = [
                 e.get("resource", {}).get("id", "")
                 for e in entries
                 if e.get("resource", {}).get("id")
             ]
+
             # Batch-query: wich patient are mindestens one obesertation or condition
             patients_with_observation: set[str] = set()
             patients_with_condition: set[str] = set()
@@ -424,7 +495,21 @@ class PatientValidator(BaseValidator):
                     page_invalid += 1
                     await self.save_invalid(run_id, "Patient", rid, issues, metrics, db)
 
+            cumulative_processed += page_processed
+            cumulative_invalid += page_invalid
+
             await self._update_run_counters(run_id, page_processed, page_invalid, db)
+
+            await self._emit_progress(
+                run_id=run_id,
+                resource_type="Patient",
+                total_processed=cumulative_processed,
+                total_invalid=cumulative_invalid,
+                pages_done=pages_done,
+                estimated_total=estimated_total,
+                start_time=start_time,
+            )
+
             url = next(
                 (
                     l["url"]
@@ -444,11 +529,21 @@ class EncounterValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         """Validate and save the Fall resources."""
         config = await get_config_for_run(self.server_id, "Encounter", db)
+
+        start_time = monotonic()
+        pages_done = 0
+        cumulative_processed = 0
+        cumulative_invalid = 0
+
+        estimated_total = await self._fetch_total("Encounter")
+
         url = f"{self.base_url}/Encounter?_count={self.PAGE_SIZE}"
 
         while url:
             bundle = await self.fetch_bundle(url)
             entries = bundle.get("entry", [])
+            pages_done += 1
+
             page_processed = 0
             page_invalid = 0
 
@@ -459,22 +554,39 @@ class EncounterValidator(BaseValidator):
                 issues = []
                 metrics = self._build_metrics(config)
 
-                # ! ============= privacy =====================
+                #  ============= privacy =====================
 
                 if rule_enabled(config, "pseudonym_format_check"):
                     pattern = config["pseudonym_format_check"].get("pattern")
                     if pattern:
-                        if not re.match(pattern, rid):
+                        # ID prüfen
+                        if re.match(pattern, rid):
                             issues.append(
                                 {
                                     "rule": "pseudonym_format_check",
                                     "severity": config["pseudonym_format_check"][
                                         "severity"
                                     ],
-                                    "message": f"Encounter.id '{rid}' does not match pseudonym pattern.",
+                                    "message": f"Encounter.id '{rid}' is not pseudonymized.",
                                 }
                             )
                             metrics["pseudonym_format_check"] = False
+
+                        # Identifier prüfen
+                        for ident in resource.get("identifier", []):
+                            value = ident.get("value", "")
+                            if value and re.match(pattern, value):
+                                issues.append(
+                                    {
+                                        "rule": "pseudonym_format_check",
+                                        "severity": config["pseudonym_format_check"][
+                                            "severity"
+                                        ],
+                                        "message": f"Encounter.identifier value '{value}' is not pseudonymized.",
+                                    }
+                                )
+                                metrics["pseudonym_format_check"] = False
+                                break
 
                 #  ============== completeness: ==================
 
@@ -554,6 +666,7 @@ class EncounterValidator(BaseValidator):
                                             """,
                                     }
                                 )
+                                metrics["period_end_after_start"] = False
                         except ValueError:
                             pass
 
@@ -606,7 +719,21 @@ class EncounterValidator(BaseValidator):
                         run_id, "Encounter", rid, issues, metrics, db
                     )
 
+            cumulative_processed += page_processed
+            cumulative_invalid += page_invalid
+
             await self._update_run_counters(run_id, page_processed, page_invalid, db)
+
+            await self._emit_progress(
+                run_id=run_id,
+                resource_type="Encounter",
+                total_processed=cumulative_processed,
+                total_invalid=cumulative_invalid,
+                pages_done=pages_done,
+                estimated_total=estimated_total,
+                start_time=start_time,
+            )
+
             url = next(
                 (
                     l["url"]
@@ -627,11 +754,21 @@ class ObservationValidator(BaseValidator):
         """Validate and save the resources Observations."""
 
         config = await get_config_for_run(self.server_id, "Observation", db)
+
+        start_time = monotonic()
+        pages_done = 0
+        cumulative_processed = 0
+        cumulative_invalid = 0
+
+        estimated_total = await self._fetch_total("Observation")
+
         url = f"{self.base_url}/Observation?_count={self.PAGE_SIZE}"
 
         while url:
             bundle = await self.fetch_bundle(url)
             entries = bundle.get("entry", [])
+            pages_done += 1
+
             page_processed = 0
             page_invalid = 0
 
@@ -640,7 +777,7 @@ class ObservationValidator(BaseValidator):
                 resource = entry.get("resource", {})
                 rid = resource.get("id", "")
                 issues = []
-                metrics = {}
+                metrics = self._build_metrics(config)
 
                 # ======== privacy: ===========
                 #
@@ -786,7 +923,20 @@ class ObservationValidator(BaseValidator):
                         run_id, "Observation", rid, issues, metrics, db
                     )
 
+            cumulative_processed += page_processed
+            cumulative_invalid += page_invalid
+
             await self._update_run_counters(run_id, page_processed, page_invalid, db)
+
+            await self._emit_progress(
+                run_id=run_id,
+                resource_type="Observation",
+                total_processed=cumulative_processed,
+                total_invalid=cumulative_invalid,
+                pages_done=pages_done,
+                estimated_total=estimated_total,
+                start_time=start_time,
+            )
             url = next(
                 (
                     l["url"]
@@ -808,11 +958,20 @@ class MedicationValidator(BaseValidator):
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
         """Validate and Saving Medication"""
         config = await get_config_for_run(self.server_id, "Medication", db)
+
+        start_time = monotonic()
+        pages_done = 0
+        cumulative_processed = 0
+        cumulative_invalid = 0
+
+        estimated_total = await self._fetch_total("Medication")
+
         url = f"{self.base_url}/Medication?_count={self.PAGE_SIZE}"
 
         while url:
             bundle = await self.fetch_bundle(url)
             entries = bundle.get("entry", [])
+            pages_done += 1
             page_processed = 0
             page_invalid = 0
 
@@ -821,7 +980,7 @@ class MedicationValidator(BaseValidator):
                 resource = entry.get("resource", {})
                 rid = resource.get("id", "")
                 issues = []
-                metrics = {}
+                metrics = self._build_metrics(config)
 
                 # ========== completeness: ============
                 #
@@ -838,6 +997,7 @@ class MedicationValidator(BaseValidator):
                                     coding nor text.""",
                             }
                         )
+                        metrics["code_required"] = False
 
                 # code_coding_present
                 if rule_enabled(config, "code_coding_present"):
@@ -847,12 +1007,10 @@ class MedicationValidator(BaseValidator):
                             {
                                 "rule": "code_coding_present",
                                 "severity": config["code_coding_present"]["severity"],
-                                "message": """Medication.code.coding 
-                                            is missing. Structured coding
-                                            is preferred over text only.
-                                        """,
+                                "message": "Medication.code.coding is missing.",
                             }
                         )
+                        metrics["code_coding_present"] = False
 
                 # ======= plausibility: =======
                 #
@@ -868,12 +1026,10 @@ class MedicationValidator(BaseValidator):
                                     "severity": config["ingredient_item_check"][
                                         "severity"
                                     ],
-                                    "message": """Medication.ingredient
-                                                    has no itemCodeableConcept
-                                                    or itemReference.
-                                                """,
+                                    "message": "Medication.ingredient has no itemCodeableConcept or itemReference.",
                                 }
                             )
+                            metrics["ingredient_item_check"] = False
                             break
 
                 if issues:
@@ -882,7 +1038,21 @@ class MedicationValidator(BaseValidator):
                         run_id, "Medication", rid, issues, metrics, db
                     )
 
+            cumulative_processed += page_processed
+            cumulative_invalid += page_invalid
+
             await self._update_run_counters(run_id, page_processed, page_invalid, db)
+
+            await self._emit_progress(
+                run_id=run_id,
+                resource_type="Medication",
+                total_processed=cumulative_processed,
+                total_invalid=cumulative_invalid,
+                pages_done=pages_done,
+                estimated_total=estimated_total,
+                start_time=start_time,
+            )
+
             url = next(
                 (
                     l["url"]
@@ -905,11 +1075,19 @@ class MedicationRequestValidator(BaseValidator):
         "Validate and save the resources Medicationrequests."
 
         config = await get_config_for_run(self.server_id, "MedicationRequest", db)
+
+        start_time = monotonic()
+        pages_done = 0
+        cumulative_processed = 0
+        cumulative_invalid = 0
+        estimated_total = await self._fetch_total("MedicationRequest")
+
         url = f"{self.base_url}/MedicationRequest?_count={self.PAGE_SIZE}"
 
         while url:
             bundle = await self.fetch_bundle(url)
             entries = bundle.get("entry", [])
+            pages_done += 1
             page_processed = 0
             page_invalid = 0
 
@@ -918,7 +1096,7 @@ class MedicationRequestValidator(BaseValidator):
                 resource = entry.get("resource", {})
                 rid = resource.get("id", "")
                 issues = []
-                metrics = {}
+                metrics = self._build_metrics(config)
 
                 # =========  completeness: ===========
                 #
@@ -932,6 +1110,7 @@ class MedicationRequestValidator(BaseValidator):
                                 "message": "MedicationRequest.status is missing.",
                             }
                         )
+                        metrics["status_required"] = False
 
                 # intent_required
                 if rule_enabled(config, "intent_required"):
@@ -943,6 +1122,7 @@ class MedicationRequestValidator(BaseValidator):
                                 "message": "MedicationRequest.intent is missing.",
                             }
                         )
+                        metrics["intent_required"] = False
 
                 # medication_required
                 if rule_enabled(config, "medication_required"):
@@ -956,6 +1136,7 @@ class MedicationRequestValidator(BaseValidator):
                                 "message": "MedicationRequest.medication[x] is missing.",
                             }
                         )
+                        metrics["medication_required"] = False
 
                 #  subject_required
                 if rule_enabled(config, "subject_required"):
@@ -967,6 +1148,7 @@ class MedicationRequestValidator(BaseValidator):
                                 "message": "MedicationRequest.subject is missing.",
                             }
                         )
+                        metrics["subject_required"] = False
 
                 #  authored_on_required
                 if rule_enabled(config, "authored_on_required"):
@@ -983,6 +1165,7 @@ class MedicationRequestValidator(BaseValidator):
                                 "message": "MedicationRequest.authoredOn is missing and no boundsPeriod in dosageInstruction.",
                             }
                         )
+                        metrics["authored_on_required"] = False
 
                 # plausibility: authored_not_future
                 if rule_enabled(config, "authored_not_future"):
@@ -995,6 +1178,7 @@ class MedicationRequestValidator(BaseValidator):
                                 "message": f"MedicationRequest.authoredOn '{authored}' is in the future.",
                             }
                         )
+                        metrics["authored_not_future"] = False
 
                 # integrity: subject_reference_format
                 if rule_enabled(config, "subject_reference_format"):
@@ -1009,6 +1193,7 @@ class MedicationRequestValidator(BaseValidator):
                                 "message": f"MedicationRequest.subject.reference '{ref}' must follow 'Patient/{{id}}' format.",
                             }
                         )
+                        metrics["subject_reference_format"] = False
 
                 if issues:
                     page_invalid += 1
@@ -1016,7 +1201,21 @@ class MedicationRequestValidator(BaseValidator):
                         run_id, "MedicationRequest", rid, issues, metrics, db
                     )
 
+            cumulative_processed += page_processed
+            cumulative_invalid += page_invalid
+
             await self._update_run_counters(run_id, page_processed, page_invalid, db)
+
+            await self._emit_progress(
+                run_id=run_id,
+                resource_type="MedicationRequest",
+                total_processed=cumulative_processed,
+                total_invalid=cumulative_invalid,
+                pages_done=pages_done,
+                estimated_total=estimated_total,
+                start_time=start_time,
+            )
+
             url = next(
                 (
                     l["url"]
@@ -1041,11 +1240,19 @@ class MedicationAdministrationValidator(BaseValidator):
         config = await get_config_for_run(
             self.server_id, "MedicationAdministration", db
         )
+
+        start_time = monotonic()
+        pages_done = 0
+        cumulative_processed = 0
+        cumulative_invalid = 0
+        estimated_total = await self._fetch_total("MedicationAdministration")
+
         url = f"{self.base_url}/MedicationAdministration?_count={self.PAGE_SIZE}"
 
         while url:
             bundle = await self.fetch_bundle(url)
             entries = bundle.get("entry", [])
+            pages_done += 1
             page_processed = 0
             page_invalid = 0
 
@@ -1054,7 +1261,7 @@ class MedicationAdministrationValidator(BaseValidator):
                 resource = entry.get("resource", {})
                 rid = resource.get("id", "")
                 issues = []
-                metrics = {}
+                metrics = self._build_metrics(config)
 
                 # completeness: status_required
                 if rule_enabled(config, "status_required"):
@@ -1066,6 +1273,7 @@ class MedicationAdministrationValidator(BaseValidator):
                                 "message": "MedicationAdministration.status is missing.",
                             }
                         )
+                        metrics["status_required"] = False
 
                 # completeness: medication_required
                 if rule_enabled(config, "medication_required"):
@@ -1079,6 +1287,7 @@ class MedicationAdministrationValidator(BaseValidator):
                                 "message": "MedicationAdministration.medication[x] is missing.",
                             }
                         )
+                        metrics["medication_required"] = False
 
                 # completeness: subject_required
                 if rule_enabled(config, "subject_required"):
@@ -1090,6 +1299,7 @@ class MedicationAdministrationValidator(BaseValidator):
                                 "message": "MedicationAdministration.subject is missing.",
                             }
                         )
+                        metrics["subject_required"] = False
 
                 # completeness: effective_required
                 if rule_enabled(config, "effective_required"):
@@ -1103,6 +1313,7 @@ class MedicationAdministrationValidator(BaseValidator):
                                 "message": "MedicationAdministration.effective[x] is missing.",
                             }
                         )
+                        metrics["effective_required"] = False
 
                 # plausibility: effective_not_future
                 if rule_enabled(config, "effective_not_future"):
@@ -1115,6 +1326,7 @@ class MedicationAdministrationValidator(BaseValidator):
                                 "message": f"MedicationAdministration.effectiveDateTime '{eff}' is in the future.",
                             }
                         )
+                        metrics["effective_not_future"] = False
 
                 # plausibility: effective_period_end_after_start
                 if rule_enabled(config, "effective_period_end_after_start"):
@@ -1137,6 +1349,7 @@ class MedicationAdministrationValidator(BaseValidator):
                                         "message": "MedicationAdministration.effectivePeriod.end is not after start.",
                                     }
                                 )
+                                metrics["effective_period_end_after_start"] = False
                         except ValueError:
                             pass
 
@@ -1153,6 +1366,7 @@ class MedicationAdministrationValidator(BaseValidator):
                                 "message": f"MedicationAdministration.subject.reference '{ref}' must follow 'Patient/{{id}}' format.",
                             }
                         )
+                        metrics["subject_reference_format"] = False
 
                 if issues:
                     page_invalid += 1
@@ -1160,7 +1374,20 @@ class MedicationAdministrationValidator(BaseValidator):
                         run_id, "MedicationAdministration", rid, issues, metrics, db
                     )
 
+            cumulative_processed += page_processed
+            cumulative_invalid += page_invalid
+
             await self._update_run_counters(run_id, page_processed, page_invalid, db)
+
+            await self._emit_progress(
+                run_id=run_id,
+                resource_type="MedicationAdministration",
+                total_processed=cumulative_processed,
+                total_invalid=cumulative_invalid,
+                pages_done=pages_done,
+                estimated_total=estimated_total,
+                start_time=start_time,
+            )
             url = next(
                 (
                     l["url"]
