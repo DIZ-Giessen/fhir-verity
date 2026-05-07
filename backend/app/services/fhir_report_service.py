@@ -459,7 +459,7 @@ def build_verification_result(
     has_errors: bool,
 ) -> dict[str, Any]:
     """
-    Build a FHIR R4 VerificationResult for the entire validation run.
+    Build a FHIR R4 VerificationResult for the entire validation run only for the version 4.0.
 
     status codes (from http://hl7.org/fhir/R4/valueset-verificationresult-status.html):
       attested     — data has been declared true
