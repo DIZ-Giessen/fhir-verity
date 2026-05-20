@@ -11,7 +11,7 @@ from uuid import UUID
 
 import re
 import httpx
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.invalid_resource import InvalidResource
@@ -118,23 +118,29 @@ class BaseValidator:
     async def _update_run_counters(
         self,
         run_id: UUID,
+        resource_type: str,
         page_processed: int,
         page_invalid: int,
         db: AsyncSession,
     ):
         """Batch update of run counters once per bundle page."""
 
-        if page_processed == 0:
+        stmt = select(ValidationRun).where(ValidationRun.id == run_id)
+        result = await db.execute(stmt)
+        run = result.scalar_one_or_none()
+        if not run:
             return
 
-        await db.execute(
-            update(ValidationRun)
-            .where(ValidationRun.id == run_id)
-            .values(
-                total_processed=ValidationRun.total_processed + page_processed,
-                total_invalid=ValidationRun.total_invalid + page_invalid,
-            )
-        )
+        run.total_processed = (run.total_processed or 0) + page_processed
+        run.total_invalid = (run.total_invalid or 0) + page_invalid
+
+        stats = dict(run.per_resource_stats or {})
+        bucket = stats.get(resource_type, {"processed": 0, "invalid": 0})
+        bucket["processed"] += page_processed
+        bucket["invalid"] += page_invalid
+        stats[resource_type] = bucket
+        run.per_resource_stats = stats
+
         await db.commit()
 
     async def _check_linked_resources(
@@ -498,7 +504,9 @@ class PatientValidator(BaseValidator):
             cumulative_processed += page_processed
             cumulative_invalid += page_invalid
 
-            await self._update_run_counters(run_id, page_processed, page_invalid, db)
+            await self._update_run_counters(
+                run_id, "Patient", page_processed, page_invalid, db
+            )
 
             await self._emit_progress(
                 run_id=run_id,
@@ -722,7 +730,9 @@ class EncounterValidator(BaseValidator):
             cumulative_processed += page_processed
             cumulative_invalid += page_invalid
 
-            await self._update_run_counters(run_id, page_processed, page_invalid, db)
+            await self._update_run_counters(
+                run_id, "Encounter", page_processed, page_invalid, db
+            )
 
             await self._emit_progress(
                 run_id=run_id,
@@ -926,7 +936,9 @@ class ObservationValidator(BaseValidator):
             cumulative_processed += page_processed
             cumulative_invalid += page_invalid
 
-            await self._update_run_counters(run_id, page_processed, page_invalid, db)
+            await self._update_run_counters(
+                run_id, "Observation", page_processed, page_invalid, db
+            )
 
             await self._emit_progress(
                 run_id=run_id,
@@ -1041,7 +1053,9 @@ class MedicationValidator(BaseValidator):
             cumulative_processed += page_processed
             cumulative_invalid += page_invalid
 
-            await self._update_run_counters(run_id, page_processed, page_invalid, db)
+            await self._update_run_counters(
+                run_id, "Medication", page_processed, page_invalid, db
+            )
 
             await self._emit_progress(
                 run_id=run_id,
@@ -1204,7 +1218,9 @@ class MedicationRequestValidator(BaseValidator):
             cumulative_processed += page_processed
             cumulative_invalid += page_invalid
 
-            await self._update_run_counters(run_id, page_processed, page_invalid, db)
+            await self._update_run_counters(
+                run_id, "MedicationRequest", page_processed, page_invalid, db
+            )
 
             await self._emit_progress(
                 run_id=run_id,
@@ -1377,7 +1393,9 @@ class MedicationAdministrationValidator(BaseValidator):
             cumulative_processed += page_processed
             cumulative_invalid += page_invalid
 
-            await self._update_run_counters(run_id, page_processed, page_invalid, db)
+            await self._update_run_counters(
+                run_id, "MedicationAdministration", page_processed, page_invalid, db
+            )
 
             await self._emit_progress(
                 run_id=run_id,

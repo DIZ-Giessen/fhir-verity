@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
 )
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin
 
 
@@ -43,3 +44,10 @@ class ValidationRun(Base, TimestampMixin):
     verification_result = Column(JSON, nullable=True)
     test_report = Column(JSON, nullable=True)
     error_message = Column(String, nullable=True)
+
+    per_resource_stats: Mapped[dict] = mapped_column(
+        JSON,
+        default=dict,
+        nullable=False,
+        server_default="{}",
+    )
