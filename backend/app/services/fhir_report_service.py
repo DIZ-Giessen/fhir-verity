@@ -95,8 +95,8 @@ async def aggregate_violations(
             COUNT(*) AS violation_count
         FROM invalid_resources ir,
              jsonb_each(ir.metrics::jsonb) AS kv(key, value)
-        WHERE ir.run_id       = :run_id
-          AND ir.resource_type = :resource_type
+        WHERE ir.last_seen_run_id = :run_id
+          AND ir.resource_type    = :resource_type
           AND kv.key           != 'issues_detail'
           AND kv.value::text    = 'false'
         GROUP BY kv.key
@@ -117,12 +117,12 @@ async def get_processed_count(
     resource_type: str,
     db: AsyncSession,
 ) -> int:
-    """Count total resources processed for a given resource type in this run."""
+    """Count total resources processed for a given resource type in this run. and accurency"""
     query = text(
         """
         SELECT COUNT(DISTINCT resource_id) AS cnt
         FROM invalid_resources
-        WHERE run_id = :run_id AND resource_type = :resource_type
+        WHERE last_seen_run_id = :run_id AND resource_type = :resource_type
     """
     )
     result = await db.execute(query, {"run_id": run_id, "resource_type": resource_type})
@@ -235,7 +235,7 @@ def build_test_script(
         "status": "active",
         "experimental": False,
         "date": now,
-        "publisher": "FHIR Verity – MII DIZ",
+        "publisher": "FHIR Verity – DIZ Gießen.",
         "description": (
             f"Automatisch generiertes TestScript für die Validierung "
             f"von {resource_type}-Ressourcen durch FHIR Verity. "
@@ -244,7 +244,7 @@ def build_test_script(
         "purpose": (
             "Beschreibt die Gesamtheit der aktivierten Validierungsregeln "
             "für diesen Ressourcentyp basierend auf der aktuellen "
-            "Konfiguration (MII KDS Defaults + server-spezifische Overrides)."
+            "und server-spezifische Konfiguration."
         ),
         "setup": {
             "action": [
@@ -380,7 +380,7 @@ def build_test_report(
         "result": overall_result,
         # score: 0.0–100.0 as per FHIR spec (decimal percentage)
         "score": quality_score_percent,
-        "tester": "FHIR Verity – MII DIZ Automatische Validierung",
+        "tester": "FHIR Verity – DIZ Gießen.",
         "issued": issued,
         # Extensions at root level for run metadata
         "extension": [
@@ -546,7 +546,7 @@ def build_verification_result(
         },
         "primarySource": [
             {
-                "who": {"display": "FHIR Verity Automated Validator"},
+                "who": {"display": "FHIR Verity DIZ Gießen"},
                 "type": [
                     {
                         "coding": [
@@ -571,7 +571,7 @@ def build_verification_result(
             }
         ],
         "attestation": {
-            "who": {"display": "FHIR Verity – MII DIZ Automatische Validierung"},
+            "who": {"display": "FHIR Verity – DIZ Gießen Automatische Validierung"},
             "communicationMethod": {
                 "coding": [
                     {
@@ -748,38 +748,13 @@ async def generate_and_post_reports(
             # Aggregate violations
             violations = await aggregate_violations(run_id, resource_type, db)
 
-            # Count invalid for this resource type
-            invalid_count_query = text(
-                """
-                SELECT COUNT(DISTINCT resource_id) AS cnt
-                FROM invalid_resources
-                WHERE run_id = :run_id AND resource_type = :rt
-            """
-            )
-            result = await db.execute(
-                invalid_count_query,
-                {"run_id": run_id, "rt": resource_type},
-            )
-            row = result.fetchone()
-            rt_invalid = row.cnt if row else 0
+            violations = await aggregate_violations(run_id, resource_type, db)
 
-            # We use run.total_processed as an approximation when per-type
-            # counts are not stored separately. If you store per-type totals
-            # later, replace this with the exact value.
-            # For now we derive from invalid_resources total count.
-            total_rt_query = text(
-                """
-                SELECT COUNT(*) AS cnt
-                FROM invalid_resources
-                WHERE run_id = :run_id AND resource_type = :rt
-            """
-            )
-            result = await db.execute(
-                total_rt_query,
-                {"run_id": run_id, "rt": resource_type},
-            )
-            rt_row = result.fetchone()
-            rt_invalid_total = rt_row.cnt if rt_row else 0
+            # Per-resource statistics directly from the run object — no extra queries needed.
+            # These values are written incrementally during validation in _update_run_counters.
+            per_stats = (run.per_resource_stats or {}).get(resource_type, {})
+            rt_processed = per_stats.get("processed", 0)
+            rt_invalid = per_stats.get("invalid", 0)
 
             # Build TestScript
             test_script = build_test_script(
@@ -803,9 +778,6 @@ async def generate_and_post_reports(
             }
 
             # Build TestReport
-            # Note: total_processed per resource type is not stored in the current
-            # schema. We use run.total_processed as the aggregate across all types.
-            # A future improvement would be to store per-resource-type counts.
             test_report = build_test_report(
                 resource_type=resource_type,
                 run_id=run_id,
@@ -813,8 +785,8 @@ async def generate_and_post_reports(
                 test_script_url=test_script["url"],
                 active_rules=active_rules,
                 violations=violations,
-                total_processed=run.total_processed,
-                total_invalid=rt_invalid_total,
+                total_processed=rt_processed,
+                total_invalid=rt_invalid,
                 server_base_url=server_base_url,
                 started_at=run.started_at,
                 finished_at=run.finished_at,

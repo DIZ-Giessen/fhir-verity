@@ -305,6 +305,7 @@ async def list_invalid_resources(
     resource_type: Optional[str] = None,
     rule: Optional[str] = None,
     severity: Optional[str] = None,
+    only_current_run: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -313,7 +314,15 @@ async def list_invalid_resources(
     AFTER fetching, since JSON-level filtering isn't portable across DBs.
     For very large result sets this should be migrated to JSONB + GIN index.
     """
-    base_filters = [InvalidResource.run_id == str(run_id)]
+    run_stmt = select(ValidationRun).where(ValidationRun.id == run_id)
+    run_result = await db.execute(run_stmt)
+    run = run_result.scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=404, detail="Validation run not found")
+
+    base_filters = [InvalidResource.server_id == run.server_id]
+    if only_current_run:
+        base_filters.append(InvalidResource.last_seen_run_id == run_id)
     if resource_type:
         base_filters.append(InvalidResource.resource_type == resource_type)
 
@@ -327,7 +336,7 @@ async def list_invalid_resources(
         stmt = (
             select(InvalidResource)
             .where(where_clause)
-            .order_by(desc(InvalidResource.created_at))
+            .order_by(desc(InvalidResource.last_seen_at))
         )
         result = await db.execute(stmt)
         rows = result.scalars().all()
@@ -407,7 +416,10 @@ async def get_run_summary(
     if not run:
         raise HTTPException(status_code=404, detail="Validation run not found")
 
-    inv_stmt = select(InvalidResource).where(InvalidResource.run_id == str(run_id))
+    inv_stmt = select(InvalidResource).where(
+        InvalidResource.server_id == run.server_id,
+        InvalidResource.last_seen_run_id == run.id,
+    )
     invalid_rows = (await db.execute(inv_stmt)).scalars().all()
 
     # Aggregate rule violations per resource_type

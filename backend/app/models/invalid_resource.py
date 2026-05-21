@@ -1,31 +1,71 @@
-"""Database Model for Ivalid Resoureces"""
+"""Model for invalid FHIR resources found during validation."""
 
 import uuid
-from sqlalchemy import Column, String, JSON, Text, Float, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy import (
+    Column,
+    String,
+    JSON,
+    Float,
+    ForeignKey,
+    DateTime,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import UUID
+
 from app.models.base import Base, TimestampMixin
 
 
 class InvalidResource(Base, TimestampMixin):
-    """Model for invalid resources."""
+    """
+    A FHIR resource that failed validation.
+
+    Acts as a deduplicated work-list per server: each (server, resource_type,
+    resource_id) combination exists at most once. Tracking fields record
+    when this resource first became invalid and when it was last seen invalid.
+    """
 
     __tablename__ = "invalid_resources"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    run_id = Column(String(36), nullable=False, index=True)
-    server_base_url = Column(String(500), nullable=False)
+
+    # Server context — primary filter for all queries
+    server_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("fhir_servers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    server_base_url = Column(String, nullable=False)
+
+    # Resource identity
     resource_type = Column(String(100), nullable=False, index=True)
-    resource_id = Column(String(1001), nullable=False)
+    resource_id = Column(String, nullable=False)
 
-    issues = Column(ARRAY(Text), nullable=False, default=list)
+    # Validation findings (latest snapshot)
+    issues = Column(JSON, nullable=False)
     metrics = Column(JSON, nullable=False)
-    raw_resource = Column(JSON, nullable=True)  # Nur bei bedarf gespeichert
 
-    # Für Verison 2.0 Bachelor Arbeit ML-Phase
-    risk_score = Column(Float, nullable=True)
+    # Optional: full FHIR resource body, used by LLM-Assistant (Block 3)
+    raw_resource = Column(JSON, nullable=True)
+
+    # ML scores (Block 2) — populated by scoring service after validation
     anomaly_score = Column(Float, nullable=True)
+    risk_score = Column(Float, nullable=True)
+
+    # LLM-generated correction/deletion suggestions (Block 3)
     llm_suggestions = Column(JSON, nullable=True)
 
+    # Run-tracking — when first detected vs. when last confirmed
+    first_seen_run_id = Column(UUID(as_uuid=True), nullable=False)
+    first_seen_at = Column(DateTime(timezone=True), nullable=False)
+    last_seen_run_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    last_seen_at = Column(DateTime(timezone=True), nullable=False)
+
     __table_args__ = (
-        UniqueConstraint("resource_type", "resource_id", name="uq_resource_type_id"),
+        UniqueConstraint(
+            "server_id",
+            "resource_type",
+            "resource_id",
+            name="uq_server_resource_type_id",
+        ),
     )

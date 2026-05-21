@@ -11,8 +11,10 @@ from uuid import UUID
 
 import re
 import httpx
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
 
 from app.models.invalid_resource import InvalidResource
 from app.models.validation_run import ValidationRun
@@ -90,30 +92,53 @@ class BaseValidator:
         db: AsyncSession,
     ):
         """
-        Save an invalid resource to the database.
+        UPSERT an invalid resource.
 
-        issues: list of dicts with keys: rule, severity, message
+        On first detection: insert with first_seen and last_seen both pointing
+        to the current run.
+        On subsequent detections: update only the "current state" fields
+        (issues, metrics, last_seen_*), preserving the original first_seen_*.
         """
+        if self.server_id is None:
+            logger.error(
+                "server_id is not set on validator; cannot save %s/%s",
+                resource_type,
+                resource_id,
+            )
+            return
+
+        now = datetime.now(timezone.utc)
+
         try:
-            invalid = InvalidResource(
-                run_id=str(run_id),
+            stmt = pg_insert(InvalidResource).values(
+                server_id=self.server_id,
                 server_base_url=self.base_url,
                 resource_type=resource_type,
                 resource_id=str(resource_id),
                 issues=[i["message"] for i in issues],
-                metrics={
-                    **metrics,
-                    "issues_detail": issues,
+                metrics={**metrics, "issues_detail": issues},
+                first_seen_run_id=run_id,
+                first_seen_at=now,
+                last_seen_run_id=run_id,
+                last_seen_at=now,
+            )
+
+            # ON CONFLICT: only refresh current-state fields. first_seen_* stays.
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_server_resource_type_id",
+                set_={
+                    "issues": stmt.excluded.issues,
+                    "metrics": stmt.excluded.metrics,
+                    "last_seen_run_id": stmt.excluded.last_seen_run_id,
+                    "last_seen_at": stmt.excluded.last_seen_at,
                 },
             )
 
-            db.add(invalid)
+            await db.execute(stmt)
             await db.commit()
-
         except Exception as e:
             await db.rollback()
-            if "uq_resource_type_id" not in str(e):
-                logger.error("Save error for %s/%s: %s", resource_type, resource_id, e)
+            logger.error("Save error for %s/%s: %s", resource_type, resource_id, e)
 
     async def _update_run_counters(
         self,
@@ -134,12 +159,20 @@ class BaseValidator:
         run.total_processed = (run.total_processed or 0) + page_processed
         run.total_invalid = (run.total_invalid or 0) + page_invalid
 
-        stats = dict(run.per_resource_stats or {})
-        bucket = stats.get(resource_type, {"processed": 0, "invalid": 0})
-        bucket["processed"] += page_processed
-        bucket["invalid"] += page_invalid
-        stats[resource_type] = bucket
-        run.per_resource_stats = stats
+        current_stats = run.per_resource_stats or {}
+        existing = current_stats.get(resource_type, {"processed": 0, "invalid": 0})
+
+        new_stats = {
+            **{
+                rt: {"processed": v["processed"], "invalid": v["invalid"]}
+                for rt, v in current_stats.items()
+            },
+            resource_type: {
+                "processed": existing["processed"] + page_processed,
+                "invalid": existing["invalid"] + page_invalid,
+            },
+        }
+        run.per_resource_stats = new_stats
 
         await db.commit()
 
