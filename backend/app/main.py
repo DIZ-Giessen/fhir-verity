@@ -9,7 +9,13 @@ from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
 from app.models.validation_config import ValidationConfig
 from app.services.config_defaults import MII_KDS_DEFAULTS
-from app.api.v1.endpoints import servers, validation, websocket
+from app.api.v1.endpoints import (
+    servers,
+    validation,
+    websocket,
+    config,
+    resource_actions,
+)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -93,3 +99,5 @@ async def root():
 app.include_router(servers.router, prefix="/api/v1", tags=["servers"])
 app.include_router(validation.router, prefix="/api/v1", tags=["validation"])
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
+app.include_router(config.router, prefix="/api/config", tags=["config"])
+app.include_router(resource_actions.router, tags=["resource-actions"])

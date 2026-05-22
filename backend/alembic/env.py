@@ -15,6 +15,7 @@ from app.models import (
     validation_run,
     invalid_resource,
     validation_config,
+    audit_log,
 )  # noqa: F401 # noqa: F401
 
 config = context.config
