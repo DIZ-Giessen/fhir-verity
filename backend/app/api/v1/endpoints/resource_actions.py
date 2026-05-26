@@ -22,10 +22,12 @@ from app.schemas.resource_action import (
     BulkActionError,
     BulkActionResult,
     BulkDeleteRequest,
+    BulkFixRequest,
     DeleteRequest,
     PaginatedAuditLog,
     PatchRequest,
 )
+from app.services.fix_templates import get_patch_template, has_template
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -66,6 +68,9 @@ async def _fetch_resource_with_etag(
     if resp.status_code == 404:
         return None, None
     resp.raise_for_status()
+
+    if resp.status_code == 410:
+        return
     return resp.json(), resp.headers.get("ETag")
 
 
@@ -344,6 +349,183 @@ async def bulk_delete_resources(
         dry_run=False,
         elapsed_seconds=round(elapsed, 2),
         errors=errors[:50],  # truncate error list in response
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /resources/bulk-fix
+# ---------------------------------------------------------------------------
+@router.post("/resources/bulk-fix", response_model=BulkActionResult)
+async def bulk_fix_resources(
+    payload: BulkFixRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Bulk-PATCH invalid resources matching (server_id, resource_type, rule).
+
+    Requires a pre-defined patch template for the (resource_type, rule) combo.
+    Returns 400 if no template exists — in that case use bulk-delete instead,
+    or wait for the LLM assistant (Block 3) to generate context-aware fixes.
+    """
+    if not has_template(payload.resource_type, payload.rule):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"No patch template available for "
+                f"{payload.resource_type}/{payload.rule}. "
+                f"Either use bulk-delete, or wait for the LLM assistant."
+            ),
+        )
+
+    server = await _load_server(payload.server_id, db)
+    auth_config = server.auth_config or {}
+    base_url = str(server.base_url).rstrip("/")
+
+    # ---- Load matching invalid_resources ----
+    stmt = select(InvalidResource).where(
+        InvalidResource.server_id == payload.server_id,
+        InvalidResource.resource_type == payload.resource_type,
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+
+    # Post-filter: must have the specified rule in its issues_detail
+    filtered = []
+    for row in rows:
+        issues = (row.metrics or {}).get("issues_detail", [])
+        if any(i.get("rule") == payload.rule for i in issues):
+            filtered.append(row)
+    rows = filtered
+
+    matched = len(rows)
+
+    if payload.dry_run:
+        return BulkActionResult(
+            matched=matched,
+            succeeded=0,
+            failed=0,
+            dry_run=True,
+            elapsed_seconds=0.0,
+        )
+
+    # ---- Execute patches in parallel ----
+    start = monotonic()
+    semaphore = asyncio.Semaphore(20)
+    audit_entries: list[AuditLog] = []
+    succeeded_invalid_ids: list = []
+    errors: list[BulkActionError] = []
+
+    timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+
+        async def patch_one(row: InvalidResource):
+            resource_before = None
+            fhir_status: Optional[str] = None
+            audit_status = AuditStatus.SUCCESS
+            error_message: Optional[str] = None
+            patch_body: list[dict] = []
+
+            async with semaphore:
+                try:
+                    resource_before, etag = await _fetch_resource_with_etag(
+                        base_url,
+                        row.resource_type,
+                        row.resource_id,
+                        auth_config,
+                        client,
+                    )
+                    if resource_before is None:
+                        audit_status = AuditStatus.FAILED
+                        error_message = "Resource not found on FHIR server"
+                        fhir_status = "404"
+                    else:
+                        # Generate patch ops from template
+                        # (dynamic templates inspect the resource body)
+                        patch_body = (
+                            get_patch_template(
+                                payload.resource_type,
+                                payload.rule,
+                                resource=resource_before,
+                            )
+                            or []
+                        )
+
+                        if not patch_body:
+                            audit_status = AuditStatus.FAILED
+                            error_message = (
+                                "Template produced no operations "
+                                "(resource may already be clean)"
+                            )
+                        else:
+                            headers = {
+                                "Content-Type": "application/json-patch+json",
+                                "Accept": "application/fhir+json",
+                            }
+                            if etag:
+                                headers["If-Match"] = etag
+                            url = f"{base_url}/{row.resource_type}/{row.resource_id}"
+                            resp = await client.patch(
+                                url,
+                                json=patch_body,
+                                headers=headers,
+                                auth=_httpx_auth(auth_config),
+                            )
+                            fhir_status = str(resp.status_code)
+                            if resp.status_code not in (200, 201):
+                                audit_status = AuditStatus.FAILED
+                                error_message = (
+                                    f"FHIR server returned {resp.status_code}: "
+                                    f"{resp.text[:300]}"
+                                )
+                except Exception as exc:
+                    audit_status = AuditStatus.FAILED
+                    error_message = str(exc)[:500]
+
+            audit = AuditLog(
+                server_id=payload.server_id,
+                server_base_url=base_url,
+                resource_type=row.resource_type,
+                resource_id=row.resource_id,
+                invalid_resource_id=row.id,
+                action=AuditAction.PATCH,
+                fhir_request_payload=patch_body if patch_body else None,
+                fhir_response_status=fhir_status,
+                resource_before=resource_before,
+                status=audit_status,
+                error_message=error_message,
+                reason=payload.reason,
+                executed_at=datetime.now(timezone.utc),
+            )
+            audit_entries.append(audit)
+
+            if audit_status == AuditStatus.SUCCESS:
+                succeeded_invalid_ids.append(row.id)
+            else:
+                errors.append(
+                    BulkActionError(
+                        resource_type=row.resource_type,
+                        resource_id=row.resource_id,
+                        error=error_message or "unknown error",
+                    )
+                )
+
+        await asyncio.gather(*[patch_one(row) for row in rows])
+
+    db.add_all(audit_entries)
+    if succeeded_invalid_ids:
+        await db.execute(
+            delete(InvalidResource).where(InvalidResource.id.in_(succeeded_invalid_ids))
+        )
+    await db.commit()
+
+    elapsed = monotonic() - start
+
+    return BulkActionResult(
+        matched=matched,
+        succeeded=len(succeeded_invalid_ids),
+        failed=len(errors),
+        dry_run=False,
+        elapsed_seconds=round(elapsed, 2),
+        errors=errors[:50],
     )
 
 

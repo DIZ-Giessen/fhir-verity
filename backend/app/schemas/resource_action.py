@@ -19,15 +19,21 @@ class PatchOperation(BaseModel):
 
 
 class PatchRequest(BaseModel):
+    """Patch Request Schemas"""
+
     operations: list[PatchOperation]
     reason: Optional[str] = None
 
 
 class DeleteRequest(BaseModel):
+    """Delete Request Schemas"""
+
     reason: Optional[str] = None
 
 
 class ActionResult(BaseModel):
+    """Aktion Result Schemas"""
+
     id: UUID
     action: str
     status: str
@@ -54,6 +60,8 @@ class AuditLogListItem(BaseModel):
 
 
 class PaginatedAuditLog(BaseModel):
+    """Pagination for AuditLog"""
+
     total: int
     skip: int
     limit: int
@@ -72,15 +80,29 @@ class BulkDeleteRequest(BaseModel):
 
 
 class BulkActionError(BaseModel):
+    """Model for a Aktion Error"""
+
     resource_type: str
     resource_id: str
     error: str
 
 
 class BulkActionResult(BaseModel):
+    """Model for a Aktion Result"""
+
     matched: int
     succeeded: int
     failed: int
     dry_run: bool
     elapsed_seconds: float
     errors: list[BulkActionError] = []
+
+
+class BulkFixRequest(BaseModel):
+    """Apply the predefined patch template for a (resource_type, rule) combo."""
+
+    server_id: UUID
+    resource_type: str
+    rule: str
+    dry_run: bool = False
+    reason: Optional[str] = None
