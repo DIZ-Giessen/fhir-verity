@@ -99,5 +99,5 @@ async def root():
 app.include_router(servers.router, prefix="/api/v1", tags=["servers"])
 app.include_router(validation.router, prefix="/api/v1", tags=["validation"])
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
-app.include_router(config.router, prefix="/api/config", tags=["config"])
+app.include_router(config.router, prefix="/api/v1", tags=["config"])
 app.include_router(resource_actions.router, tags=["resource-actions"])

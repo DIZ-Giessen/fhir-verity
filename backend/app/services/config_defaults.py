@@ -33,23 +33,24 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
     # =========================================================================
     "Patient": {
         # --- Privacy & Pseudonymization ---
+        "text_forbidden": {
+            "enabled": True,
+            "severity": "error",
+            "category": "privacy",
+            "description": ("Checks whether the field 'text' is present."),
+        },
         "name_forbidden": {
             "enabled": True,
             "severity": "error",
             "category": "privacy",
-            "description": (
-                "Das FHIR-Feld 'name' darf bei pseudonymisierten Patienten nicht befüllt sein."
-            ),
+            "description": ("Checks whether the field 'name' is present"),
         },
         "address_forbidden": {
             "enabled": True,
             "severity": "error",
             "category": "privacy",
             "description": (
-                "Die Felder 'address.line', 'address.city' und 'address.text' "
-                "dürfen nicht befüllt sein. Adressdaten sind personenidentifizierend "
-                "und in pseudonymisierten Datensätzen verboten. "
-                "address.postalCode und address.country sind erlaubt."
+                "Checks whether the address contains fields other than postal code, and whether the postal code is valid and conforms to expected standards."
             ),
         },
         "telecom_forbidden": {
@@ -57,14 +58,14 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "privacy",
             "description": (
-                "Das Feld 'telecom' (Telefon, E-Mail etc.) darf nicht befüllt sein. "
+                "Ensures that no contact information such as phone numbers or email addresses is included in the resource."
             ),
         },
         "photo_forbidden": {
             "enabled": True,
             "severity": "error",
             "category": "privacy",
-            "description": ("Das Feld 'photo' darf nicht befüllt sein. "),
+            "description": ("Checks whether the field 'name' is present"),
         },
         "pseudonym_format_check": {
             "enabled": True,
@@ -72,8 +73,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "category": "privacy",
             "pattern": "^20[0-9]{7}$",
             "description": (
-                "Prüft ob die Patient.id dem erwarteten Pseudonym-Format entspricht. "
-                "pattern=null deaktiviert die Regex-Prüfung (nur Anwesenheit wird geprüft). "
+                "Checks whether the Patient.id matches the expected pseudonym format."
             ),
         },
         "identifier_pseudonym_check": {
@@ -82,7 +82,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "category": "privacy",
             "pattern": "^20[0-9]{7}$",
             "description": (
-                "Prüft ob Patient.identifier-Werte dem Pseudonym-Format entsprechen. "
+                "Checks whether Patient.identifier values conform to the pseudonym format. "
             ),
         },
         # --- Structural Completeness ---
@@ -90,38 +90,34 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "enabled": True,
             "severity": "error",
             "category": "completeness",
-            "description": ("Der Patient muss mindestens einen Identifier enthalten "),
+            "description": ("Checks if the Patient resource has an identifier"),
         },
         "birthdate_required": {
             "enabled": True,
             "severity": "warning",
             "category": "completeness",
-            "description": (
-                "Das Geburtsdatum ist für klinische Analysen zwingend erforderlich."
-            ),
+            "description": ("Checks if the Patient resource has a birthdate."),
         },
         "gender_required": {
             "enabled": True,
             "severity": "warning",
             "category": "completeness",
-            "description": (
-                "Das Geschlecht sollte vorhanden sein. "
-                "Erlaubte Werte: male | female | other | unknown."
-            ),
+            "description": ("Checks if the Patient has a gender."),
         },
         "managingorganization_required": {
             "enabled": False,
             "severity": "info",
             "category": "completeness",
-            "description": ("Referenz auf die behandelnde Einrichtung. "),
+            "description": (
+                "Checks if the Patient resource has a managing organization."
+            ),
         },
         "has_observation": {
             "enabled": True,
             "severity": "warning",
             "category": "completeness",
             "description": (
-                "Jeder Patient sollte mindestens eine verknüpfte Observation haben. "
-                "Patienten ohne Observations deuten auf unvollständige Datenmigration hin."
+                "Checks if the Patient resource has at least one Observation."
             ),
         },
         "has_condition": {
@@ -129,8 +125,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "completeness",
             "description": (
-                "Jeder Patient sollte mindestens eine verknüpfte Condition (Diagnose) haben. "
-                "Patienten ohne Conditions deuten auf unvollständige Datenmigration hin."
+                "Checks if the Patient resource has at least one Condition."
             ),
         },
         # --- Plausibility ---
@@ -139,8 +134,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "plausibility",
             "description": (
-                "Das Geburtsdatum darf nicht in der Zukunft liegen. "
-                "Zukünftige Geburtsdaten deuten auf Dateneingabefehler hin."
+                "Checks if the patient's birthdate is plausible and not set in the future."
             ),
         },
         "birthdate_plausible_range": {
@@ -148,8 +142,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "plausibility",
             "description": (
-                "Das Geburtsdatum sollte nicht mehr als 150 Jahre in der Vergangenheit liegen. "
-                "Extrem alte Daten deuten auf Dateneingabefehler oder Default-Werte hin "
+                "Checks if the patient's birthdate falls within a plausible range."
             ),
         },
     },
@@ -274,8 +267,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "privacy",
             "description": (
-                "Das Freitextfeld 'note' kann personenidentifizierende Informationen enthalten. "
-                "Sollte vor Weitergabe geprüft werden."
+                "Check before sharing what is in this field."
+                "The free text 'note' field may contain personally identifiable information. "
             ),
         },
         # --- Structural Completeness ---

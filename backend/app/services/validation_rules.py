@@ -349,6 +349,16 @@ class PatientValidator(BaseValidator):
                 metrics = self._build_metrics(config)
 
                 # privacy: name_forbidden
+                if rule_enabled(config, "text_forbidden"):
+                    if resource.get("text"):
+                        issues.append(
+                            {
+                                "rule": "text_forbidden",
+                                "severity": config["text_forbidden"]["severity"],
+                                "message": "Patient.text is present. Cleartext are forbidden in pseudonymized data.",
+                            }
+                        )
+                        metrics["text_forbidden"] = False
                 if rule_enabled(config, "name_forbidden"):
                     if resource.get("name"):
                         issues.append(

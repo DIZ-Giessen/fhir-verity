@@ -48,6 +48,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/servers/{server_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete FHIR server
+         * @description Delete FHIR Servers
+         */
+        delete: operations["delete_fhir_server_api_v1_servers__server_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update FHIR server
+         * @description Update FHIR Server
+         */
+        patch: operations["update_fhir_server_api_v1_servers__server_id__patch"];
+        trace?: never;
+    };
     "/api/v1/validation/start": {
         parameters: {
             query?: never;
@@ -152,7 +176,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/config/config/defaults/{resource_type}": {
+    "/api/v1/config/defaults/{resource_type}": {
         parameters: {
             query?: never;
             header?: never;
@@ -163,7 +187,7 @@ export interface paths {
          * Get Defaults
          * @description Global default configuration for a resource type (server_id IS NULL).
          */
-        get: operations["get_defaults_api_config_config_defaults__resource_type__get"];
+        get: operations["get_defaults_api_v1_config_defaults__resource_type__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -172,7 +196,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/config/config/servers/{server_id}/{resource_type}": {
+    "/api/v1/config/servers/{server_id}/{resource_type}": {
         parameters: {
             query?: never;
             header?: never;
@@ -183,24 +207,24 @@ export interface paths {
          * Get Server Config
          * @description Effective configuration: defaults merged with server-specific overrides.
          */
-        get: operations["get_server_config_api_config_config_servers__server_id___resource_type__get"];
+        get: operations["get_server_config_api_v1_config_servers__server_id___resource_type__get"];
         /**
          * Replace Server Config
          * @description Replace the complete server-specific override.
          */
-        put: operations["replace_server_config_api_config_config_servers__server_id___resource_type__put"];
+        put: operations["replace_server_config_api_v1_config_servers__server_id___resource_type__put"];
         post?: never;
         /**
          * Delete Server Config
          * @description Remove server override entirely, falling back to global defaults.
          */
-        delete: operations["delete_server_config_api_config_config_servers__server_id___resource_type__delete"];
+        delete: operations["delete_server_config_api_v1_config_servers__server_id___resource_type__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/config/config/servers/{server_id}/{resource_type}/rules/{rule_key}": {
+    "/api/v1/config/servers/{server_id}/{resource_type}/rules/{rule_key}": {
         parameters: {
             query?: never;
             header?: never;
@@ -219,7 +243,27 @@ export interface paths {
          *     Creates a server override on-the-fly if none exists yet,
          *     starting from the default rule definition.
          */
-        patch: operations["patch_rule_api_config_config_servers__server_id___resource_type__rules__rule_key__patch"];
+        patch: operations["patch_rule_api_v1_config_servers__server_id___resource_type__rules__rule_key__patch"];
+        trace?: never;
+    };
+    "/api/v1/config/resource-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Resource Types
+         * @description Alle Ressourcentypen, die konfiguriert werden können.
+         */
+        get: operations["list_resource_types_api_v1_config_resource_types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/resources/{server_id}/{resource_type}/{resource_id}": {
@@ -521,6 +565,24 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * FhirServerUpdate
+         * @description All fields optional for PATCH.
+         */
+        FhirServerUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Base Url */
+            base_url?: string | null;
+            /** Project Id */
+            project_id?: string | null;
+            /** Auth Config */
+            auth_config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Is Active */
+            is_active?: boolean | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -977,6 +1039,70 @@ export interface operations {
             };
         };
     };
+    delete_fhir_server_api_v1_servers__server_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_fhir_server_api_v1_servers__server_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FhirServerUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FhirServerRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     start_validation_api_v1_validation_start_post: {
         parameters: {
             query?: never;
@@ -1146,7 +1272,7 @@ export interface operations {
             };
         };
     };
-    get_defaults_api_config_config_defaults__resource_type__get: {
+    get_defaults_api_v1_config_defaults__resource_type__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1177,7 +1303,7 @@ export interface operations {
             };
         };
     };
-    get_server_config_api_config_config_servers__server_id___resource_type__get: {
+    get_server_config_api_v1_config_servers__server_id___resource_type__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1209,7 +1335,7 @@ export interface operations {
             };
         };
     };
-    replace_server_config_api_config_config_servers__server_id___resource_type__put: {
+    replace_server_config_api_v1_config_servers__server_id___resource_type__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -1245,7 +1371,7 @@ export interface operations {
             };
         };
     };
-    delete_server_config_api_config_config_servers__server_id___resource_type__delete: {
+    delete_server_config_api_v1_config_servers__server_id___resource_type__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -1277,7 +1403,7 @@ export interface operations {
             };
         };
     };
-    patch_rule_api_config_config_servers__server_id___resource_type__rules__rule_key__patch: {
+    patch_rule_api_v1_config_servers__server_id___resource_type__rules__rule_key__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -1310,6 +1436,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_resource_types_api_v1_config_resource_types_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
         };

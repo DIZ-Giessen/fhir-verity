@@ -9,38 +9,179 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ServersRouteImport } from './routes/servers'
+import { Route as RunsRouteImport } from './routes/runs'
+import { Route as CleanupRouteImport } from './routes/cleanup'
+import { Route as AuditRouteImport } from './routes/audit'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ServersIndexRouteImport } from './routes/servers.index'
+import { Route as ServersIdRouteImport } from './routes/servers.$id'
+import { Route as ServersIdIndexRouteImport } from './routes/servers.$id.index'
+import { Route as ServersIdConfigIndexRouteImport } from './routes/servers.$id.config.index'
+import { Route as ServersIdConfigResourceTypeRouteImport } from './routes/servers.$id.config.$resourceType'
 
+const ServersRoute = ServersRouteImport.update({
+  id: '/servers',
+  path: '/servers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RunsRoute = RunsRouteImport.update({
+  id: '/runs',
+  path: '/runs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CleanupRoute = CleanupRouteImport.update({
+  id: '/cleanup',
+  path: '/cleanup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuditRoute = AuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServersIndexRoute = ServersIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ServersRoute,
+} as any)
+const ServersIdRoute = ServersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ServersRoute,
+} as any)
+const ServersIdIndexRoute = ServersIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ServersIdRoute,
+} as any)
+const ServersIdConfigIndexRoute = ServersIdConfigIndexRouteImport.update({
+  id: '/config/',
+  path: '/config/',
+  getParentRoute: () => ServersIdRoute,
+} as any)
+const ServersIdConfigResourceTypeRoute =
+  ServersIdConfigResourceTypeRouteImport.update({
+    id: '/config/$resourceType',
+    path: '/config/$resourceType',
+    getParentRoute: () => ServersIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/audit': typeof AuditRoute
+  '/cleanup': typeof CleanupRoute
+  '/runs': typeof RunsRoute
+  '/servers': typeof ServersRouteWithChildren
+  '/servers/$id': typeof ServersIdRouteWithChildren
+  '/servers/': typeof ServersIndexRoute
+  '/servers/$id/': typeof ServersIdIndexRoute
+  '/servers/$id/config/$resourceType': typeof ServersIdConfigResourceTypeRoute
+  '/servers/$id/config/': typeof ServersIdConfigIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/audit': typeof AuditRoute
+  '/cleanup': typeof CleanupRoute
+  '/runs': typeof RunsRoute
+  '/servers': typeof ServersIndexRoute
+  '/servers/$id': typeof ServersIdIndexRoute
+  '/servers/$id/config/$resourceType': typeof ServersIdConfigResourceTypeRoute
+  '/servers/$id/config': typeof ServersIdConfigIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/audit': typeof AuditRoute
+  '/cleanup': typeof CleanupRoute
+  '/runs': typeof RunsRoute
+  '/servers': typeof ServersRouteWithChildren
+  '/servers/$id': typeof ServersIdRouteWithChildren
+  '/servers/': typeof ServersIndexRoute
+  '/servers/$id/': typeof ServersIdIndexRoute
+  '/servers/$id/config/$resourceType': typeof ServersIdConfigResourceTypeRoute
+  '/servers/$id/config/': typeof ServersIdConfigIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/audit'
+    | '/cleanup'
+    | '/runs'
+    | '/servers'
+    | '/servers/$id'
+    | '/servers/'
+    | '/servers/$id/'
+    | '/servers/$id/config/$resourceType'
+    | '/servers/$id/config/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/audit'
+    | '/cleanup'
+    | '/runs'
+    | '/servers'
+    | '/servers/$id'
+    | '/servers/$id/config/$resourceType'
+    | '/servers/$id/config'
+  id:
+    | '__root__'
+    | '/'
+    | '/audit'
+    | '/cleanup'
+    | '/runs'
+    | '/servers'
+    | '/servers/$id'
+    | '/servers/'
+    | '/servers/$id/'
+    | '/servers/$id/config/$resourceType'
+    | '/servers/$id/config/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuditRoute: typeof AuditRoute
+  CleanupRoute: typeof CleanupRoute
+  RunsRoute: typeof RunsRoute
+  ServersRoute: typeof ServersRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/servers': {
+      id: '/servers'
+      path: '/servers'
+      fullPath: '/servers'
+      preLoaderRoute: typeof ServersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/runs': {
+      id: '/runs'
+      path: '/runs'
+      fullPath: '/runs'
+      preLoaderRoute: typeof RunsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cleanup': {
+      id: '/cleanup'
+      path: '/cleanup'
+      fullPath: '/cleanup'
+      preLoaderRoute: typeof CleanupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/audit': {
+      id: '/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +189,79 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/servers/': {
+      id: '/servers/'
+      path: '/'
+      fullPath: '/servers/'
+      preLoaderRoute: typeof ServersIndexRouteImport
+      parentRoute: typeof ServersRoute
+    }
+    '/servers/$id': {
+      id: '/servers/$id'
+      path: '/$id'
+      fullPath: '/servers/$id'
+      preLoaderRoute: typeof ServersIdRouteImport
+      parentRoute: typeof ServersRoute
+    }
+    '/servers/$id/': {
+      id: '/servers/$id/'
+      path: '/'
+      fullPath: '/servers/$id/'
+      preLoaderRoute: typeof ServersIdIndexRouteImport
+      parentRoute: typeof ServersIdRoute
+    }
+    '/servers/$id/config/': {
+      id: '/servers/$id/config/'
+      path: '/config'
+      fullPath: '/servers/$id/config/'
+      preLoaderRoute: typeof ServersIdConfigIndexRouteImport
+      parentRoute: typeof ServersIdRoute
+    }
+    '/servers/$id/config/$resourceType': {
+      id: '/servers/$id/config/$resourceType'
+      path: '/config/$resourceType'
+      fullPath: '/servers/$id/config/$resourceType'
+      preLoaderRoute: typeof ServersIdConfigResourceTypeRouteImport
+      parentRoute: typeof ServersIdRoute
+    }
   }
 }
 
+interface ServersIdRouteChildren {
+  ServersIdIndexRoute: typeof ServersIdIndexRoute
+  ServersIdConfigResourceTypeRoute: typeof ServersIdConfigResourceTypeRoute
+  ServersIdConfigIndexRoute: typeof ServersIdConfigIndexRoute
+}
+
+const ServersIdRouteChildren: ServersIdRouteChildren = {
+  ServersIdIndexRoute: ServersIdIndexRoute,
+  ServersIdConfigResourceTypeRoute: ServersIdConfigResourceTypeRoute,
+  ServersIdConfigIndexRoute: ServersIdConfigIndexRoute,
+}
+
+const ServersIdRouteWithChildren = ServersIdRoute._addFileChildren(
+  ServersIdRouteChildren,
+)
+
+interface ServersRouteChildren {
+  ServersIdRoute: typeof ServersIdRouteWithChildren
+  ServersIndexRoute: typeof ServersIndexRoute
+}
+
+const ServersRouteChildren: ServersRouteChildren = {
+  ServersIdRoute: ServersIdRouteWithChildren,
+  ServersIndexRoute: ServersIndexRoute,
+}
+
+const ServersRouteWithChildren =
+  ServersRoute._addFileChildren(ServersRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuditRoute: AuditRoute,
+  CleanupRoute: CleanupRoute,
+  RunsRoute: RunsRoute,
+  ServersRoute: ServersRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
