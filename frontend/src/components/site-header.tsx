@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router"
 
-import { Button } from "@/components/ui/button"
 import { MainNav } from "@/components/main-nav"
+import { UserMenu } from "./user-menu"
 
 export function SiteHeader() {
   return (
@@ -19,9 +19,7 @@ export function SiteHeader() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/">Log in</Link>
-          </Button>
+          <UserMenu />
         </div>
       </div>
     </header>

@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query"
 
-import { api } from "@/lib/api-client"
+import { api, ApiError } from "@/lib/api-client"
 import type { components } from "./schema"
 
 export type FhirServer = components["schemas"]["FhirServerRead"]
@@ -137,4 +137,33 @@ export async function updateServerAuth(
     body,
   })
   return data
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+export type AuthUser = components["schemas"]["UserRead"]
+
+export const authKeys = {
+  me: ["auth", "me"] as const,
+}
+
+export const meQueryOptions = () =>
+  queryOptions({
+    queryKey: authKeys.me,
+    queryFn: async (): Promise<AuthUser | null> => {
+      try {
+        const { data } = await api.GET("/api/v1/auth/me")
+        return (data as AuthUser) ?? null
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) return null
+        throw err
+      }
+    },
+    retry: false,
+    staleTime: 60_000,
+  })
+
+export async function logout() {
+  await api.POST("/api/v1/auth/logout")
 }

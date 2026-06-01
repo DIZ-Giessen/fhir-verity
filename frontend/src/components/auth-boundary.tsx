@@ -3,17 +3,9 @@ import { Navigate, useLocation } from "@tanstack/react-router"
 import { useEffect, useState, type ReactNode } from "react"
 
 import { SiteHeader } from "@/components/site-header"
-import { ApiError, api } from "@/lib/api-client"
+import { meQueryOptions } from "@/api/queries"
 
 const PUBLIC_PATHS = ["/login"]
-
-interface AuthUser {
-  id: string
-  username: string | null
-  email: string | null
-  full_name: string | null
-  role: "viewer" | "editor" | "admin"
-}
 
 export function AuthBoundary({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false)
@@ -30,20 +22,7 @@ function AuthGate({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
 
-  const { data, isPending } = useQuery({
-    queryKey: ["auth", "me"],
-    queryFn: async (): Promise<AuthUser | null> => {
-      try {
-        const { data } = await api.GET("/api/v1/auth/me")
-        return (data as AuthUser) ?? null
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 401) return null
-        throw err
-      }
-    },
-    retry: false,
-    staleTime: 60_000,
-  })
+  const { data, isPending } = useQuery(meQueryOptions())
 
   if (isPending) {
     return <Centered>Loading…</Centered>

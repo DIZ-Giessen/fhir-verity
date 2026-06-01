@@ -13,9 +13,90 @@ export interface paths {
         };
         /**
          * Root
-         * @description Principal Root
+         * @description Default public Root
          */
         get: operations["root__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Login
+         * @description Starts the authentication process by redirecting to Keycloak.
+         */
+        get: operations["login_api_v1_auth_login_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Callback
+         * @description Callback endpoint for Keycloak OAuth2. Exchanges the authorization code for tokens,
+         *     fetches user info from the IdP, provisions the user in the local DB, and sets a session.
+         */
+        get: operations["callback_api_v1_auth_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description Logs out the current user by clearing the session.
+         */
+        post: operations["logout_api_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Me
+         * @description Get the current authenticated user's profile.
+         */
+        get: operations["me_api_v1_auth_me_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -869,6 +950,27 @@ export interface components {
             /** Scope */
             scope?: string | null;
         };
+        /**
+         * UserRead
+         * @description User Model
+         */
+        UserRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Keycloak Sub */
+            keycloak_sub: string;
+            /** Username */
+            username?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name?: string | null;
+            /** Role */
+            role: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1040,6 +1142,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    login_api_v1_auth_login_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    callback_api_v1_auth_callback_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    logout_api_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    me_api_v1_auth_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
                 };
             };
         };
