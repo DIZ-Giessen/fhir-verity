@@ -113,19 +113,19 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             ),
         },
         "has_observation": {
-            "enabled": True,
+            "enabled": False,
             "severity": "warning",
             "category": "completeness",
             "description": (
-                "Checks if the Patient resource has at least one Observation."
+                "Checks if the Patient resource has at least one Observation. Note: enabling this can significantly increase run times!"
             ),
         },
         "has_condition": {
-            "enabled": True,
+            "enabled": False,
             "severity": "warning",
             "category": "completeness",
             "description": (
-                "Checks if the Patient resource has at least one Condition."
+                "Checks if the Patient resource has at least one Condition.  Note: enabling this can significantly increase run times!"
             ),
         },
         # --- Plausibility ---

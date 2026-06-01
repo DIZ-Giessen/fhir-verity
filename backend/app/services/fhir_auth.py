@@ -75,9 +75,11 @@ class OAuth2ClientCredentialsAuth(httpx.Auth):
             headers={"Accept": "application/json"},
         )
 
-    async def async_auth_flow(self, request: httpx.Request):
+    def auth_flow(self, request: httpx.Request):
         if self._access_token is None or monotonic() >= self._expires_at:
             token_response = yield self._build_token_request()
+            # requires_response_body=True ensures httpx has already read the
+            # body before returning the response into this generator.
             if token_response.status_code != 200:
                 raise httpx.HTTPError(
                     f"Token endpoint {self.token_url} returned "
