@@ -25,15 +25,14 @@ class FhirServerRead(BaseModel):
     id: UUID
     name: str
     base_url: str
-    project_id: str = None
+    project_id: str | None = None
     is_active: bool
+    has_auth_config: bool = False
+    auth_type: Literal["none", "basic", "oauth2_client_credentials"] = "none"
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        "Config"
-
-        from_attributes = True  # Konvertiere SQLAlchemy Models zu Pydantic Models
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FhirServerBase(BaseModel):
@@ -82,3 +81,24 @@ class ServerAuthUpdate(BaseModel):
     scope: str | None = None
 
     model_config = ConfigDict(extra="forbid")
+
+
+class ServerMetadata(BaseModel):
+    """Result of a CapabilityStatement read against a FHIR server."""
+
+    ok: bool
+    response_ms: int | None = None
+    fhir_version: str | None = None
+    software_name: str | None = None
+    software_version: str | None = None
+    publisher: str | None = None
+    error: str | None = None
+
+
+class ResourceCount(BaseModel):
+    """Count of resources of a given type on a FHIR server."""
+
+    resource_type: str
+    total: int
+    ok: bool
+    error: str | None = None

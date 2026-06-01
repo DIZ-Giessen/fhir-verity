@@ -136,7 +136,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get Fhir Server
+         * @description Single FHIR server details.
+         */
+        get: operations["get_fhir_server_api_v1_servers__server_id__get"];
         put?: never;
         post?: never;
         /**
@@ -175,6 +179,48 @@ export interface paths {
          * @description Replace a server's auth. Omitted secrets keep their existing value.
          */
         patch: operations["update_server_auth_api_v1_servers__server_id__auth_patch"];
+        trace?: never;
+    };
+    "/api/v1/servers/{server_id}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Server Metadata
+         * @description Connection test: fetch the FHIR server's CapabilityStatement and report
+         *     version + response time. Returns ok=false instead of raising so the
+         *     frontend can render a clean error state.
+         */
+        get: operations["get_server_metadata_api_v1_servers__server_id__metadata_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/servers/{server_id}/resource-counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Server Resource Counts
+         * @description `_summary=count` per supported resource type, fired in parallel.
+         */
+        get: operations["get_server_resource_counts_api_v1_servers__server_id__resource_counts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/validation/start": {
@@ -660,9 +706,20 @@ export interface components {
             /** Base Url */
             base_url: string;
             /** Project Id */
-            project_id?: string;
+            project_id?: string | null;
             /** Is Active */
             is_active: boolean;
+            /**
+             * Has Auth Config
+             * @default false
+             */
+            has_auth_config: boolean;
+            /**
+             * Auth Type
+             * @default none
+             * @enum {string}
+             */
+            auth_type: "none" | "basic" | "oauth2_client_credentials";
             /**
              * Created At
              * Format: date-time
@@ -832,6 +889,20 @@ export interface components {
             /** Is Server Specific */
             is_server_specific: boolean;
         };
+        /**
+         * ResourceCount
+         * @description Count of resources of a given type on a FHIR server.
+         */
+        ResourceCount: {
+            /** Resource Type */
+            resource_type: string;
+            /** Total */
+            total: number;
+            /** Ok */
+            ok: boolean;
+            /** Error */
+            error?: string | null;
+        };
         /** ResourceTypeSummary */
         ResourceTypeSummary: {
             /** Resource Type */
@@ -949,6 +1020,26 @@ export interface components {
             token_url?: string | null;
             /** Scope */
             scope?: string | null;
+        };
+        /**
+         * ServerMetadata
+         * @description Result of a CapabilityStatement read against a FHIR server.
+         */
+        ServerMetadata: {
+            /** Ok */
+            ok: boolean;
+            /** Response Ms */
+            response_ms?: number | null;
+            /** Fhir Version */
+            fhir_version?: string | null;
+            /** Software Name */
+            software_name?: string | null;
+            /** Software Version */
+            software_version?: string | null;
+            /** Publisher */
+            publisher?: string | null;
+            /** Error */
+            error?: string | null;
         };
         /**
          * UserRead
@@ -1291,6 +1382,37 @@ export interface operations {
             };
         };
     };
+    get_fhir_server_api_v1_servers__server_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FhirServerRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_fhir_server_api_v1_servers__server_id__delete: {
         parameters: {
             query?: never;
@@ -1408,6 +1530,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServerAuthRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_server_metadata_api_v1_servers__server_id__metadata_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerMetadata"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_server_resource_counts_api_v1_servers__server_id__resource_counts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceCount"][];
                 };
             };
             /** @description Validation Error */
