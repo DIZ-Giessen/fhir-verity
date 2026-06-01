@@ -72,6 +72,30 @@ export interface paths {
         patch: operations["update_fhir_server_api_v1_servers__server_id__patch"];
         trace?: never;
     };
+    "/api/v1/servers/{server_id}/auth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Server Auth
+         * @description Return the non-secret parts of a server's auth config.
+         */
+        get: operations["get_server_auth_api_v1_servers__server_id__auth_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Server Auth
+         * @description Replace a server's auth. Omitted secrets keep their existing value.
+         */
+        patch: operations["update_server_auth_api_v1_servers__server_id__auth_patch"];
+        trace?: never;
+    };
     "/api/v1/validation/start": {
         parameters: {
             query?: never;
@@ -351,7 +375,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Audit Log */
+        /**
+         * List Audit Log
+         * @description Audir Logs
+         */
         get: operations["list_audit_log_audit_log_get"];
         put?: never;
         post?: never;
@@ -799,6 +826,49 @@ export interface components {
             /** By Resource Type */
             by_resource_type: components["schemas"]["ResourceTypeSummary"][];
         };
+        /**
+         * ServerAuthRead
+         * @description Non-secret view of a server's auth config (for prefilling the UI).
+         */
+        ServerAuthRead: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "none" | "basic" | "oauth2_client_credentials";
+            /** Username */
+            username?: string | null;
+            /** Client Id */
+            client_id?: string | null;
+            /** Token Url */
+            token_url?: string | null;
+            /** Scope */
+            scope?: string | null;
+        };
+        /**
+         * ServerAuthUpdate
+         * @description Set a server's auth. Secret fields (password, client_secret) may be omitted
+         *     to keep the currently stored value.
+         */
+        ServerAuthUpdate: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "none" | "basic" | "oauth2_client_credentials";
+            /** Username */
+            username?: string | null;
+            /** Password */
+            password?: string | null;
+            /** Client Id */
+            client_id?: string | null;
+            /** Client Secret */
+            client_secret?: string | null;
+            /** Token Url */
+            token_url?: string | null;
+            /** Scope */
+            scope?: string | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1090,6 +1160,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FhirServerRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_server_auth_api_v1_servers__server_id__auth_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerAuthRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_server_auth_api_v1_servers__server_id__auth_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServerAuthUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerAuthRead"];
                 };
             };
             /** @description Validation Error */

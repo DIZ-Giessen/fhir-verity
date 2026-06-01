@@ -10,10 +10,13 @@ export type FhirServerUpdate = components["schemas"]["FhirServerUpdate"]
 export type ResourceConfig = components["schemas"]["ResourceConfig"]
 export type RuleDefinition = components["schemas"]["RuleDefinition"]
 export type RuleUpdate = components["schemas"]["RuleUpdate"]
+export type ServerAuthRead = components["schemas"]["ServerAuthRead"]
+export type ServerAuthUpdate = components["schemas"]["ServerAuthUpdate"]
 
 export const serverKeys = {
   all: ["servers"] as const,
   detail: (id: string) => ["servers", id] as const,
+  auth: (id: string) => ["servers", id, "auth"] as const,
 }
 
 export const serversQueryOptions = () =>
@@ -112,4 +115,26 @@ export async function deleteServerConfig(
   await api.DELETE("/api/v1/config/servers/{server_id}/{resource_type}", {
     params: { path: { server_id: serverId, resource_type: resourceType } },
   })
+}
+
+export const serverAuthQueryOptions = (serverId: string) =>
+  queryOptions({
+    queryKey: serverKeys.auth(serverId),
+    queryFn: async () => {
+      const { data } = await api.GET("/api/v1/servers/{server_id}/auth", {
+        params: { path: { server_id: serverId } },
+      })
+      return data
+    },
+  })
+
+export async function updateServerAuth(
+  serverId: string,
+  body: ServerAuthUpdate
+) {
+  const { data } = await api.PATCH("/api/v1/servers/{server_id}/auth", {
+    params: { path: { server_id: serverId } },
+    body,
+  })
+  return data
 }

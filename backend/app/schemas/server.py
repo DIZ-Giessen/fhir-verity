@@ -4,7 +4,7 @@ in FastAPI endpoints handling FHIR Server resources.
 """
 
 from uuid import UUID
-from typing import Optional, Dict, Any
+from typing import Literal, Optional, Dict, Any
 from datetime import datetime
 
 from pydantic import BaseModel, HttpUrl, Field, ConfigDict
@@ -37,6 +37,8 @@ class FhirServerRead(BaseModel):
 
 
 class FhirServerBase(BaseModel):
+    """Server Base"""
+
     name: str = Field(min_length=1, max_length=255)
     base_url: HttpUrl
     project_id: str = Field(min_length=1, max_length=64)
@@ -51,5 +53,32 @@ class FhirServerUpdate(BaseModel):
     project_id: str | None = Field(default=None, min_length=1, max_length=64)
     auth_config: dict[str, Any] | None = None
     is_active: bool | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ServerAuthRead(BaseModel):
+    """Non-secret view of a server's auth config (for prefilling the UI)."""
+
+    type: Literal["none", "basic", "oauth2_client_credentials"]
+    username: str | None = None
+    client_id: str | None = None
+    token_url: str | None = None
+    scope: str | None = None
+
+
+class ServerAuthUpdate(BaseModel):
+    """
+    Set a server's auth. Secret fields (password, client_secret) may be omitted
+    to keep the currently stored value.
+    """
+
+    type: Literal["none", "basic", "oauth2_client_credentials"]
+    username: str | None = None
+    password: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
+    token_url: str | None = None
+    scope: str | None = None
 
     model_config = ConfigDict(extra="forbid")

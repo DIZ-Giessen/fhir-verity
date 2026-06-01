@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  KeyRound,
   MoreHorizontal,
   Pencil,
   SlidersHorizontal,
@@ -59,6 +60,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { ServerAuthDialog } from "./server-auth-dialog"
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
@@ -78,6 +80,7 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
   const [rowSelection, setRowSelection] = useState({})
   const [globalFilter, setGlobalFilter] = useState("")
   const [deleteTarget, setDeleteTarget] = useState<FhirServer | null>(null)
+  const [authTarget, setAuthTarget] = useState<FhirServer | null>(null)
 
   const queryClient = useQueryClient()
 
@@ -197,6 +200,10 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
                   <SlidersHorizontal className="mr-2 h-4 w-4" />
                   Config
                 </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setAuthTarget(row.original)}>
+                <KeyRound className="mr-2 h-4 w-4" />
+                Server auth
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -402,6 +409,11 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <ServerAuthDialog
+        open={authTarget !== null}
+        onOpenChange={(open) => !open && setAuthTarget(null)}
+        server={authTarget}
+      />
     </div>
   )
 }

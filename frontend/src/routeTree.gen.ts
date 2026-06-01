@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ServersRouteImport } from './routes/servers'
 import { Route as RunsRouteImport } from './routes/runs'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as CleanupRouteImport } from './routes/cleanup'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as IndexRouteImport } from './routes/index'
@@ -28,6 +29,11 @@ const ServersRoute = ServersRouteImport.update({
 const RunsRoute = RunsRouteImport.update({
   id: '/runs',
   path: '/runs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CleanupRoute = CleanupRouteImport.update({
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/audit': typeof AuditRoute
   '/cleanup': typeof CleanupRoute
+  '/login': typeof LoginRoute
   '/runs': typeof RunsRoute
   '/servers': typeof ServersRouteWithChildren
   '/servers/$id': typeof ServersIdRouteWithChildren
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audit': typeof AuditRoute
   '/cleanup': typeof CleanupRoute
+  '/login': typeof LoginRoute
   '/runs': typeof RunsRoute
   '/servers': typeof ServersIndexRoute
   '/servers/$id': typeof ServersIdIndexRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/audit': typeof AuditRoute
   '/cleanup': typeof CleanupRoute
+  '/login': typeof LoginRoute
   '/runs': typeof RunsRoute
   '/servers': typeof ServersRouteWithChildren
   '/servers/$id': typeof ServersIdRouteWithChildren
@@ -113,6 +122,7 @@ export interface FileRouteTypes {
     | '/'
     | '/audit'
     | '/cleanup'
+    | '/login'
     | '/runs'
     | '/servers'
     | '/servers/$id'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
     | '/'
     | '/audit'
     | '/cleanup'
+    | '/login'
     | '/runs'
     | '/servers'
     | '/servers/$id'
@@ -135,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/audit'
     | '/cleanup'
+    | '/login'
     | '/runs'
     | '/servers'
     | '/servers/$id'
@@ -148,6 +160,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuditRoute: typeof AuditRoute
   CleanupRoute: typeof CleanupRoute
+  LoginRoute: typeof LoginRoute
   RunsRoute: typeof RunsRoute
   ServersRoute: typeof ServersRouteWithChildren
 }
@@ -166,6 +179,13 @@ declare module '@tanstack/react-router' {
       path: '/runs'
       fullPath: '/runs'
       preLoaderRoute: typeof RunsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cleanup': {
@@ -260,6 +280,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuditRoute: AuditRoute,
   CleanupRoute: CleanupRoute,
+  LoginRoute: LoginRoute,
   RunsRoute: RunsRoute,
   ServersRoute: ServersRouteWithChildren,
 }

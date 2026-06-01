@@ -10,6 +10,8 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.models.fhir_server import FhirServer
 from app.schemas.server import FhirServerCreate, FhirServerRead, FhirServerUpdate
+from app.schemas.server import ServerAuthRead, ServerAuthUpdate
+from app.services.fhir_auth import normalize_auth_config
 
 router = APIRouter()
 
@@ -133,3 +135,93 @@ async def delete_fhir_server(
 
     await db.delete(server)
     await db.commit()
+
+
+async def _get_server_or_404(server_id: UUID, db: AsyncSession) -> FhirServer:
+    server = (
+        await db.execute(select(FhirServer).where(FhirServer.id == server_id))
+    ).scalar_one_or_none()
+    if server is None:
+        raise HTTPException(status_code=404, detail="FHIR server not found")
+    return server
+
+
+def _auth_read(cfg: dict) -> ServerAuthRead:
+    return ServerAuthRead(
+        type=cfg["type"],
+        username=cfg.get("username"),
+        client_id=cfg.get("client_id"),
+        token_url=cfg.get("token_url"),
+        scope=cfg.get("scope"),
+    )
+
+
+@router.get("/servers/{server_id}/auth", response_model=ServerAuthRead)
+async def get_server_auth(server_id: UUID, db: AsyncSession = Depends(get_db)):
+    """Return the non-secret parts of a server's auth config."""
+    server = await _get_server_or_404(server_id, db)
+    return _auth_read(normalize_auth_config(server.auth_config))
+
+
+@router.patch("/servers/{server_id}/auth", response_model=ServerAuthRead)
+async def update_server_auth(
+    server_id: UUID,
+    payload: ServerAuthUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Replace a server's auth. Omitted secrets keep their existing value."""
+    server = await _get_server_or_404(server_id, db)
+    existing = normalize_auth_config(server.auth_config)
+
+    if payload.type == "none":
+        new_cfg: dict = {"type": "none"}
+
+    elif payload.type == "basic":
+        username = (
+            payload.username
+            if payload.username is not None
+            else existing.get("username")
+        )
+        password = (
+            payload.password
+            if payload.password is not None
+            else existing.get("password")
+        )
+        if not username or not password:
+            raise HTTPException(400, "basic auth requires username and password")
+        new_cfg = {"type": "basic", "username": username, "password": password}
+
+    else:  # oauth2_client_credentials
+        token_url = (
+            payload.token_url
+            if payload.token_url is not None
+            else existing.get("token_url")
+        )
+        client_id = (
+            payload.client_id
+            if payload.client_id is not None
+            else existing.get("client_id")
+        )
+        client_secret = (
+            payload.client_secret
+            if payload.client_secret is not None
+            else existing.get("client_secret")
+        )
+        scope = payload.scope if payload.scope is not None else existing.get("scope")
+        if not token_url or not client_id or not client_secret:
+            raise HTTPException(
+                400, "oauth2 requires token_url, client_id and client_secret"
+            )
+        new_cfg = {
+            "type": "oauth2_client_credentials",
+            "token_url": token_url,
+            "client_id": client_id,
+            "client_secret": client_secret,
+        }
+        if scope:
+            new_cfg["scope"] = scope
+
+    server.auth_config = new_cfg
+    await db.commit()
+    await db.refresh(server)
+    return _auth_read(normalize_auth_config(server.auth_config))

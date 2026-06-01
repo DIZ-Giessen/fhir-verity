@@ -32,5 +32,8 @@ const throwOnError: Middleware = {
   },
 }
 
-export const api = createClient<paths>({ baseUrl: env.API_URL })
+export const api = createClient<paths>({
+  baseUrl: env.API_URL,
+  credentials: "include",
+})
 api.use(throwOnError)
