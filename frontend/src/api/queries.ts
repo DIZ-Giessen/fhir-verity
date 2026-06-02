@@ -7,16 +7,26 @@ export type FhirServer = components["schemas"]["FhirServerRead"]
 export type FhirServerCreate = components["schemas"]["FhirServerCreate"]
 export type FhirServerUpdate = components["schemas"]["FhirServerUpdate"]
 
+// Type Script Schema from the Backend
 export type ResourceConfig = components["schemas"]["ResourceConfig"]
 export type RuleDefinition = components["schemas"]["RuleDefinition"]
 export type RuleUpdate = components["schemas"]["RuleUpdate"]
 export type ServerAuthRead = components["schemas"]["ServerAuthRead"]
 export type ServerAuthUpdate = components["schemas"]["ServerAuthUpdate"]
+export type ServerMetadata = components["schemas"]["ServerMetadata"]
+export type ResourceCount = components["schemas"]["ResourceCount"]
+export type ValidationRunListItem =
+  components["schemas"]["ValidationRunListItem"]
+export type RunSummary = components["schemas"]["RunSummary"]
+
+// ======================
 
 export const serverKeys = {
   all: ["servers"] as const,
   detail: (id: string) => ["servers", id] as const,
   auth: (id: string) => ["servers", id, "auth"] as const,
+  metadata: (id: string) => ["servers", id, "metadata"] as const,
+  resourceCounts: (id: string) => ["servers", id, "resource-counts"] as const,
 }
 
 export const serversQueryOptions = () =>
@@ -167,3 +177,62 @@ export const meQueryOptions = () =>
 export async function logout() {
   await api.POST("/api/v1/auth/logout")
 }
+
+// SERVER IDS ====================
+
+export const serverQueryOptions = (serverId: string) =>
+  queryOptions({
+    queryKey: serverKeys.detail(serverId),
+    queryFn: async () => {
+      const { data } = await api.GET("/api/v1/servers/{server_id}", {
+        params: { path: { server_id: serverId } },
+      })
+      return data
+    },
+  })
+
+export const serverMetadataQueryOptions = (serverId: string) =>
+  queryOptions({
+    queryKey: serverKeys.metadata(serverId),
+    queryFn: async () => {
+      const { data } = await api.GET("/api/v1/servers/{server_id}/metadata", {
+        params: { path: { server_id: serverId } },
+      })
+      return data
+    },
+  })
+
+export const serverResourceCountsQueryOptions = (serverId: string) =>
+  queryOptions({
+    queryKey: serverKeys.resourceCounts(serverId),
+    queryFn: async () => {
+      const { data } = await api.GET(
+        "/api/v1/servers/{server_id}/resource-counts",
+        { params: { path: { server_id: serverId } } }
+      )
+      return data ?? []
+    },
+  })
+
+export const serverRunsQueryOptions = (serverId: string, limit = 5) =>
+  queryOptions({
+    queryKey: ["validation", "runs", { serverId, limit }],
+    queryFn: async () => {
+      const { data } = await api.GET("/api/v1/validation/runs", {
+        params: { query: { server_id: serverId, limit, skip: 0 } },
+      })
+      return data
+    },
+  })
+
+export const runSummaryQueryOptions = (runId: string) =>
+  queryOptions({
+    queryKey: ["validation", "runs", runId, "summary"],
+    queryFn: async () => {
+      const { data } = await api.GET(
+        "/api/v1/validation/runs/{run_id}/summary",
+        { params: { path: { run_id: runId } } }
+      )
+      return data
+    },
+  })

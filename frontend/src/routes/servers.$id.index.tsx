@@ -1,19 +1,724 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { useQuery } from "@tanstack/react-query"
+import { Link, createFileRoute } from "@tanstack/react-router"
+import {
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  KeyRound,
+  Pencil,
+  Play,
+  RefreshCw,
+  Settings,
+  TriangleAlert,
+} from "lucide-react"
+import { useState } from "react"
+
+import {
+  type ResourceCount,
+  type ValidationRunListItem,
+  runSummaryQueryOptions,
+  serverMetadataQueryOptions,
+  serverQueryOptions,
+  serverResourceCountsQueryOptions,
+  serverRunsQueryOptions,
+} from "@/api/queries"
+import { ServerAuthDialog } from "@/components/server-auth-dialog"
+import { ServerFormDialog } from "@/components/server-form-dialog"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { ApiError } from "@/lib/api-client"
+import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/servers/$id/")({
   component: ServerDetailPage,
 })
 
+const dateFormatter = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+})
+
+const SUPPORTED_TYPES = [
+  "Patient",
+  "Encounter",
+  "Observation",
+  "Condition",
+  "Medication",
+  "MedicationRequest",
+  "MedicationAdministration",
+  "MedicationStatement",
+  "Procedure",
+  "DiagnosticReport",
+]
+
+function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return "—"
+  const d = new Date(iso)
+  const diff = Date.now() - d.getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1) return "just now"
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const days = Math.floor(h / 24)
+  if (days < 30) return `${days}d ago`
+  return dateFormatter.format(d)
+}
+
+function formatDuration(startISO: string, endISO: string | null): string {
+  if (!endISO) return "—"
+  const sec = Math.round(
+    (new Date(endISO).getTime() - new Date(startISO).getTime()) / 1000
+  )
+  if (sec < 60) return `${sec}s`
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  if (m < 60) return `${m}m ${s}s`
+  const h = Math.floor(m / 60)
+  return `${h}h ${m % 60}m`
+}
+
 function ServerDetailPage() {
   const { id } = Route.useParams()
 
+  const serverQ = useQuery(serverQueryOptions(id))
+  const runsQ = useQuery(serverRunsQueryOptions(id, 5))
+  const countsQ = useQuery(serverResourceCountsQueryOptions(id))
+  const metaQ = useQuery({
+    ...serverMetadataQueryOptions(id),
+    enabled: false,
+  })
+
+  const latestCompleted = runsQ.data?.items.find(
+    (r) => r.status === "completed"
+  )
+  const summaryQ = useQuery({
+    ...runSummaryQueryOptions(latestCompleted?.id ?? ""),
+    enabled: Boolean(latestCompleted),
+  })
+
+  const [editOpen, setEditOpen] = useState(false)
+  const [authOpen, setAuthOpen] = useState(false)
+  const [startOpen, setStartOpen] = useState(false)
+
+  if (serverQ.isPending) {
+    return <Skeleton className="h-96 w-full" />
+  }
+
+  if (serverQ.error || !serverQ.data) {
+    return (
+      <div className="rounded-lg border p-8 text-center">
+        <p className="text-sm font-medium text-destructive">
+          Failed to load server
+        </p>
+        <p className="mt-1 font-mono text-xs text-muted-foreground">
+          {serverQ.error instanceof ApiError
+            ? `HTTP ${serverQ.error.status} — ${serverQ.error.statusText}`
+            : serverQ.error?.message}
+        </p>
+      </div>
+    )
+  }
+
+  const server = serverQ.data
+
   return (
-    <div className="space-y-1">
-      <h1 className="text-2xl font-semibold tracking-tight">Server detail</h1>
-      <p className="text-sm text-muted-foreground">
-        Detail view for server <code className="font-mono text-xs">{id}</code> —
-        coming soon
-      </p>
+    <div className="space-y-6">
+      <Link
+        to="/servers"
+        className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ChevronLeft className="mr-1 h-4 w-4" />
+        Back to servers
+      </Link>
+
+      {/* Header */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {server.name}
+          </h1>
+          <p className="font-mono text-xs text-muted-foreground">
+            {server.base_url}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{server.project_id}</Badge>
+            {server.is_active ? (
+              <Badge
+                variant="outline"
+                className="border-0 bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+              >
+                Active
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="border-0 bg-zinc-500/15 text-zinc-700 dark:bg-zinc-500/10 dark:text-zinc-400"
+              >
+                Inactive
+              </Badge>
+            )}
+            <AuthBadge type={server.auth_type} />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setStartOpen(true)}>
+            <Play className="mr-2 h-4 w-4" />
+            Start validation
+          </Button>
+          <Button variant="outline" onClick={() => setEditOpen(true)}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </Button>
+          <Button variant="outline" asChild>
+            <Link to="/servers/$id/config" params={{ id }}>
+              <Settings className="mr-2 h-4 w-4" />
+              Config
+            </Link>
+          </Button>
+          <Button variant="outline" onClick={() => setAuthOpen(true)}>
+            <KeyRound className="mr-2 h-4 w-4" />
+            Server auth
+          </Button>
+        </div>
+      </div>
+
+      {/* KPI cards from latest completed run */}
+      <KpiRow run={latestCompleted ?? null} />
+
+      {/* Severity breakdown from latest completed run */}
+      <SeverityRow
+        summary={summaryQ.data ?? null}
+        loading={summaryQ.isFetching}
+        hasRun={Boolean(latestCompleted)}
+      />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ConnectionTestCard
+          data={metaQ.data}
+          loading={metaQ.isFetching}
+          onTest={() => metaQ.refetch()}
+        />
+        <ResourceCountsCard
+          counts={countsQ.data ?? []}
+          loading={countsQ.isPending}
+          onRefresh={() => countsQ.refetch()}
+        />
+      </div>
+
+      <RecentRunsCard
+        runs={runsQ.data?.items ?? []}
+        loading={runsQ.isPending}
+      />
+
+      <ServerFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        server={server}
+      />
+      <ServerAuthDialog
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        server={server}
+      />
+      <StartValidationDialog
+        open={startOpen}
+        onOpenChange={setStartOpen}
+        serverName={server.name}
+      />
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+const AUTH_LABELS: Record<string, string> = {
+  none: "No auth",
+  basic: "Basic auth",
+  oauth2_client_credentials: "OAuth2",
+}
+
+const AUTH_STYLES: Record<string, string> = {
+  none: "border-0 bg-zinc-500/15 text-zinc-700 dark:bg-zinc-500/10 dark:text-zinc-400",
+  basic:
+    "border-0 bg-sky-500/15 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400",
+  oauth2_client_credentials:
+    "border-0 bg-violet-500/15 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400",
+}
+
+function AuthBadge({ type }: { type: string }) {
+  return (
+    <Badge variant="outline" className={AUTH_STYLES[type] ?? ""}>
+      {AUTH_LABELS[type] ?? type}
+    </Badge>
+  )
+}
+
+function KpiRow({ run }: { run: ValidationRunListItem | null }) {
+  const rate =
+    run && run.total_processed > 0
+      ? (run.total_invalid / run.total_processed) * 100
+      : null
+
+  const cards: Array<{ name: string; stat: string; sub?: string }> = [
+    {
+      name: "Last validation",
+      stat: run ? relativeTime(run.started_at) : "—",
+      sub: run ? dateFormatter.format(new Date(run.started_at)) : "No runs yet",
+    },
+    {
+      name: "Processed",
+      stat: run ? run.total_processed.toLocaleString() : "—",
+    },
+    {
+      name: "Invalid",
+      stat: run ? run.total_invalid.toLocaleString() : "—",
+    },
+    {
+      name: "Invalid rate",
+      stat: rate != null ? `${rate.toFixed(1)}%` : "—",
+    },
+  ]
+
+  return (
+    <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      {cards.map((item) => (
+        <Card key={item.name} className="p-6 py-4 shadow-2xs">
+          <CardContent className="p-0">
+            <dt className="text-sm font-medium text-muted-foreground">
+              {item.name}
+            </dt>
+            <dd className="mt-2 flex items-baseline space-x-2.5">
+              <span className="text-3xl font-semibold text-foreground tabular-nums">
+                {item.stat}
+              </span>
+            </dd>
+            {item.sub && (
+              <p className="mt-1 text-xs text-muted-foreground">{item.sub}</p>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+    </dl>
+  )
+}
+
+interface SeverityRowProps {
+  summary: {
+    by_resource_type: Array<{
+      by_rule: Array<{ severity: string; count: number }>
+    }>
+  } | null
+  loading: boolean
+  hasRun: boolean
+}
+
+function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
+  const counts = { error: 0, warning: 0, info: 0 }
+  summary?.by_resource_type.forEach((rt) => {
+    rt.by_rule.forEach((r) => {
+      if (r.severity in counts) {
+        counts[r.severity as keyof typeof counts] += r.count
+      }
+    })
+  })
+
+  const items = [
+    {
+      key: "error",
+      name: "Errors",
+      stat: counts.error,
+      Icon: AlertTriangle,
+      tone: "bg-red-500 text-white",
+      label: "Errors",
+    },
+    {
+      key: "warning",
+      name: "Warnings",
+      stat: counts.warning,
+      Icon: TriangleAlert,
+      tone: "bg-amber-500 text-white",
+      label: "Warnings",
+    },
+    {
+      key: "info",
+      name: "Infos",
+      stat: counts.info,
+      Icon: Info,
+      tone: "bg-sky-500 text-white",
+      label: "Infos",
+    },
+  ]
+
+  if (!hasRun) {
+    return (
+      <Card className="p-6 shadow-2xs">
+        <p className="text-sm text-muted-foreground">
+          No completed validation runs yet. Start one to see issue counts.
+        </p>
+      </Card>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-32 w-full" />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+      {items.map((item) => (
+        <Card key={item.key} className="p-6 shadow-2xs">
+          <CardContent className="p-0">
+            <dt className="text-sm font-medium text-muted-foreground">
+              {item.name}
+            </dt>
+            <dd className="text-3xl font-semibold text-foreground tabular-nums">
+              {item.stat.toLocaleString()}
+            </dd>
+            <div className="mt-4 flex items-center gap-3 rounded-md bg-muted/60 p-2">
+              <span
+                className={cn(
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded",
+                  item.tone
+                )}
+              >
+                <item.Icon className="size-4" />
+              </span>
+              <p className="text-sm text-muted-foreground">
+                Across the latest completed run
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </dl>
+  )
+}
+
+interface ConnectionTestCardProps {
+  data?: {
+    ok: boolean
+    response_ms: number | null
+    fhir_version: string | null
+    software_name: string | null
+    software_version: string | null
+    error: string | null
+  } | null
+  loading: boolean
+  onTest: () => void
+}
+
+function ConnectionTestCard({
+  data,
+  loading,
+  onTest,
+}: ConnectionTestCardProps) {
+  return (
+    <Card className="shadow-2xs">
+      <CardHeader>
+        <CardTitle className="text-base">Connection test</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Button onClick={onTest} disabled={loading}>
+          {loading ? "Testing…" : "Test connection"}
+        </Button>
+
+        {data && data.ok && (
+          <dl className="space-y-2 text-sm">
+            <Row label="Status">
+              <Badge
+                variant="outline"
+                className="border-0 bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+              >
+                Reachable
+              </Badge>
+            </Row>
+            <Row label="Response time">{data.response_ms} ms</Row>
+            <Row label="FHIR version">{data.fhir_version ?? "—"}</Row>
+            <Row label="Software">
+              {data.software_name
+                ? `${data.software_name}${data.software_version ? ` ${data.software_version}` : ""}`
+                : "—"}
+            </Row>
+          </dl>
+        )}
+
+        {data && !data.ok && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+            <p className="text-sm font-medium text-destructive">
+              Connection failed
+            </p>
+            <p className="mt-1 font-mono text-xs break-all text-muted-foreground">
+              {data.error ?? "Unknown error"}
+            </p>
+          </div>
+        )}
+
+        {!data && !loading && (
+          <p className="text-sm text-muted-foreground">
+            Test the FHIR server reachability and read its CapabilityStatement.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function Row({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium">{children}</dd>
+    </div>
+  )
+}
+
+interface ResourceCountsCardProps {
+  counts: ResourceCount[]
+  loading: boolean
+  onRefresh: () => void
+}
+
+function ResourceCountsCard({
+  counts,
+  loading,
+  onRefresh,
+}: ResourceCountsCardProps) {
+  return (
+    <Card className="shadow-2xs">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">Resource counts</CardTitle>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={onRefresh}
+          disabled={loading}
+          aria-label="Refresh counts"
+        >
+          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-6 w-full" />
+            ))}
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Resource type</TableHead>
+                <TableHead className="text-right">Count</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {counts.map((c) => (
+                <TableRow key={c.resource_type}>
+                  <TableCell className="font-medium">
+                    {c.resource_type}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {c.ok ? (
+                      c.total.toLocaleString()
+                    ) : (
+                      <span
+                        title={c.error ?? "Unknown error"}
+                        className="text-destructive"
+                      >
+                        error
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+const RUN_STATUS_STYLES: Record<string, string> = {
+  completed:
+    "border-0 bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+  running:
+    "border-0 bg-sky-500/15 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400",
+  failed:
+    "border-0 bg-red-500/15 text-red-700 dark:bg-red-500/10 dark:text-red-400",
+}
+
+function RecentRunsCard({
+  runs,
+  loading,
+}: {
+  runs: ValidationRunListItem[]
+  loading: boolean
+}) {
+  return (
+    <Card className="shadow-2xs">
+      <CardHeader>
+        <CardTitle className="text-base">Recent validation runs</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-full" />
+            ))}
+          </div>
+        ) : runs.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            No validation runs yet.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Status</TableHead>
+                <TableHead>Started</TableHead>
+                <TableHead>Duration</TableHead>
+                <TableHead className="text-right">Processed</TableHead>
+                <TableHead className="text-right">Invalid</TableHead>
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {runs.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={RUN_STATUS_STYLES[r.status] ?? ""}
+                    >
+                      {r.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {dateFormatter.format(new Date(r.started_at))}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {formatDuration(r.started_at, r.finished_at)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {r.total_processed.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {r.total_invalid.toLocaleString()}
+                  </TableCell>
+                  <TableCell>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function StartValidationDialog({
+  open,
+  onOpenChange,
+  serverName,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  serverName: string
+}) {
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(SUPPORTED_TYPES)
+  )
+
+  const toggle = (rt: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(rt)) next.delete(rt)
+      else next.add(rt)
+      return next
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Start validation</DialogTitle>
+          <DialogDescription>
+            Run validation against{" "}
+            <span className="font-medium">{serverName}</span>. Select the
+            resource types to include.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-2 gap-2 py-2">
+          {SUPPORTED_TYPES.map((rt) => (
+            <label
+              key={rt}
+              className="flex cursor-pointer items-center gap-2 rounded-md border p-2 text-sm hover:bg-muted/50"
+            >
+              <Checkbox
+                checked={selected.has(rt)}
+                onCheckedChange={() => toggle(rt)}
+              />
+              <span>{rt}</span>
+            </label>
+          ))}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Triggering runs from this dialog isn't wired up yet — coming soon.
+        </p>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button disabled>Start</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
