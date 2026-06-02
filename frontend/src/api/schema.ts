@@ -1105,6 +1105,10 @@ export interface components {
             total_invalid: number;
             /** Resource Types */
             resource_types: string[];
+            /** Test Report */
+            test_report?: {
+                [key: string]: unknown;
+            } | null;
             /** Error Message */
             error_message: string | null;
             /**
@@ -1145,6 +1149,10 @@ export interface components {
             total_invalid: number;
             /** Resource Types */
             resource_types: string[];
+            /** Test Report */
+            test_report?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * ValidationRunRead

@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router"
 
 import { MainNav } from "@/components/main-nav"
 import { UserMenu } from "./user-menu"
+import { ModeToggle } from "./mode-toggle"
 
 export function SiteHeader() {
   return (
@@ -20,6 +21,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2">
           <UserMenu />
+          <ModeToggle />
         </div>
       </div>
     </header>

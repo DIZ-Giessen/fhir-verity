@@ -6,6 +6,7 @@ import type { ReactNode } from "react"
 import { AuthBoundary } from "@/components/auth-boundary"
 
 import appCss from "../styles.css?url"
+import { ThemeProvider } from "@/components/theme-provider"
 
 export const Route = createRootRoute({
   head: () => ({
@@ -29,12 +30,14 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
       <body className="bg-background text-foreground antialiased">
-        <AuthBoundary>{children}</AuthBoundary>
+        <ThemeProvider defaultTheme="dark" storageKey="theme">
+          <AuthBoundary>{children}</AuthBoundary>
+        </ThemeProvider>
         <TanStackDevtools
           config={{ position: "bottom-right" }}
           plugins={[

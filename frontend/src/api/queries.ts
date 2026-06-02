@@ -236,3 +236,16 @@ export const runSummaryQueryOptions = (runId: string) =>
       return data
     },
   })
+
+// Run Query
+
+export const runsQueryOptions = (limit = 50) =>
+  queryOptions({
+    queryKey: ["validation", "runs", "all", { limit }],
+    queryFn: async () => {
+      const { data } = await api.GET("/api/v1/validation/runs", {
+        params: { query: { limit, skip: 0 } },
+      })
+      return data
+    },
+  })

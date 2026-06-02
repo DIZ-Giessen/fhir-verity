@@ -1,16 +1,12 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import {
-  AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  Info,
   KeyRound,
   Pencil,
   Play,
-  RefreshCw,
   Settings,
-  TriangleAlert,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -48,6 +44,12 @@ import {
 } from "@/components/ui/table"
 import { ApiError } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
+import {
+  DangerCircle,
+  DangerTriangle,
+  ExpressionlessSquare,
+  Refresh,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
 
 export const Route = createFileRoute("/servers/$id/")({
   component: ServerDetailPage,
@@ -165,8 +167,8 @@ function ServerDetailPage() {
             {server.base_url}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">{server.project_id}</Badge>
-            {server.is_active ? (
+            {/*  <Badge variant="secondary">{server.project_id}</Badge> */}
+            {/*  {server.is_active ? (
               <Badge
                 variant="outline"
                 className="border-0 bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
@@ -180,13 +182,13 @@ function ServerDetailPage() {
               >
                 Inactive
               </Badge>
-            )}
-            <AuthBadge type={server.auth_type} />
+            )} */}
+            {/* <AuthBadge type={server.auth_type} /> */}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setStartOpen(true)}>
-            <Play className="mr-2 h-4 w-4" />
+            <Play className="mr-2 size-4" />
             Start validation
           </Button>
           <Button variant="outline" onClick={() => setEditOpen(true)}>
@@ -216,7 +218,7 @@ function ServerDetailPage() {
         hasRun={Boolean(latestCompleted)}
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-5">
         <ConnectionTestCard
           data={metaQ.data}
           loading={metaQ.isFetching}
@@ -287,7 +289,8 @@ function KpiRow({ run }: { run: ValidationRunListItem | null }) {
 
   const cards: Array<{ name: string; stat: string; sub?: string }> = [
     {
-      name: "Last validation",
+      name: "Last successful validation",
+
       stat: run ? relativeTime(run.started_at) : "—",
       sub: run ? dateFormatter.format(new Date(run.started_at)) : "No runs yet",
     },
@@ -310,17 +313,28 @@ function KpiRow({ run }: { run: ValidationRunListItem | null }) {
       {cards.map((item) => (
         <Card key={item.name} className="p-6 py-4 shadow-2xs">
           <CardContent className="p-0">
-            <dt className="text-sm font-medium text-muted-foreground">
+            <dt
+              className={cn(
+                "text-sm font-medium text-muted-foreground",
+                item.name === "Invalid"
+                  ? "text-rose-500"
+                  : item.name === "Invalid rate" && "text-orange-500"
+              )}
+            >
               {item.name}
             </dt>
             <dd className="mt-2 flex items-baseline space-x-2.5">
-              <span className="text-3xl font-semibold text-foreground tabular-nums">
+              <span
+                className={cn(
+                  "text-foregroundtabular-nums text-3xl font-semibold"
+                )}
+              >
                 {item.stat}
               </span>
             </dd>
-            {item.sub && (
+            {/* {item.sub && (
               <p className="mt-1 text-xs text-muted-foreground">{item.sub}</p>
-            )}
+            )} */}
           </CardContent>
         </Card>
       ))}
@@ -332,6 +346,7 @@ interface SeverityRowProps {
   summary: {
     by_resource_type: Array<{
       by_rule: Array<{ severity: string; count: number }>
+      resource_type: string
     }>
   } | null
   loading: boolean
@@ -353,24 +368,24 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
       key: "error",
       name: "Errors",
       stat: counts.error,
-      Icon: AlertTriangle,
-      tone: "bg-red-500 text-white",
+      Icon: DangerTriangle,
+      tone: "text-rose-500",
       label: "Errors",
     },
     {
       key: "warning",
       name: "Warnings",
       stat: counts.warning,
-      Icon: TriangleAlert,
-      tone: "bg-amber-500 text-white",
+      Icon: DangerTriangle,
+      tone: "text-orange-500",
       label: "Warnings",
     },
     {
       key: "info",
       name: "Infos",
       stat: counts.info,
-      Icon: Info,
-      tone: "bg-sky-500 text-white",
+      Icon: DangerCircle,
+      tone: "text-blue-500",
       label: "Infos",
     },
   ]
@@ -378,7 +393,8 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
   if (!hasRun) {
     return (
       <Card className="p-6 shadow-2xs">
-        <p className="text-sm text-muted-foreground">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <ExpressionlessSquare className="size-5.5" />
           No completed validation runs yet. Start one to see issue counts.
         </p>
       </Card>
@@ -397,6 +413,10 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
 
   return (
     <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+      <span className="col-span-3 text-sm text-muted-foreground">
+        across resource{summary?.by_resource_type?.length === 1 ? "" : "s"}{" "}
+        {summary?.by_resource_type?.map((i) => i.resource_type).join(", ")}
+      </span>
       {items.map((item) => (
         <Card key={item.key} className="p-6 shadow-2xs">
           <CardContent className="p-0">
@@ -406,14 +426,14 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
             <dd className="text-3xl font-semibold text-foreground tabular-nums">
               {item.stat.toLocaleString()}
             </dd>
-            <div className="mt-4 flex items-center gap-3 rounded-md bg-muted/60 p-2">
+            <div className="mt-4 flex items-center gap-3 rounded-xl bg-muted/50 p-2">
               <span
                 className={cn(
                   "flex h-9 w-9 shrink-0 items-center justify-center rounded",
                   item.tone
                 )}
               >
-                <item.Icon className="size-4" />
+                <item.Icon className="size-7" />
               </span>
               <p className="text-sm text-muted-foreground">
                 Across the latest completed run
@@ -445,7 +465,7 @@ function ConnectionTestCard({
   onTest,
 }: ConnectionTestCardProps) {
   return (
-    <Card className="shadow-2xs">
+    <Card className="col-span-2 shadow-2xs">
       <CardHeader>
         <CardTitle className="text-base">Connection test</CardTitle>
       </CardHeader>
@@ -522,7 +542,7 @@ function ResourceCountsCard({
   onRefresh,
 }: ResourceCountsCardProps) {
   return (
-    <Card className="shadow-2xs">
+    <Card className="col-span-3 shadow-2xs">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Resource counts</CardTitle>
         <Button
@@ -533,7 +553,7 @@ function ResourceCountsCard({
           disabled={loading}
           aria-label="Refresh counts"
         >
-          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+          <Refresh className={cn("size-5", loading && "animate-spin")} />
         </Button>
       </CardHeader>
       <CardContent>
@@ -697,7 +717,7 @@ function StartValidationDialog({
           {SUPPORTED_TYPES.map((rt) => (
             <label
               key={rt}
-              className="flex cursor-pointer items-center gap-2 rounded-md border p-2 text-sm hover:bg-muted/50"
+              className="flex cursor-pointer items-center gap-2 rounded-xl p-2 text-sm hover:bg-muted/50"
             >
               <Checkbox
                 checked={selected.has(rt)}
@@ -709,7 +729,7 @@ function StartValidationDialog({
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Triggering runs from this dialog isn't wired up yet — coming soon.
+          Starts a validation run for this server with the selected resources.
         </p>
 
         <DialogFooter>

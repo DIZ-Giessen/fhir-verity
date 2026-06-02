@@ -40,8 +40,6 @@ export function UserMenu() {
 
   const displayName = user.full_name || user.username || user.email || "User"
 
-  console.log(user)
-
   return (
     <Popover>
       <PopoverTrigger asChild>
