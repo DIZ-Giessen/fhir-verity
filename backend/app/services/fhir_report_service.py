@@ -27,6 +27,7 @@ from app.models.validation_run import ValidationRun
 from app.models.validation_config import ValidationConfig
 from app.services.validation_rules import VALIDATORS
 from app.core.database import AsyncSessionLocal
+from app.services.fhir_auth import build_httpx_auth
 
 logger = logging.getLogger(__name__)
 
@@ -635,7 +636,6 @@ async def post_to_fhir(
     resource: dict,
     resource_type: str,
     base_url: str,
-    auth_config: dict,
     client: httpx.AsyncClient,
 ) -> str | None:
     """
@@ -648,15 +648,8 @@ async def post_to_fhir(
         "Accept": "application/fhir+json",
     }
 
-    auth = None
-    if auth_config.get("username") and auth_config.get("password"):
-        auth = httpx.BasicAuth(
-            username=auth_config["username"],
-            password=auth_config["password"],
-        )
-
     try:
-        resp = await client.post(url, json=resource, headers=headers, auth=auth)
+        resp = await client.post(url, json=resource, headers=headers)
         resp.raise_for_status()
         created = resp.json()
         server_id = created.get("id")
@@ -728,8 +721,9 @@ async def generate_and_post_reports(
     has_any_error = False
 
     timeout = httpx.Timeout(connect=10.0, read=60.0, write=30.0, pool=10.0)
+    auth = build_httpx_auth(auth_config)
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with httpx.AsyncClient(timeout=timeout, auth=auth) as client:
 
         for resource_type in resource_types:
 
@@ -767,7 +761,6 @@ async def generate_and_post_reports(
                 resource=test_script,
                 resource_type="TestScript",
                 base_url=server_base_url,
-                auth_config=auth_config,
                 client=client,
             )
 
@@ -796,7 +789,6 @@ async def generate_and_post_reports(
                 resource=test_report,
                 resource_type="TestReport",
                 base_url=server_base_url,
-                auth_config=auth_config,
                 client=client,
             )
 
@@ -835,7 +827,6 @@ async def generate_and_post_reports(
             resource=verification_result,
             resource_type="VerificationResult",
             base_url=server_base_url,
-            auth_config=auth_config,
             client=client,
         )
 

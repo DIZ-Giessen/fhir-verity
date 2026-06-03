@@ -18,6 +18,8 @@ from app.models import (
     audit_log,
 )  # noqa: F401 # noqa: F401
 
+from app.models.user import User  # noqa: F401 - register with Base.metadata
+
 config = context.config
 settings = get_settings()
 

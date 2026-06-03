@@ -50,7 +50,7 @@ class ValidationRunListItem(BaseModel):
     total_processed: int
     total_invalid: int
     resource_types: list[str]
-
+    test_report: dict | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

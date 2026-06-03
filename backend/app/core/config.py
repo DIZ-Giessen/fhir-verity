@@ -21,9 +21,20 @@ class Settings(BaseSettings):
     BACKEND_HOST: str = "0.0.0.0"
     BACKEND_PORT: int = 8000
 
-    class Config:
-        """Default Config"""
+    # --- Auth (BFF) ---
+    AUTH_ENABLED: bool = True
+    SESSION_SECRET_KEY: str
+    BACKEND_BASE_URL: str = "http://localhost:8000"
+    FRONTEND_BASE_URL: str = "http://localhost:3000"
+    KEYCLOAK_DISCOVERY_URL: str = (
+        "https://mirauth.med.uni-giessen.de/auth/realms/Test/"
+        ".well-known/openid-configuration"
+    )
+    KEYCLOAK_CLIENT_ID: str = "fhir-verity"
+    KEYCLOAK_CLIENT_SECRET: str
+    INITIAL_ADMIN_USERS: str = ""
 
+    class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"

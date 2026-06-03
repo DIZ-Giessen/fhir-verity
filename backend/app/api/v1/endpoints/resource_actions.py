@@ -28,6 +28,7 @@ from app.schemas.resource_action import (
     PatchRequest,
 )
 from app.services.fix_templates import get_patch_template, has_template
+from app.services.fhir_auth import build_httpx_auth
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -45,26 +46,15 @@ async def _load_server(server_id: UUID, db: AsyncSession) -> FhirServer:
     return server
 
 
-def _httpx_auth(auth_config: dict) -> Optional[httpx.BasicAuth]:
-    if auth_config.get("username") and auth_config.get("password"):
-        return httpx.BasicAuth(auth_config["username"], auth_config["password"])
-    return None
-
-
 async def _fetch_resource_with_etag(
     base_url: str,
     resource_type: str,
     resource_id: str,
-    auth_config: dict,
     client: httpx.AsyncClient,
 ) -> tuple[Optional[dict], Optional[str]]:
     """Returns (resource_body, etag) or (None, None) if the resource doesn't exist."""
     url = f"{base_url.rstrip('/')}/{resource_type}/{resource_id}"
-    resp = await client.get(
-        url,
-        headers={"Accept": "application/fhir+json"},
-        auth=_httpx_auth(auth_config),
-    )
+    resp = await client.get(url, headers={"Accept": "application/fhir+json"})
     if resp.status_code == 404:
         return None, None
     resp.raise_for_status()
@@ -115,14 +105,14 @@ async def delete_resource(
     status = AuditStatus.SUCCESS
     error_message: Optional[str] = None
 
+    auth = build_httpx_auth(auth_config)
     timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with httpx.AsyncClient(timeout=timeout, auth=auth) as client:
         try:
             resource_before, etag = await _fetch_resource_with_etag(
                 base_url,
                 resource_type,
                 resource_id,
-                auth_config,
                 client,
             )
             if resource_before is None:
@@ -138,7 +128,6 @@ async def delete_resource(
                 resp = await client.delete(
                     url,
                     headers=headers,
-                    auth=_httpx_auth(auth_config),
                 )
                 fhir_status = str(resp.status_code)
 
@@ -260,7 +249,8 @@ async def bulk_delete_resources(
     errors: list[BulkActionError] = []
 
     timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    auth = build_httpx_auth(auth_config)
+    async with httpx.AsyncClient(timeout=timeout, auth=auth) as client:
 
         async def delete_one(row: InvalidResource):
             resource_before = None
@@ -274,7 +264,6 @@ async def bulk_delete_resources(
                         base_url,
                         row.resource_type,
                         row.resource_id,
-                        auth_config,
                         client,
                     )
                     if resource_before is None:
@@ -286,11 +275,7 @@ async def bulk_delete_resources(
                         if etag:
                             headers["If-Match"] = etag
                         url = f"{base_url}/{row.resource_type}/{row.resource_id}"
-                        resp = await client.delete(
-                            url,
-                            headers=headers,
-                            auth=_httpx_auth(auth_config),
-                        )
+                        resp = await client.delete(url, headers=headers)
                         fhir_status = str(resp.status_code)
                         if resp.status_code not in (200, 204):
                             audit_status = AuditStatus.FAILED
@@ -414,8 +399,9 @@ async def bulk_fix_resources(
     succeeded_invalid_ids: list = []
     errors: list[BulkActionError] = []
 
+    auth = build_httpx_auth(auth_config)
     timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with httpx.AsyncClient(timeout=timeout, auth=auth) as client:
 
         async def patch_one(row: InvalidResource):
             resource_before = None
@@ -430,7 +416,6 @@ async def bulk_fix_resources(
                         base_url,
                         row.resource_type,
                         row.resource_id,
-                        auth_config,
                         client,
                     )
                     if resource_before is None:
@@ -467,7 +452,6 @@ async def bulk_fix_resources(
                                 url,
                                 json=patch_body,
                                 headers=headers,
-                                auth=_httpx_auth(auth_config),
                             )
                             fhir_status = str(resp.status_code)
                             if resp.status_code not in (200, 201):
@@ -561,13 +545,13 @@ async def patch_resource(
     error_message: Optional[str] = None
 
     timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    auth = build_httpx_auth(auth_config)
+    async with httpx.AsyncClient(timeout=timeout, auth=auth) as client:
         try:
             resource_before, etag = await _fetch_resource_with_etag(
                 base_url,
                 resource_type,
                 resource_id,
-                auth_config,
                 client,
             )
             if resource_before is None:
@@ -587,7 +571,6 @@ async def patch_resource(
                     url,
                     json=patch_body,
                     headers=headers,
-                    auth=_httpx_auth(auth_config),
                 )
                 fhir_status = str(resp.status_code)
 
@@ -655,6 +638,7 @@ async def list_audit_log(
     status_filter: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
+    """Audir Logs"""
     filters = []
     if server_id:
         filters.append(AuditLog.server_id == server_id)

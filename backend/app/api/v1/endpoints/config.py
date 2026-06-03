@@ -256,3 +256,9 @@ async def delete_server_config(
     await db.delete(existing)
     await db.commit()
     return {"status": "deleted", "fallback": "global defaults"}
+
+
+@router.get("/config/resource-types", response_model=list[str])
+async def list_resource_types():
+    """Alle Ressourcentypen, die konfiguriert werden können."""
+    return SUPPORTED_RESOURCE_TYPES

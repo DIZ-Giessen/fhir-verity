@@ -33,6 +33,7 @@ from app.schemas.validation import (
 from app.services.validation_rules import VALIDATORS
 from app.services.fhir_report_service import generate_and_post_reports
 from app.models.invalid_resource import InvalidResource
+from app.services.fhir_auth import build_httpx_auth
 
 
 router = APIRouter()
@@ -106,8 +107,8 @@ async def run_validation_task(
 
             # Build Time Out
             timeout = httpx.Timeout(connect=10.0, read=300.0, write=10.0, pool=10.0)
-
-            async with httpx.AsyncClient(timeout=timeout) as client:
+            auth = build_httpx_auth(auth_config)
+            async with httpx.AsyncClient(timeout=timeout, auth=auth) as client:
                 for res_type in to_validate:
                     validator_class = VALIDATORS.get(res_type)
                     if not validator_class:

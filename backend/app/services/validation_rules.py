@@ -47,21 +47,11 @@ class BaseValidator:
 
         headers = {"Accept": "application/fhir+json"}
 
-        # Basic Auth
-        auth = None
-        if self.auth_config.get("username") and self.auth_config.get("password"):
-            auth = httpx.BasicAuth(
-                username=self.auth_config["username"],
-                password=self.auth_config["password"],
-            )
-
-        # Other Auth Methods later checken: FixME
-
         # Fetching the FHIR Bundle
         last_exc = None
         for attempt in range(1, self.MAX_RETRIES + 1):
             try:
-                resp = await self.client.get(url, headers=headers, auth=auth)
+                resp = await self.client.get(url, headers=headers)
                 resp.raise_for_status()
                 return resp.json()
             except (httpx.ReadError, httpx.ConnectError, httpx.TimeoutException) as e:
@@ -349,6 +339,16 @@ class PatientValidator(BaseValidator):
                 metrics = self._build_metrics(config)
 
                 # privacy: name_forbidden
+                if rule_enabled(config, "text_forbidden"):
+                    if resource.get("text"):
+                        issues.append(
+                            {
+                                "rule": "text_forbidden",
+                                "severity": config["text_forbidden"]["severity"],
+                                "message": "Patient.text is present. Cleartext are forbidden in pseudonymized data.",
+                            }
+                        )
+                        metrics["text_forbidden"] = False
                 if rule_enabled(config, "name_forbidden"):
                     if resource.get("name"):
                         issues.append(
