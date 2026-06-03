@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router"
-import type { JSX, SVGProps } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"

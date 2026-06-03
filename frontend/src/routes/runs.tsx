@@ -1,18 +1,10 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import {
-  ChevronRight,
-  ExternalLink,
-  FileText,
-  Search,
-  Shield,
-} from "lucide-react"
-import { useMemo } from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   PolarAngleAxis,
   PolarGrid,
@@ -57,6 +49,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  CheckCircle,
+  Documents,
+  NotificationLinesRemove,
+  SadCircle,
+  SquareTopDown,
+  Star2,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
+import { cn } from "@/lib/utils"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 export const Route = createFileRoute("/runs")({ component: RunsPage })
 
@@ -358,6 +368,14 @@ function BarCard({
 // Runs table
 // ---------------------------------------------------------------------------
 
+/* {
+ 
+
+
+} */
+
+const PAGE_SIZE = 10
+
 function RunsTable({
   runs,
   serverMap,
@@ -367,11 +385,62 @@ function RunsTable({
   serverMap: Map<string, { id: string; name: string; base_url: string }>
   loading: boolean
 }) {
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [search, setSearch] = useState("")
+  const [page, setPage] = useState(0)
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return runs.filter((r) => {
+      if (statusFilter !== "all" && r.status !== statusFilter) return false
+      if (q) {
+        const name = serverMap.get(r.server_id)?.name.toLowerCase() ?? ""
+        if (!name.includes(q)) return false
+      }
+      return true
+    })
+  }, [runs, statusFilter, search, serverMap])
+
+  // Filterwechsel -> immer zurück auf Seite 1
+  useEffect(() => {
+    setPage(0)
+  }, [statusFilter, search])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const pageStart = page * PAGE_SIZE
+  const pageEnd = pageStart + PAGE_SIZE
+  const pageItems = filtered.slice(pageStart, pageEnd)
+
   return (
     <Card className="shadow-2xs">
-      <CardHeader>
-        <CardTitle className="text-base">All runs</CardTitle>
+      <CardHeader className="gap-4">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">All runs</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            {filtered.length} of {runs.length}
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            placeholder="Search by server name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="sm:max-w-xs"
+          />
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="sm:w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="running">Running</SelectItem>
+              <SelectItem value="failed">Failed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </CardHeader>
+
       <CardContent>
         {loading ? (
           <div className="space-y-2">
@@ -379,9 +448,11 @@ function RunsTable({
               <Skeleton key={i} className="h-8 w-full" />
             ))}
           </div>
-        ) : runs.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            No validation runs yet.
+            {runs.length === 0
+              ? "No validation runs yet."
+              : "No runs match the current filters."}
           </p>
         ) : (
           <Table>
@@ -399,7 +470,7 @@ function RunsTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {runs.map((r) => {
+              {pageItems.map((r) => {
                 const server = serverMap.get(r.server_id)
                 const rate =
                   r.total_processed > 0
@@ -413,6 +484,13 @@ function RunsTable({
                         variant="outline"
                         className={RUN_STATUS_STYLES[r.status] ?? ""}
                       >
+                        {r.status === "running" ? (
+                          <Star2 className="scale-115 animate-spin" />
+                        ) : r.status === "failed" ? (
+                          <SadCircle className="scale-125" />
+                        ) : (
+                          <CheckCircle className="scale-125" />
+                        )}
                         {r.status}
                       </Badge>
                     </TableCell>
@@ -441,7 +519,18 @@ function RunsTable({
                     <TableCell className="text-right tabular-nums">
                       {r.total_invalid.toLocaleString()}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell
+                      className={cn(
+                        "text-right font-medium tabular-nums",
+                        rate == null
+                          ? "text-muted"
+                          : rate < 10
+                            ? "text-emerald-500"
+                            : rate < 30
+                              ? "text-orange-500"
+                              : "text-rose-500"
+                      )}
+                    >
                       {rate != null ? `${rate.toFixed(1)}%` : "—"}
                     </TableCell>
                     <TableCell>
@@ -469,10 +558,41 @@ function RunsTable({
           </Table>
         )}
       </CardContent>
+
+      {filtered.length > PAGE_SIZE && (
+        <CardFooter className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            Showing {pageStart + 1}–{Math.min(pageEnd, filtered.length)} of{" "}
+            {filtered.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+            >
+              <ChevronLeft className="size-4" />
+              Previous
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {page + 1} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+            >
+              Next
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        </CardFooter>
+      )}
     </Card>
   )
 }
-
 // ---------------------------------------------------------------------------
 // FHIR resources popover
 // ---------------------------------------------------------------------------
@@ -486,9 +606,9 @@ function FhirResourcesPopover({
 }) {
   if (!report || !baseUrl) {
     return (
-      <Button variant="outline" size="sm" disabled className="h-7 gap-1">
-        <FileText className="h-3 w-3" />
-        <span className="text-xs">—</span>
+      <Button variant="ghost" size="sm" disabled className="h-7 gap-1">
+        <NotificationLinesRemove className="size-4.5" />
+        <span>Not available</span>
       </Button>
     )
   }
@@ -507,13 +627,13 @@ function FhirResourcesPopover({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-7 gap-1">
-          <FileText className="h-3 w-3" />
-          <span className="text-xs">View</span>
+        <Button variant="outline" className="h-7 gap-1">
+          <Documents className="size-4.5" />
+          <span className="text-xs text-muted-foreground">View Resources</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-96 p-0">
-        <div className="max-h-96 space-y-3 overflow-y-auto p-4">
+        <div className="max-h-96 overflow-y-auto p-4">
           {empty && (
             <p className="text-sm text-muted-foreground">
               Reports were not successfully posted to the FHIR server.
@@ -522,7 +642,9 @@ function FhirResourcesPopover({
 
           {vrId && (
             <section>
-              <SectionLabel icon={Shield}>VerificationResult</SectionLabel>
+              <Label className="py-2 text-xs text-orange-500/80">
+                VerificationResult
+              </Label>
               <ResourceLink
                 href={`${base}/VerificationResult/${vrId}`}
                 label="View on FHIR server"
@@ -530,14 +652,16 @@ function FhirResourcesPopover({
             </section>
           )}
 
-          {scripts.length > 0 && (
+          {reports.length > 0 && (
             <section>
-              <SectionLabel icon={FileText}>TestScripts</SectionLabel>
+              <Label className="py-2 text-xs text-rose-500/80">
+                TestReports
+              </Label>
               <ul className="space-y-1">
-                {scripts.map(({ rt, id }) => (
+                {reports.map(({ rt, id }) => (
                   <li key={rt}>
                     <ResourceLink
-                      href={`${base}/TestScript/${id}`}
+                      href={`${base}/TestReport/${id}`}
                       label={rt}
                     />
                   </li>
@@ -546,14 +670,16 @@ function FhirResourcesPopover({
             </section>
           )}
 
-          {reports.length > 0 && (
+          {scripts.length > 0 && (
             <section>
-              <SectionLabel icon={Search}>TestReports</SectionLabel>
+              <Label className="py-2 text-xs text-blue-500/80">
+                TestScripts
+              </Label>
               <ul className="space-y-1">
-                {reports.map(({ rt, id }) => (
+                {scripts.map(({ rt, id }) => (
                   <li key={rt}>
                     <ResourceLink
-                      href={`${base}/TestReport/${id}`}
+                      href={`${base}/TestScript/${id}`}
                       label={rt}
                     />
                   </li>
@@ -567,31 +693,16 @@ function FhirResourcesPopover({
   )
 }
 
-function SectionLabel({
-  icon: Icon,
-  children,
-}: {
-  icon: typeof FileText
-  children: React.ReactNode
-}) {
-  return (
-    <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-      <Icon className="h-3 w-3" />
-      {children}
-    </div>
-  )
-}
-
 function ResourceLink({ href, label }: { href: string; label: string }) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs hover:bg-muted/50"
+      className="flex items-center justify-between gap-2 rounded-xl border bg-accent px-2 py-1.5 text-xs hover:bg-muted/50"
     >
       <span className="font-medium">{label}</span>
-      <ExternalLink className="h-3 w-3 text-muted-foreground" />
+      <SquareTopDown className="size-3 text-muted-foreground" />
     </a>
   )
 }
