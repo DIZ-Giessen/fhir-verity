@@ -1,7 +1,8 @@
-import { queryOptions } from "@tanstack/react-query"
+import { keepPreviousData, queryOptions } from "@tanstack/react-query"
 
 import { api, ApiError } from "@/lib/api-client"
 import type { components } from "./schema"
+import type { InvalidResourcesParams } from "@/lib/interface"
 
 export type FhirServer = components["schemas"]["FhirServerRead"]
 export type FhirServerCreate = components["schemas"]["FhirServerCreate"]
@@ -18,7 +19,13 @@ export type ResourceCount = components["schemas"]["ResourceCount"]
 export type ValidationRunListItem =
   components["schemas"]["ValidationRunListItem"]
 export type RunSummary = components["schemas"]["RunSummary"]
-
+export type ValidationRunDetail = components["schemas"]["ValidationRunDetail"]
+export type PerResourceStats = components["schemas"]["PerResourceStats"]
+export type ResourceTypeSummary = components["schemas"]["ResourceTypeSummary"]
+export type InvalidResourceRead = components["schemas"]["InvalidResourceRead"]
+export type IssueDetail = components["schemas"]["IssueDetail"]
+export type PaginatedInvalidResources =
+  components["schemas"]["PaginatedInvalidResources"]
 // ======================
 
 export const serverKeys = {
@@ -248,4 +255,30 @@ export const runsQueryOptions = (limit = 50) =>
       })
       return data
     },
+  })
+export const runQueryOptions = (runId: string) =>
+  queryOptions({
+    queryKey: ["validation", "runs", runId, "detail"],
+    queryFn: async () => {
+      const { data } = await api.GET("/api/v1/validation/runs/{run_id}", {
+        params: { path: { run_id: runId } },
+      })
+      return data
+    },
+  })
+
+export const invalidResourcesQueryOptions = (
+  runId: string,
+  params: InvalidResourcesParams = {}
+) =>
+  queryOptions({
+    queryKey: ["validation", "runs", runId, "invalid-resources", params],
+    queryFn: async () => {
+      const { data } = await api.GET(
+        "/api/v1/validation/runs/{run_id}/invalid-resources",
+        { params: { path: { run_id: runId }, query: params } }
+      )
+      return data
+    },
+    placeholderData: keepPreviousData,
   })

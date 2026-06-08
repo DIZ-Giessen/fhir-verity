@@ -27,7 +27,10 @@ function ConfigOverviewPage() {
         </Link>
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">
-            Validation configuration
+            Validation configuration for the server with ID{" "}
+            <span className="font-mono text-orange-500/70">
+              {id.slice(0, 8)}
+            </span>
           </h1>
           <p className="text-sm text-muted-foreground">
             Select a resource type to review and adjust its validation rules.
@@ -58,7 +61,7 @@ function ConfigOverviewPage() {
       )}
 
       {data && (
-        <div className="mx-auto max-w-6xl divide-y overflow-hidden rounded-lg border">
+        <div className="mx-auto max-w-7xl divide-y overflow-hidden rounded-lg border">
           {data.map((rt) => (
             <Link
               key={rt}

@@ -259,7 +259,7 @@ function ServerDetailPage() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-const AUTH_LABELS: Record<string, string> = {
+/* const AUTH_LABELS: Record<string, string> = {
   none: "No auth",
   basic: "Basic auth",
   oauth2_client_credentials: "OAuth2",
@@ -271,15 +271,15 @@ const AUTH_STYLES: Record<string, string> = {
     "border-0 bg-sky-500/15 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400",
   oauth2_client_credentials:
     "border-0 bg-violet-500/15 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400",
-}
+} */
 
-function AuthBadge({ type }: { type: string }) {
+/* function AuthBadge({ type }: { type: string }) {
   return (
     <Badge variant="outline" className={AUTH_STYLES[type] ?? ""}>
       {AUTH_LABELS[type] ?? type}
     </Badge>
   )
-}
+} */
 
 function KpiRow({ run }: { run: ValidationRunListItem | null }) {
   const rate =

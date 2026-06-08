@@ -285,6 +285,7 @@ async def get_validation_run(
         total_invalid=run.total_invalid or 0,
         resource_types=run.resource_types or [],
         error_message=run.error_message,
+        test_report=run.test_report or {},
         per_resource_stats=per_resource,
         elapsed_seconds=elapsed,
     )
@@ -377,7 +378,7 @@ async def list_invalid_resources(
         items.append(
             InvalidResourceRead(
                 id=row.id,
-                run_id=row.run_id,
+                run_id=str(row.last_seen_run_id),
                 server_base_url=row.server_base_url,
                 resource_type=row.resource_type,
                 resource_id=row.resource_id,
