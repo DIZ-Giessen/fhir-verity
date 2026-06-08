@@ -667,7 +667,9 @@ function RecentRunsCard({
                     {r.total_invalid.toLocaleString()}
                   </TableCell>
                   <TableCell>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <Link to="/runs/$runId" params={{ runId: r.id }}>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))}

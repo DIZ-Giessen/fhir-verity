@@ -135,13 +135,24 @@ function RunDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        to="/runs"
-        className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="mr-1 h-4 w-4" />
-        Back to runs
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link
+          to="/runs"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="mr-1 h-4 w-4" />
+          Back to runs
+        </Link>
+        <Button asChild size="sm">
+          <Link
+            to="/runs/$runId/invalid-resources"
+            params={{ runId: run?.id ?? "" }}
+          >
+            View all invalid resources
+            <ArrowRight className="ml-1 h-4 w-4" />
+          </Link>
+        </Button>
+      </div>
 
       {runQ.isPending ? (
         <DetailSkeleton />

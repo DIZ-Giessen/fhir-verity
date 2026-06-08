@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/table"
 import { dateFormatter } from "@/lib/functions/runs"
 import type { InvalidResourcesParams } from "@/lib/interface"
+import { Restart } from "@solar-icons/react-perf/category/style/LineDuotone"
 
 export const Route = createFileRoute("/runs/$runId_/invalid-resources")({
   component: InvalidResourcesPage,
@@ -132,7 +133,9 @@ function InvalidResourcesPage() {
         <h1 className="text-2xl font-semibold tracking-tight">
           Invalid resources
         </h1>
-        <p className="font-mono text-xs text-muted-foreground">{runId}</p>
+        <p className="font-mono text-xs text-muted-foreground">
+          for run with ID {runId}
+        </p>
       </div>
 
       <Card className="shadow-2xs">
@@ -200,6 +203,7 @@ function InvalidResourcesPage() {
                 }}
               >
                 Reset
+                <Restart className="ml-1 h-4 w-4" />
               </Button>
             )}
           </div>
@@ -246,7 +250,7 @@ function InvalidResourcesPage() {
                       <>
                         <TableRow
                           key={r.id}
-                          className="cursor-pointer"
+                          className="cursor-pointerl"
                           onClick={() => toggleExpand(r.id)}
                         >
                           <TableCell>
@@ -318,16 +322,14 @@ function InvalidResourcesPage() {
 
                                 <div className="rounded-lg border border-dashed p-3">
                                   <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                                    <Sparkles className="h-3.5 w-3.5" />
+                                    <Sparkles className="h-3.5 w-3.5 text-blue-500" />
                                     Fix suggestion
                                   </div>
                                   <p className="text-sm text-muted-foreground">
-                                    Automated correction proposals (rule-based
-                                    patch templates, and later the LLM
-                                    assistant) will appear here with the exact
-                                    FHIR command and a manual-confirm step. For
-                                    now, inspect or fix the resource directly on
-                                    the server.
+                                    Automated correction proposals will appear
+                                    here with the exact FHIR command and a
+                                    manual-confirm step. For now, inspect or fix
+                                    the resource directly on the server.
                                   </p>
                                   <div className="mt-2 flex gap-2">
                                     <Button
