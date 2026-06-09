@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { env } from "@/lib/env"
+import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/runs/$runId_/live")({
   component: LivePage,
@@ -283,7 +284,9 @@ function LivePage() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Live monitor
           </h1>
-          <p className="font-mono text-xs text-muted-foreground">{runId}</p>
+          <p className="font-mono text-xs text-muted-foreground">
+            for run with ID {runId}
+          </p>
         </div>
         <span className="flex items-center gap-2 text-sm">
           <span className={`h-2.5 w-2.5 rounded-full ${c.dot}`} />
@@ -339,9 +342,16 @@ function LivePage() {
                 : "—"}
             </span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-primary transition-all duration-500"
+              className={cn(
+                "h-full rounded-full transition-all duration-500",
+                runState === "running"
+                  ? "bg-primary"
+                  : runState === "failed"
+                    ? "bg-red-500"
+                    : "bg-emerald-500"
+              )}
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -354,10 +364,10 @@ function LivePage() {
             </span>
             <span>
               ETA:{" "}
-              <span className="text-foreground">
+              <span className="pl-1.5 text-foreground">
                 {metrics.etaSeconds != null
                   ? fmtTime(metrics.etaSeconds)
-                  : "unknown"}
+                  : "finished"}
               </span>
             </span>
           </div>

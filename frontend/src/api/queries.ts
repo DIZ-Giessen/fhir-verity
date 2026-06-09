@@ -26,6 +26,7 @@ export type InvalidResourceRead = components["schemas"]["InvalidResourceRead"]
 export type IssueDetail = components["schemas"]["IssueDetail"]
 export type PaginatedInvalidResources =
   components["schemas"]["PaginatedInvalidResources"]
+export type ValidationRunRead = components["schemas"]["ValidationRunRead"]
 // ======================
 
 export const serverKeys = {
@@ -282,3 +283,13 @@ export const invalidResourcesQueryOptions = (
     },
     placeholderData: keepPreviousData,
   })
+
+//!  START VALIDATION RUNS
+export async function startValidation(body: {
+  server_id: string
+  resource_types: string[]
+}) {
+  const { data } = await api.POST("/api/v1/validation/start", { body })
+  return data
+}
+//!  END VALIDATION RUNS

@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { ServerAuthDialog } from "./server-auth-dialog"
+import { toast } from "sonner"
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
@@ -89,6 +90,7 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: serverKeys.all })
       setDeleteTarget(null)
+      toast.success("Server deleted successfully")
     },
   })
 

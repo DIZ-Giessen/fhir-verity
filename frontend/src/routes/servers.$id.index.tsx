@@ -24,15 +24,6 @@ import { ServerFormDialog } from "@/components/server-form-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -50,6 +41,7 @@ import {
   ExpressionlessSquare,
   Refresh,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
+import { StartValidationDialog } from "@/components/start-validation-dialog"
 
 export const Route = createFileRoute("/servers/$id/")({
   component: ServerDetailPage,
@@ -62,19 +54,6 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
   minute: "2-digit",
 })
-
-const SUPPORTED_TYPES = [
-  "Patient",
-  "Encounter",
-  "Observation",
-  "Condition",
-  "Medication",
-  "MedicationRequest",
-  "MedicationAdministration",
-  "MedicationStatement",
-  "Procedure",
-  "DiagnosticReport",
-]
 
 function relativeTime(iso: string | null | undefined): string {
   if (!iso) return "—"
@@ -166,25 +145,6 @@ function ServerDetailPage() {
           <p className="font-mono text-xs text-muted-foreground">
             {server.base_url}
           </p>
-          <div className="flex flex-wrap items-center gap-2">
-            {/*  <Badge variant="secondary">{server.project_id}</Badge> */}
-            {/*  {server.is_active ? (
-              <Badge
-                variant="outline"
-                className="border-0 bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
-              >
-                Active
-              </Badge>
-            ) : (
-              <Badge
-                variant="outline"
-                className="border-0 bg-zinc-500/15 text-zinc-700 dark:bg-zinc-500/10 dark:text-zinc-400"
-              >
-                Inactive
-              </Badge>
-            )} */}
-            {/* <AuthBadge type={server.auth_type} /> */}
-          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setStartOpen(true)}>
@@ -249,6 +209,7 @@ function ServerDetailPage() {
       <StartValidationDialog
         open={startOpen}
         onOpenChange={setStartOpen}
+        serverId={server.id}
         serverName={server.name}
       />
     </div>
@@ -678,69 +639,5 @@ function RecentRunsCard({
         )}
       </CardContent>
     </Card>
-  )
-}
-
-function StartValidationDialog({
-  open,
-  onOpenChange,
-  serverName,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  serverName: string
-}) {
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(SUPPORTED_TYPES)
-  )
-
-  const toggle = (rt: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(rt)) next.delete(rt)
-      else next.add(rt)
-      return next
-    })
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Start validation</DialogTitle>
-          <DialogDescription>
-            Run validation against{" "}
-            <span className="font-medium">{serverName}</span>. Select the
-            resource types to include.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid grid-cols-2 gap-2 py-2">
-          {SUPPORTED_TYPES.map((rt) => (
-            <label
-              key={rt}
-              className="flex cursor-pointer items-center gap-2 rounded-xl p-2 text-sm hover:bg-muted/50"
-            >
-              <Checkbox
-                checked={selected.has(rt)}
-                onCheckedChange={() => toggle(rt)}
-              />
-              <span>{rt}</span>
-            </label>
-          ))}
-        </div>
-
-        <p className="text-xs text-muted-foreground">
-          Starts a validation run for this server with the selected resources.
-        </p>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button disabled>Start</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }
