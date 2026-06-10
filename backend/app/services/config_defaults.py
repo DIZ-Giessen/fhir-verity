@@ -159,8 +159,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "category": "privacy",
             "pattern": "^20[0-9]{8}$",
             "description": (
-                "Prüft ob die Encounter.id dem erwarteten Pseudonym-Format entspricht. "
-                "pattern=null deaktiviert die Regex-Prüfung."
+                "Checks if the Encounter.id matches the expected pseudonym format. "
+                "pattern=null disables the regex check."
             ),
         },
         # --- Structural Completeness ---
@@ -169,8 +169,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "Ein Fall muss einen Status haben. "
-                "Erlaubte Werte: planned | arrived | triaged | in-progress | "
+                "Check if the Encounter.status is present. "
+                "Allowed values: planned | arrived | triaged | in-progress | "
                 "onleave | finished | cancelled."
             ),
         },
@@ -178,42 +178,34 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "enabled": True,
             "severity": "error",
             "category": "completeness",
-            "description": (
-                "Ein Fall muss einen Class haben."
-                "Klassifikation des Kontakts (stationär, ambulant etc.) "
-            ),
+            "description": ("Check if the Encounter.class is present. "),
         },
         "subject_required": {
             "enabled": True,
             "severity": "error",
             "category": "completeness",
-            "description": ("Muss eine Referenz auf eine Patient-Ressource enthalten."),
+            "description": ("Check if the Encounter.subject is present. "),
         },
         "period_start_required": {
             "enabled": True,
             "severity": "error",
             "category": "completeness",
-            "description": (
-                "Der Beginn des Kontakts muss vorhanden und dokumentiert sein."
-            ),
+            "description": ("Check if the Encounter.period.start is present. "),
         },
         "servicetype_required": {
             "enabled": False,
             "severity": "info",
             "category": "completeness",
             "description": (
-                "MII KDS Encounter: serviceType Should-Support. "
-                "Art der Leistung (Fachrichtung). Standardmäßig deaktiviert."
+                "Check if the Encounter.serviceType is present. "
+                "Allowed values: hospital | ambulatory | community | other."
             ),
         },
         "diagnosis_present": {
             "enabled": False,
             "severity": "info",
             "category": "completeness",
-            "description": (
-                "Prüft ob eine Diagnose (Condition-Referenz) im Encounter hinterlegt ist. "
-                "Standardmäßig deaktiviert da nicht immer erwartet."
-            ),
+            "description": ("Check if the Encounter.diagnosis is present. "),
         },
         # --- Plausibility ---
         "period_end_after_start": {
@@ -221,8 +213,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "plausibility",
             "description": (
-                "Wenn period.end vorhanden, muss es nach period.start liegen. "
-                "Umgekehrte Perioden sind Dateneingabefehler."
+                "If period.end is present, it must be after period.start. "
             ),
         },
         "period_not_future": {
@@ -230,8 +221,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "plausibility",
             "description": (
-                "period.start sollte nicht mehr als 24 Stunden in der Zukunft liegen. "
-                "Zukünftige Aufnahmedaten deuten auf Planungsdaten hin, nicht auf abgeschlossene Fälle."
+                "period.start should not be more than 24 hours in the future. "
             ),
         },
         "period_plausible_duration": {
@@ -239,9 +229,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "plausibility",
             "description": (
-                "Wenn period.end vorhanden, sollte die Aufenthaltsdauer nicht mehr als "
-                "2 Jahre (730 Tage) betragen. Extrem lange Aufenthalte deuten auf "
-                "fehlende Entlassdaten hin."
+                "If period.end is present, the duration should not be more than "
+                "2 years (730 days). Extrem long stays indicate missing discharge data."
             ),
         },
         # --- Referential Integrity ---
@@ -250,8 +239,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "integrity",
             "description": (
-                "subject.reference muss das Format 'Patient/{id}' haben. "
-                "Absolute URLs oder andere Formate werden nicht akzeptiert."
+                "subject.reference must be in the format 'Patient/{id}'. "
+                "Absolute URLs or other formats are not accepted."
             ),
         },
     },
@@ -277,8 +266,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS Diagnose: code 1..1 Pflichtfeld. "
-                "Muss eine ICD-10-GM Kodierung enthalten."
+                "Check if the Condition.code is present. "
+                "Must contain an ICD-10-GM code. "
             ),
         },
         "subject_required": {
@@ -286,8 +275,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS Diagnose: subject 1..1 Pflichtfeld. "
-                "Referenz auf Patient-Ressource."
+                "Check if the Condition.subject is present. "
+                "Reference to a Patient resource. "
             ),
         },
         "clinicalstatus_required": {
@@ -295,8 +284,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "completeness",
             "description": (
-                "MII KDS Diagnose: clinicalStatus Should-Support. "
-                "Klinischer Status der Diagnose (active, resolved etc.)."
+                "Check if the Condition.clinicalStatus is present. "
+                "Clinical status of the condition (active, resolved etc.). "
             ),
         },
         "verificationstatus_required": {
@@ -304,8 +293,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "info",
             "category": "completeness",
             "description": (
-                "MII KDS Diagnose: verificationStatus Should-Support. "
-                "Standardmäßig deaktiviert."
+                "Check if the Condition.verificationStatus is present. "
+                "Allowed values: confirmed | differential | entered-in-error | unknown."
             ),
         },
         "onset_present": {
@@ -313,8 +302,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "info",
             "category": "completeness",
             "description": (
-                "MII KDS Diagnose: onset[x] Should-Support. "
-                "Zeitpunkt des Auftretens der Diagnose. Standardmäßig deaktiviert."
+                "Check if the Condition.onset[x] is present. "
+                "Time of onset of the condition. "
             ),
         },
         # --- Referential Integrity ---
@@ -322,7 +311,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "enabled": True,
             "severity": "error",
             "category": "integrity",
-            "description": ("subject.reference muss das Format 'Patient/{id}' haben."),
+            "description": ("subject.reference must be in the format 'Patient/{id}'. "),
         },
     },
     # =========================================================================
@@ -337,9 +326,9 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "privacy",
             "description": (
-                "Das Feld valueString darf keine personenidentifizierenden Informationen enthalten. "
-                "Laborwerte sollten als valueQuantity, valueCodeableConcept etc. gespeichert werden, "
-                "nicht als Freitext mit Patientendaten."
+                "The valueString field must not contain personally identifiable information. "
+                "Labor values should be stored as valueQuantity, valueCodeableConcept etc., "
+                "not as free text with patient data."
             ),
         },
         "note_cleartext_check": {
@@ -347,7 +336,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "privacy",
             "description": (
-                "Das Freitextfeld 'note' kann personenidentifizierende Informationen enthalten."
+                "The free text field 'note' may contain personally identifiable information."
             ),
         },
         # --- Structural Completeness ---
@@ -356,8 +345,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS Observation: status 1..1 Pflichtfeld. "
-                "Erlaubte Werte: registered | preliminary | final | amended | corrected | "
+                "Check if the Observation.status is present. "
+                "Allowed values: registered | preliminary | final | amended | corrected | "
                 "cancelled | entered-in-error | unknown."
             ),
         },
@@ -366,8 +355,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS Observation: code 1..1 Pflichtfeld. "
-                "Sollte eine LOINC-Kodierung enthalten."
+                "Check if the Observation.code is present. "
+                "Should contain a LOINC code. "
             ),
         },
         "subject_required": {
@@ -375,8 +364,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS Observation: subject 1..1 Pflichtfeld. "
-                "Referenz auf Patient-Ressource."
+                "Check if the Observation.subject is present. "
+                "Reference to a Patient resource. "
             ),
         },
         "effective_required": {
@@ -384,9 +373,9 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "completeness",
             "description": (
-                "MII KDS Observation: effective[x] Must-Support. "
-                "Zeitpunkt oder Periode der Messung. "
-                "Akzeptiert: effectiveDateTime, effectivePeriod, effectiveInstant."
+                "Check if the Observation.effective[x] is present. "
+                "Time or period of the measurement. "
+                "Accepted: effectiveDateTime, effectivePeriod, effectiveInstant."
             ),
         },
         "value_present": {
@@ -394,9 +383,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "completeness",
             "description": (
-                "Eine Observation sollte entweder einen Wert (value[x]) oder "
-                "einen dataAbsentReason enthalten. "
-                "Observations ohne beides sind informationslos."
+                "Check if the Observation.value[x] is present. it should to be a valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange, valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, dataAbsentReason. "
             ),
         },
         # --- Plausibility ---
@@ -405,8 +392,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "plausibility",
             "description": (
-                "effective[x] sollte nicht in der Zukunft liegen. "
-                "Zukünftige Messzeitpunkte deuten auf Dateneingabefehler hin."
+                "effective[x] should not be in the future. "
+                "Future measurement times indicate data entry errors."
             ),
         },
         # --- Referential Integrity ---
@@ -414,7 +401,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "enabled": True,
             "severity": "error",
             "category": "integrity",
-            "description": ("subject.reference muss das Format 'Patient/{id}' haben."),
+            "description": ("subject.reference must be in the format 'Patient/{id}'. "),
         },
     },
     # =========================================================================
@@ -429,8 +416,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS Medication: code 1..1 Pflichtfeld. "
-                "Muss eine Kodierung enthalten, bevorzugt ATC (WHO oder DIMDI) oder PZN."
+                "Check if the Medication.code is present. "
+                "Must contain a code, preferably ATC or PZN."
             ),
         },
         "code_coding_present": {
@@ -438,8 +425,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "completeness",
             "description": (
-                "code.coding sollte vorhanden sein. "
-                "Nur code.text ohne strukturierte Kodierung ist für Analysen unzureichend."
+                "Check if the Medication.code.coding is present. "
+                "Only code.text without structured coding is insufficient for analysis."
             ),
         },
         # --- Plausibility ---
@@ -448,9 +435,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "plausibility",
             "description": (
-                "MII KDS Medication: ingredient.item[x] ist ein FHIR Choice-Type. "
-                "Muss entweder itemCodeableConcept ODER itemReference enthalten, nicht beides. "
-                "Fehlende item-Angabe bei vorhandenem ingredient-Element ist ein Strukturfehler."
+                "Check if the Medication.ingredient.item[x] is present. It should contain either itemCodeableConcept OR itemReference, not both. "
             ),
         },
     },
@@ -466,8 +451,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "privacy",
             "description": (
-                "Das Freitextfeld 'note' und 'dosageInstruction.text' können "
-                "personenidentifizierende Informationen enthalten."
+                "Check if the Medication.note and Medication.dosageInstruction.text are present. They may contain personally identifiable information. "
             ),
         },
         # --- Structural Completeness ---
@@ -476,8 +460,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS MedicationRequest: status 1..1 Pflichtfeld. "
-                "Erlaubte Werte: active | on-hold | cancelled | completed | "
+                "Check if the MedicationRequest.status is present. "
+                "Allowed values: active | on-hold | cancelled | completed | "
                 "entered-in-error | stopped | draft | unknown."
             ),
         },
@@ -486,8 +470,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS MedicationRequest: intent 1..1 Pflichtfeld. "
-                "Erlaubte Werte: proposal | plan | order | original-order | "
+                "Check if the MedicationRequest.intent is present. "
+                "Allowed values: proposal | plan | order | original-order | "
                 "reflex-order | filler-order | instance-order | option."
             ),
         },
@@ -496,9 +480,9 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS MedicationRequest: medication[x] 1..1 Pflichtfeld. "
-                "Entweder medicationReference (Referenz auf Medication) oder "
-                "medicationCodeableConcept (kodierte Angabe) muss vorhanden sein."
+                "Check if the MedicationRequest.medication[x] is present. "
+                "Either medicationReference (Reference to Medication) or "
+                "medicationCodeableConcept (coded reference) must be present."
             ),
         },
         "subject_required": {
@@ -506,8 +490,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS MedicationRequest: subject 1..1 Pflichtfeld. "
-                "Referenz auf Patient-Ressource."
+                "Check if the MedicationRequest.subject is present. "
+                "Reference to a Patient resource. "
             ),
         },
         "authored_on_required": {
@@ -515,9 +499,9 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "completeness",
             "description": (
-                "MII KDS MedicationRequest: authoredOn Must-Support. "
-                "Datum und Uhrzeit der Verordnung. "
-                "Alternativ wird boundsPeriod in dosageInstruction akzeptiert."
+                "Check if the MedicationRequest.authoredOn is present. "
+                "Date and time of the prescription. "
+                "Alternatively, boundsPeriod in dosageInstruction is accepted."
             ),
         },
         # --- Plausibility ---
@@ -526,8 +510,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "plausibility",
             "description": (
-                "authoredOn sollte nicht in der Zukunft liegen. "
-                "Zukünftige Verordnungsdaten deuten auf Planungsdaten hin."
+                "authoredOn should not be in the future. "
+                "Future prescription data indicates planning data."
             ),
         },
         # --- Referential Integrity ---
@@ -535,7 +519,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "enabled": True,
             "severity": "error",
             "category": "integrity",
-            "description": ("subject.reference muss das Format 'Patient/{id}' haben."),
+            "description": ("subject.reference must be in the format 'Patient/{id}'. "),
         },
     },
     # =========================================================================
@@ -550,8 +534,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "privacy",
             "description": (
-                "Das Freitextfeld 'note' und 'dosage.text' können "
-                "personenidentifizierende Informationen enthalten."
+                "Check if the MedicationAdministration.note and MedicationAdministration.dosage.text are present. They may contain personally identifiable information. "
             ),
         },
         # --- Structural Completeness ---
@@ -560,8 +543,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS MedicationAdministration: status 1..1 Pflichtfeld. "
-                "Erlaubte Werte: in-progress | not-done | on-hold | completed | "
+                "Check if the MedicationAdministration.status is present. "
+                "Allowed values: in-progress | not-done | on-hold | completed | "
                 "entered-in-error | stopped | unknown."
             ),
         },
@@ -570,8 +553,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS MedicationAdministration: medication[x] 1..1 Pflichtfeld. "
-                "Entweder medicationReference oder medicationCodeableConcept."
+                "Check if the MedicationAdministration.medication[x] is present. "
+                "Either medicationReference or medicationCodeableConcept must be present."
             ),
         },
         "subject_required": {
@@ -579,8 +562,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS MedicationAdministration: subject 1..1 Pflichtfeld. "
-                "Referenz auf Patient-Ressource."
+                "Check if the MedicationAdministration.subject is present. "
+                "Reference to a Patient resource. "
             ),
         },
         "effective_required": {
@@ -588,8 +571,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS MedicationAdministration: effective[x] 1..1 Pflichtfeld. "
-                "Entweder effectiveDateTime oder effectivePeriod muss vorhanden sein."
+                "Check if the MedicationAdministration.effective[x] is present. "
+                "Either effectiveDateTime or effectivePeriod must be present."
             ),
         },
         # --- Plausibility ---
@@ -598,24 +581,22 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "plausibility",
             "description": (
-                "effective[x] sollte nicht in der Zukunft liegen. "
-                "Zukünftige Verabreichungszeitpunkte sind klinisch nicht plausibel."
+                "effective[x] should not be in the future. "
+                "Future administration times are clinically not plausible."
             ),
         },
         "effective_period_end_after_start": {
             "enabled": True,
             "severity": "error",
             "category": "plausibility",
-            "description": (
-                "Wenn effectivePeriod verwendet wird, muss end nach start liegen."
-            ),
+            "description": ("If effectivePeriod is used, end must be after start. "),
         },
         # --- Referential Integrity ---
         "subject_reference_format": {
             "enabled": True,
             "severity": "error",
             "category": "integrity",
-            "description": ("subject.reference muss das Format 'Patient/{id}' haben."),
+            "description": ("subject.reference must be in the format 'Patient/{id}'. "),
         },
     },
     # =========================================================================
@@ -628,8 +609,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MedicationStatement: status 1..1 Pflichtfeld. "
-                "Erlaubte Werte: active | completed | entered-in-error | "
+                "Check if the MedicationStatement.status is present. "
+                "Allowed values: active | completed | entered-in-error | "
                 "intended | stopped | on-hold | unknown | not-taken."
             ),
         },
@@ -637,22 +618,24 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "enabled": True,
             "severity": "error",
             "category": "completeness",
-            "description": ("MedicationStatement: medication[x] 1..1 Pflichtfeld."),
+            "description": (
+                "Check if the MedicationStatement.medication[x] is present. "
+            ),
         },
         "subject_required": {
             "enabled": True,
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MedicationStatement: subject 1..1 Pflichtfeld. "
-                "Referenz auf Patient-Ressource."
+                "Check if the MedicationStatement.subject is present. "
+                "Reference to a Patient resource. "
             ),
         },
         "subject_reference_format": {
             "enabled": True,
             "severity": "error",
             "category": "integrity",
-            "description": ("subject.reference muss das Format 'Patient/{id}' haben."),
+            "description": ("subject.reference must be in the format 'Patient/{id}'. "),
         },
     },
     # =========================================================================
@@ -666,7 +649,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "privacy",
             "description": (
-                "Das Freitextfeld 'note' kann personenidentifizierende Informationen enthalten."
+                "Check if the Procedure.note is present. It may contain personally identifiable information. "
             ),
         },
         "status_required": {
@@ -674,8 +657,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS Prozedur: status 1..1 Pflichtfeld. "
-                "Erlaubte Werte: preparation | in-progress | not-done | on-hold | "
+                "Check if the Procedure.status is present. "
+                "Allowed values: preparation | in-progress | not-done | on-hold | "
                 "stopped | completed | entered-in-error | unknown."
             ),
         },
@@ -684,8 +667,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS Prozedur: code 1..1 Pflichtfeld. "
-                "Sollte OPS-Kodierung enthalten."
+                "Check if the Procedure.code is present. "
+                "Should contain an OPS code. "
             ),
         },
         "subject_required": {
@@ -693,8 +676,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "MII KDS Prozedur: subject 1..1 Pflichtfeld. "
-                "Referenz auf Patient-Ressource."
+                "Check if the Procedure.subject is present. "
+                "Reference to a Patient resource. "
             ),
         },
         "performed_required": {
@@ -702,15 +685,15 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "completeness",
             "description": (
-                "MII KDS Prozedur: performed[x] Must-Support. "
-                "Akzeptiert: performedDateTime, performedPeriod."
+                "Check if the Procedure.performed[x] is present. "
+                "Accepted: performedDateTime, performedPeriod."
             ),
         },
         "subject_reference_format": {
             "enabled": True,
             "severity": "error",
             "category": "integrity",
-            "description": ("subject.reference muss das Format 'Patient/{id}' haben."),
+            "description": ("subject.reference must be in the format 'Patient/{id}'. "),
         },
     },
     # =========================================================================
@@ -723,23 +706,26 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "warning",
             "category": "privacy",
             "description": (
-                "Das Freitextfeld 'conclusion' und 'text' können "
-                "personenidentifizierende Informationen enthalten."
+                "Check if the DiagnosticReport.conclusion and DiagnosticReport.text are present. They may contain personally identifiable information. "
             ),
         },
         "status_required": {
             "enabled": True,
             "severity": "error",
             "category": "completeness",
-            "description": ("DiagnosticReport: status 1..1 Pflichtfeld."),
+            "description": (
+                "Check if the DiagnosticReport.status is present. "
+                "Allowed values: registered | preliminary | final | amended | corrected | "
+                "cancelled | entered-in-error | unknown."
+            ),
         },
         "code_required": {
             "enabled": True,
             "severity": "error",
             "category": "completeness",
             "description": (
-                "DiagnosticReport: code 1..1 Pflichtfeld. "
-                "Beschreibt die Art des Berichts (z.B. Laborbefund)."
+                "Check if the DiagnosticReport.code is present. "
+                "Describes the type of report (e.g. labor report)."
             ),
         },
         "subject_required": {
@@ -747,31 +733,31 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "completeness",
             "description": (
-                "DiagnosticReport: subject 1..1 Pflichtfeld. "
-                "Referenz auf Patient-Ressource."
+                "Check if the DiagnosticReport.subject is present. "
+                "Reference to a Patient resource. "
             ),
         },
         "subject_reference_format": {
             "enabled": True,
             "severity": "error",
             "category": "integrity",
-            "description": ("subject.reference muss das Format 'Patient/{id}' haben."),
+            "description": ("subject.reference must be in the format 'Patient/{id}'. "),
         },
     },
 }
 
 
-# Alle Ressource-Typen die FHIR Verity validieren kann
+# All resource types that FHIR Verity can validate
 SUPPORTED_RESOURCE_TYPES: list[str] = list(MII_KDS_DEFAULTS.keys())
 
 
 def get_rule_keys_by_category(resource_type: str, category: str) -> list[str]:
-    """Gibt alle Regel-Keys einer bestimmten Kategorie für einen Ressource-Typ zurück."""
+    """Returns all rule keys of a specific category for a resource type."""
     rules = MII_KDS_DEFAULTS.get(resource_type, {})
     return [key for key, rule in rules.items() if rule.get("category") == category]
 
 
 def get_enabled_rules(resource_type: str) -> dict[str, dict]:
-    """Gibt nur aktivierte Regeln für einen Ressource-Typ zurück."""
+    """Returns only enabled rules for a resource type."""
     rules = MII_KDS_DEFAULTS.get(resource_type, {})
     return {key: rule for key, rule in rules.items() if rule.get("enabled", False)}

@@ -1452,6 +1452,469 @@ class MedicationAdministrationValidator(BaseValidator):
 
 
 # =============================================================================
+# CONDITION
+# =============================================================================
+class ConditionValidator(BaseValidator):
+    """Condition (Diagnose) Validator."""
+
+    async def validate_and_save(self, run_id: UUID, db: AsyncSession):
+        config = await get_config_for_run(self.server_id, "Condition", db)
+
+        start_time = monotonic()
+        pages_done = 0
+        cumulative_processed = 0
+        cumulative_invalid = 0
+
+        estimated_total = await self._fetch_total("Condition")
+
+        url = f"{self.base_url}/Condition?_count={self.PAGE_SIZE}"
+
+        while url:
+            bundle = await self.fetch_bundle(url)
+            entries = bundle.get("entry", [])
+            pages_done += 1
+            page_processed = 0
+            page_invalid = 0
+
+            for entry in entries:
+                page_processed += 1
+                resource = entry.get("resource", {})
+                rid = resource.get("id", "")
+                issues = []
+                metrics = self._build_metrics(config)
+
+                # ========== privacy ==========
+
+                if rule_enabled(config, "note_cleartext_check"):
+                    for note in resource.get("note", []):
+                        text = note.get("text", "")
+                        if text and len(text) > 50:
+                            issues.append(
+                                {
+                                    "rule": "note_cleartext_check",
+                                    "severity": config["note_cleartext_check"][
+                                        "severity"
+                                    ],
+                                    "message": "Condition.note contains a long free-text string that may include personal data.",
+                                }
+                            )
+                            metrics["note_cleartext_check"] = False
+                            break
+
+                # ========== completeness ==========
+
+                if rule_enabled(config, "code_required"):
+                    if not resource.get("code"):
+                        issues.append(
+                            {
+                                "rule": "code_required",
+                                "severity": config["code_required"]["severity"],
+                                "message": "Condition.code is missing.",
+                            }
+                        )
+                        metrics["code_required"] = False
+
+                if rule_enabled(config, "subject_required"):
+                    if not resource.get("subject"):
+                        issues.append(
+                            {
+                                "rule": "subject_required",
+                                "severity": config["subject_required"]["severity"],
+                                "message": "Condition.subject is missing.",
+                            }
+                        )
+                        metrics["subject_required"] = False
+
+                if rule_enabled(config, "clinicalstatus_required"):
+                    if not resource.get("clinicalStatus"):
+                        issues.append(
+                            {
+                                "rule": "clinicalstatus_required",
+                                "severity": config["clinicalstatus_required"][
+                                    "severity"
+                                ],
+                                "message": "Condition.clinicalStatus is missing.",
+                            }
+                        )
+                        metrics["clinicalstatus_required"] = False
+
+                if rule_enabled(config, "verificationstatus_required"):
+                    if not resource.get("verificationStatus"):
+                        issues.append(
+                            {
+                                "rule": "verificationstatus_required",
+                                "severity": config["verificationstatus_required"][
+                                    "severity"
+                                ],
+                                "message": "Condition.verificationStatus is missing.",
+                            }
+                        )
+                        metrics["verificationstatus_required"] = False
+
+                if rule_enabled(config, "onset_present"):
+                    has_onset = any(
+                        resource.get(f)
+                        for f in [
+                            "onsetDateTime",
+                            "onsetAge",
+                            "onsetPeriod",
+                            "onsetRange",
+                            "onsetString",
+                        ]
+                    )
+                    if not has_onset:
+                        issues.append(
+                            {
+                                "rule": "onset_present",
+                                "severity": config["onset_present"]["severity"],
+                                "message": "Condition.onset[x] is missing.",
+                            }
+                        )
+                        metrics["onset_present"] = False
+
+                # ========== integrity ==========
+
+                if rule_enabled(config, "subject_reference_format"):
+                    ref = resource.get("subject", {}).get("reference", "")
+                    if ref and not self._is_reference_format(ref, "Patient"):
+                        issues.append(
+                            {
+                                "rule": "subject_reference_format",
+                                "severity": config["subject_reference_format"][
+                                    "severity"
+                                ],
+                                "message": f"Condition.subject.reference '{ref}' must follow 'Patient/{{id}}' format.",
+                            }
+                        )
+                        metrics["subject_reference_format"] = False
+
+                if issues:
+                    page_invalid += 1
+                    await self.save_invalid(
+                        run_id, "Condition", rid, issues, metrics, db
+                    )
+
+            cumulative_processed += page_processed
+            cumulative_invalid += page_invalid
+
+            await self._update_run_counters(
+                run_id, "Condition", page_processed, page_invalid, db
+            )
+
+            await self._emit_progress(
+                run_id=run_id,
+                resource_type="Condition",
+                total_processed=cumulative_processed,
+                total_invalid=cumulative_invalid,
+                pages_done=pages_done,
+                estimated_total=estimated_total,
+                start_time=start_time,
+            )
+
+            url = next(
+                (
+                    l["url"]
+                    for l in bundle.get("link", [])
+                    if l.get("relation") == "next"
+                ),
+                None,
+            )
+
+        logger.info("Condition validation complete for run %s", run_id)
+
+
+# =============================================================================
+# PROCEDURE
+# =============================================================================
+class ProcedureValidator(BaseValidator):
+    """Procedure (Prozedur) Validator."""
+
+    async def validate_and_save(self, run_id: UUID, db: AsyncSession):
+        config = await get_config_for_run(self.server_id, "Procedure", db)
+
+        start_time = monotonic()
+        pages_done = 0
+        cumulative_processed = 0
+        cumulative_invalid = 0
+
+        estimated_total = await self._fetch_total("Procedure")
+
+        url = f"{self.base_url}/Procedure?_count={self.PAGE_SIZE}"
+
+        while url:
+            bundle = await self.fetch_bundle(url)
+            entries = bundle.get("entry", [])
+            pages_done += 1
+            page_processed = 0
+            page_invalid = 0
+
+            for entry in entries:
+                page_processed += 1
+                resource = entry.get("resource", {})
+                rid = resource.get("id", "")
+                issues = []
+                metrics = self._build_metrics(config)
+
+                # ========== privacy ==========
+
+                if rule_enabled(config, "note_cleartext_check"):
+                    for note in resource.get("note", []):
+                        text = note.get("text", "")
+                        if text and len(text) > 50:
+                            issues.append(
+                                {
+                                    "rule": "note_cleartext_check",
+                                    "severity": config["note_cleartext_check"][
+                                        "severity"
+                                    ],
+                                    "message": "Procedure.note contains a long free-text string that may include personal data.",
+                                }
+                            )
+                            metrics["note_cleartext_check"] = False
+                            break
+
+                # ========== completeness ==========
+
+                if rule_enabled(config, "status_required"):
+                    if not resource.get("status"):
+                        issues.append(
+                            {
+                                "rule": "status_required",
+                                "severity": config["status_required"]["severity"],
+                                "message": "Procedure.status is missing.",
+                            }
+                        )
+                        metrics["status_required"] = False
+
+                if rule_enabled(config, "code_required"):
+                    if not resource.get("code"):
+                        issues.append(
+                            {
+                                "rule": "code_required",
+                                "severity": config["code_required"]["severity"],
+                                "message": "Procedure.code is missing.",
+                            }
+                        )
+                        metrics["code_required"] = False
+
+                if rule_enabled(config, "subject_required"):
+                    if not resource.get("subject"):
+                        issues.append(
+                            {
+                                "rule": "subject_required",
+                                "severity": config["subject_required"]["severity"],
+                                "message": "Procedure.subject is missing.",
+                            }
+                        )
+                        metrics["subject_required"] = False
+
+                if rule_enabled(config, "performed_required"):
+                    has_performed = (
+                        resource.get("performedDateTime")
+                        or resource.get("performedPeriod")
+                        or resource.get("performedString")
+                        or resource.get("performedAge")
+                        or resource.get("performedRange")
+                    )
+                    if not has_performed:
+                        issues.append(
+                            {
+                                "rule": "performed_required",
+                                "severity": config["performed_required"]["severity"],
+                                "message": "Procedure.performed[x] is missing.",
+                            }
+                        )
+                        metrics["performed_required"] = False
+
+                # ========== integrity ==========
+
+                if rule_enabled(config, "subject_reference_format"):
+                    ref = resource.get("subject", {}).get("reference", "")
+                    if ref and not self._is_reference_format(ref, "Patient"):
+                        issues.append(
+                            {
+                                "rule": "subject_reference_format",
+                                "severity": config["subject_reference_format"][
+                                    "severity"
+                                ],
+                                "message": f"Procedure.subject.reference '{ref}' must follow 'Patient/{{id}}' format.",
+                            }
+                        )
+                        metrics["subject_reference_format"] = False
+
+                if issues:
+                    page_invalid += 1
+                    await self.save_invalid(
+                        run_id, "Procedure", rid, issues, metrics, db
+                    )
+
+            cumulative_processed += page_processed
+            cumulative_invalid += page_invalid
+
+            await self._update_run_counters(
+                run_id, "Procedure", page_processed, page_invalid, db
+            )
+
+            await self._emit_progress(
+                run_id=run_id,
+                resource_type="Procedure",
+                total_processed=cumulative_processed,
+                total_invalid=cumulative_invalid,
+                pages_done=pages_done,
+                estimated_total=estimated_total,
+                start_time=start_time,
+            )
+
+            url = next(
+                (
+                    l["url"]
+                    for l in bundle.get("link", [])
+                    if l.get("relation") == "next"
+                ),
+                None,
+            )
+
+        logger.info("Procedure validation complete for run %s", run_id)
+
+
+# =============================================================================
+# DIAGNOSTICREPORT
+# =============================================================================
+class DiagnosticReportValidator(BaseValidator):
+    """DiagnosticReport Validator."""
+
+    async def validate_and_save(self, run_id: UUID, db: AsyncSession):
+        config = await get_config_for_run(self.server_id, "DiagnosticReport", db)
+
+        start_time = monotonic()
+        pages_done = 0
+        cumulative_processed = 0
+        cumulative_invalid = 0
+
+        estimated_total = await self._fetch_total("DiagnosticReport")
+
+        url = f"{self.base_url}/DiagnosticReport?_count={self.PAGE_SIZE}"
+
+        while url:
+            bundle = await self.fetch_bundle(url)
+            entries = bundle.get("entry", [])
+            pages_done += 1
+            page_processed = 0
+            page_invalid = 0
+
+            for entry in entries:
+                page_processed += 1
+                resource = entry.get("resource", {})
+                rid = resource.get("id", "")
+                issues = []
+                metrics = self._build_metrics(config)
+
+                # ========== privacy ==========
+
+                if rule_enabled(config, "note_cleartext_check"):
+                    # DiagnosticReport uses 'conclusion' (string) and 'text' (Narrative)
+                    conclusion = resource.get("conclusion", "")
+                    narrative_div = resource.get("text", {}).get("div", "")
+                    flagged = (conclusion and len(conclusion) > 50) or (
+                        narrative_div and len(narrative_div) > 100
+                    )
+                    if flagged:
+                        issues.append(
+                            {
+                                "rule": "note_cleartext_check",
+                                "severity": config["note_cleartext_check"]["severity"],
+                                "message": "DiagnosticReport.conclusion or text.div contains a long free-text string that may include personal data.",
+                            }
+                        )
+                        metrics["note_cleartext_check"] = False
+
+                # ========== completeness ==========
+
+                if rule_enabled(config, "status_required"):
+                    if not resource.get("status"):
+                        issues.append(
+                            {
+                                "rule": "status_required",
+                                "severity": config["status_required"]["severity"],
+                                "message": "DiagnosticReport.status is missing.",
+                            }
+                        )
+                        metrics["status_required"] = False
+
+                if rule_enabled(config, "code_required"):
+                    if not resource.get("code"):
+                        issues.append(
+                            {
+                                "rule": "code_required",
+                                "severity": config["code_required"]["severity"],
+                                "message": "DiagnosticReport.code is missing.",
+                            }
+                        )
+                        metrics["code_required"] = False
+
+                if rule_enabled(config, "subject_required"):
+                    if not resource.get("subject"):
+                        issues.append(
+                            {
+                                "rule": "subject_required",
+                                "severity": config["subject_required"]["severity"],
+                                "message": "DiagnosticReport.subject is missing.",
+                            }
+                        )
+                        metrics["subject_required"] = False
+
+                # ========== integrity ==========
+
+                if rule_enabled(config, "subject_reference_format"):
+                    ref = resource.get("subject", {}).get("reference", "")
+                    if ref and not self._is_reference_format(ref, "Patient"):
+                        issues.append(
+                            {
+                                "rule": "subject_reference_format",
+                                "severity": config["subject_reference_format"][
+                                    "severity"
+                                ],
+                                "message": f"DiagnosticReport.subject.reference '{ref}' must follow 'Patient/{{id}}' format.",
+                            }
+                        )
+                        metrics["subject_reference_format"] = False
+
+                if issues:
+                    page_invalid += 1
+                    await self.save_invalid(
+                        run_id, "DiagnosticReport", rid, issues, metrics, db
+                    )
+
+            cumulative_processed += page_processed
+            cumulative_invalid += page_invalid
+
+            await self._update_run_counters(
+                run_id, "DiagnosticReport", page_processed, page_invalid, db
+            )
+
+            await self._emit_progress(
+                run_id=run_id,
+                resource_type="DiagnosticReport",
+                total_processed=cumulative_processed,
+                total_invalid=cumulative_invalid,
+                pages_done=pages_done,
+                estimated_total=estimated_total,
+                start_time=start_time,
+            )
+
+            url = next(
+                (
+                    l["url"]
+                    for l in bundle.get("link", [])
+                    if l.get("relation") == "next"
+                ),
+                None,
+            )
+
+        logger.info("DiagnosticReport validation complete for run %s", run_id)
+
+
+# =============================================================================
 # VALIDATORS REGISTRY
 # =============================================================================
 VALIDATORS: dict[str, type[BaseValidator]] = {
@@ -1461,4 +1924,7 @@ VALIDATORS: dict[str, type[BaseValidator]] = {
     "Medication": MedicationValidator,
     "MedicationRequest": MedicationRequestValidator,
     "MedicationAdministration": MedicationAdministrationValidator,
+    "Condition": ConditionValidator,
+    "Procedure": ProcedureValidator,
+    "DiagnosticReport": DiagnosticReportValidator,
 }
