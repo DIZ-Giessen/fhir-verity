@@ -330,7 +330,9 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
       name: "Errors",
       stat: counts.error,
       Icon: DangerTriangle,
-      tone: "text-rose-500",
+      tone: "text-red-500",
+      description:
+        "Errors are critical issues that must be resolved before the validation can be completed successfully.",
       label: "Errors",
     },
     {
@@ -339,6 +341,8 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
       stat: counts.warning,
       Icon: DangerTriangle,
       tone: "text-orange-500",
+      description:
+        "Warnings are non-critical issues but should be resolved to improve the quality of the validation results.",
       label: "Warnings",
     },
     {
@@ -347,6 +351,8 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
       stat: counts.info,
       Icon: DangerCircle,
       tone: "text-blue-500",
+      description:
+        "Infos are non-critical issues that are not considered errors or warnings.",
       label: "Infos",
     },
   ]
@@ -397,7 +403,7 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
                 <item.Icon className="size-7" />
               </span>
               <p className="text-sm text-muted-foreground">
-                Across the latest completed run
+                {item.description}
               </p>
             </div>
           </CardContent>
