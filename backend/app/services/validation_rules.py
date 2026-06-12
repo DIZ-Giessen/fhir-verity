@@ -1458,6 +1458,7 @@ class ConditionValidator(BaseValidator):
     """Condition (Diagnose) Validator."""
 
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
+        """Validate and save Condition resources."""
         config = await get_config_for_run(self.server_id, "Condition", db)
 
         start_time = monotonic()
@@ -1630,6 +1631,7 @@ class ProcedureValidator(BaseValidator):
     """Procedure (Prozedur) Validator."""
 
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
+        """Validate and save Procedure resources."""
         config = await get_config_for_run(self.server_id, "Procedure", db)
 
         start_time = monotonic()
@@ -1784,6 +1786,7 @@ class DiagnosticReportValidator(BaseValidator):
     """DiagnosticReport Validator."""
 
     async def validate_and_save(self, run_id: UUID, db: AsyncSession):
+        """Validate and save DiagnosticReport resources."""
         config = await get_config_for_run(self.server_id, "DiagnosticReport", db)
 
         start_time = monotonic()

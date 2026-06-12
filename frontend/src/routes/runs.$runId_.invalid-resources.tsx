@@ -321,16 +321,6 @@ function InvalidResourcesPage() {
                                 </div>
 
                                 <div className="rounded-lg border border-dashed p-3">
-                                  <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                                    <Sparkles className="h-3.5 w-3.5 text-blue-500" />
-                                    Fix suggestion
-                                  </div>
-                                  <p className="text-sm text-muted-foreground">
-                                    Automated correction proposals will appear
-                                    here with the exact FHIR command and a
-                                    manual-confirm step. For now, inspect or fix
-                                    the resource directly on the server.
-                                  </p>
                                   <div className="mt-2 flex gap-2">
                                     <Button
                                       size="sm"

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { Activity, AlertTriangle, ArrowRight, ChevronLeft } from "lucide-react"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import {
   Bar,
   BarChart,
@@ -54,11 +54,16 @@ import {
 import type { TestReportSummary } from "@/lib/interface"
 import {
   ArrowRightUp,
+  Chart2,
   CheckCircle,
   DangerTriangle,
+  Export,
+  PieChart2,
   SadCircle,
   Star2,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
+import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 export const Route = createFileRoute("/runs/$runId")({
   component: RunDetailPage,
@@ -99,6 +104,7 @@ const gaugeConfig = {
 
 function RunDetailPage() {
   const { runId } = Route.useParams()
+  const [showBar, setShowBar] = useState(false)
 
   const runQ = useQuery({
     ...runQueryOptions(runId),
@@ -133,6 +139,10 @@ function RunDetailPage() {
     return rows.sort((a, b) => b.count - a.count)
   }, [summaryQ.data])
 
+  const exportAsPNG = () => {
+    /*TODO: export the chart as a PNG */
+    toast.info("Exporting chart as PNG… will be implemented in the future")
+  }
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -303,9 +313,31 @@ function RunDetailPage() {
               </CardContent>
             </Card>
           )}
-
+          <div className="flex items-center justify-between">
+            <h2 className="mb-3 text-base font-medium">
+              Invalid rate per resource type
+            </h2>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setShowBar(!showBar)}
+                size="sm"
+                variant="outline"
+              >
+                {showBar ? "Show as Radial Chart" : "Show as Bar Chart"}
+                {showBar ? (
+                  <PieChart2 className="ml-1 size-5" />
+                ) : (
+                  <Chart2 className="ml-1 size-4" />
+                )}
+              </Button>
+              <Button onClick={() => exportAsPNG()} size="sm" variant="outline">
+                Export the chart
+                <Export className="ml-1 size-5" />
+              </Button>
+            </div>
+          </div>
           {/* --- Bar chart: processed vs invalid per type ---------------- */}
-          <Card className="">
+          <Card className={cn(showBar ? "" : "hidden")}>
             <CardHeader>
               <CardTitle className="text-base">Resources by type</CardTitle>
               <CardDescription>
@@ -340,7 +372,7 @@ function RunDetailPage() {
                       allowDecimals={false}
                       tickLine={false}
                       axisLine={false}
-                      width={44}
+                      width={80}
                     />
                     <ChartTooltip
                       cursor={false}
@@ -366,10 +398,7 @@ function RunDetailPage() {
 
           {/* --- Radial gauges: invalid rate per type -------------------- */}
           {run.per_resource_stats.length > 0 && (
-            <div>
-              <h2 className="mb-3 text-base font-medium">
-                Invalid rate per resource type
-              </h2>
+            <div className={cn(!showBar ? "" : "hidden")}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {run.per_resource_stats.map((s) => (
                   <RateGauge key={s.resource_type} stat={s} />
