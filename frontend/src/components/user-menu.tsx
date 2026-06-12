@@ -83,17 +83,15 @@ export function UserMenu() {
             </div>
           </div>
           <Separator />
-          <div>
+          <div className="p-1 px-3">
             <Button
-              variant="ghost"
-              size="lg"
-              className="w-full justify-start"
+              className="w-full"
               onClick={() => {
                 setMenuOpen(false)
                 setStartOpen(true)
               }}
             >
-              <Play className="mr-2 h-4 w-4" />
+              <Play className="size-4" />
               Start validation
             </Button>
           </div>

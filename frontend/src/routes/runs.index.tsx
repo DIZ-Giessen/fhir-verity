@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, Play } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import {
   Area,
@@ -55,6 +55,7 @@ import {
   Documents,
   InfoCircle,
   NotificationLinesRemove,
+  Sidebar,
   SquareTopDown,
   Star2,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
@@ -75,6 +76,7 @@ import {
   RUN_STATUS_STYLES,
 } from "@/lib/functions/runs"
 import type { MonthlyBucket, TestReportSummary } from "@/lib/interface"
+import { StartValidationDialog } from "@/components/start-validation-dialog"
 
 export const Route = createFileRoute("/runs/")({ component: RunsPage })
 
@@ -120,6 +122,9 @@ function RunsPage() {
   const runsQ = useQuery(runsQueryOptions(50))
   const serversQ = useQuery(serversQueryOptions())
 
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [startOpen, setStartOpen] = useState(false)
+  const [showCharts, setShowCharts] = useState(true)
   const serverMap = useMemo(() => {
     const map = new Map<
       string,
@@ -140,38 +145,67 @@ function RunsPage() {
   const totalRuns = monthly.reduce((sum, b) => sum + b.runs, 0)
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Validation runs
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            History of all validation runs across servers, with links to the
-            FHIR resources they produced.
-          </p>
+    <>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Validation runs
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              History of all validation runs across servers, with links to the
+              FHIR resources they produced.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              className=""
+              onClick={() => {
+                setMenuOpen(false)
+                setStartOpen(true)
+              }}
+            >
+              <Play className="size-4" />
+              Start a new run
+            </Button>
+            <Button
+              variant="outline"
+              size="icon-lg"
+              onClick={() => setShowCharts(!showCharts)}
+            >
+              <Sidebar
+                className={cn(
+                  "size-5 rotate-270 transition-transform duration-500 ease-out",
+                  !showCharts && "rotate-90"
+                )}
+              />
+            </Button>
+          </div>
         </div>
-      </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <RadarCard
-          data={monthly}
-          totalInvalid={totalInvalid}
+        <div
+          className={cn("grid gap-6 lg:grid-cols-2", !showCharts && "hidden")}
+        >
+          <RadarCard
+            data={monthly}
+            totalInvalid={totalInvalid}
+            loading={runsQ.isPending}
+          />
+          <BarCard
+            data={monthly}
+            totalRuns={totalRuns}
+            loading={runsQ.isPending}
+          />
+        </div>
+
+        <RunsTable
+          runs={runsQ.data?.items ?? []}
+          serverMap={serverMap}
           loading={runsQ.isPending}
         />
-        <BarCard
-          data={monthly}
-          totalRuns={totalRuns}
-          loading={runsQ.isPending}
-        />
       </div>
-
-      <RunsTable
-        runs={runsQ.data?.items ?? []}
-        serverMap={serverMap}
-        loading={runsQ.isPending}
-      />
-    </div>
+      <StartValidationDialog open={startOpen} onOpenChange={setStartOpen} />
+    </>
   )
 }
 

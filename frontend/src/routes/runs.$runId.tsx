@@ -1,6 +1,13 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { Activity, AlertTriangle, ArrowRight, ChevronLeft } from "lucide-react"
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  ChevronLeft,
+  Loader,
+  Loader2,
+} from "lucide-react"
 import { useMemo, useState } from "react"
 import {
   Bar,
@@ -55,12 +62,9 @@ import type { TestReportSummary } from "@/lib/interface"
 import {
   ArrowRightUp,
   Chart2,
-  CheckCircle,
   DangerTriangle,
   Export,
   PieChart2,
-  SadCircle,
-  Star2,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -180,6 +184,35 @@ function RunDetailPage() {
         </Card>
       ) : (
         <>
+          {/* --- Running / failed banners -------------------------------- */}
+          {run.status === "running" && (
+            <Card className="sticky top-16 z-10 bg-background shadow-2xs">
+              <CardContent className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="animate-pulse">
+                    <Loader className="size-4.5 animate-spin text-blue-500/70 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      This run is still running. page will automatically refresh
+                      every few seconds.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="text-blue-500 hover:text-blue-500/80"
+                >
+                  <Link to="/runs/$runId/live" params={{ runId: run.id }}>
+                    Live view
+                    <ArrowRightUp className="ml-1 size-4" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           {/* --- Header --------------------------------------------------- */}
           <Card className="shadow-2xs">
             <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
@@ -190,13 +223,6 @@ function RunDetailPage() {
                     variant="outline"
                     className={RUN_STATUS_STYLES[run.status] ?? ""}
                   >
-                    {run.status === "running" ? (
-                      <Star2 className="scale-115 animate-spin" />
-                    ) : run.status === "failed" ? (
-                      <SadCircle className="scale-125" />
-                    ) : (
-                      <CheckCircle className="scale-125" />
-                    )}
                     {run.status}{" "}
                   </Badge>
                 </div>
@@ -235,7 +261,12 @@ function RunDetailPage() {
                     ? dateFormatter.format(new Date(run.finished_at))
                     : "—"}
                 </MetaItem>
-                <MetaItem label="Duration">
+                <MetaItem
+                  label="Duration"
+                  className={cn(
+                    run.status === "running" && "animate-pulse text-blue-500"
+                  )}
+                >
                   {run.status === "running"
                     ? "running…"
                     : formatDuration(run.started_at, run.finished_at)}
@@ -274,31 +305,6 @@ function RunDetailPage() {
               )}
             </CardContent>
           </Card>
-
-          {/* --- Running / failed banners -------------------------------- */}
-          {run.status === "running" && (
-            <Card className="border-blue-500/30 bg-blue-500/5">
-              <CardContent className="flex items-center justify-between gap-4 py-4">
-                <div className="flex items-center gap-3">
-                  <Activity className="h-5 w-5 animate-pulse text-blue-500" />
-                  <div>
-                    <p className="text-sm font-medium">
-                      This run is still in progress.
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Numbers refresh automatically every few seconds.
-                    </p>
-                  </div>
-                </div>
-                <Button asChild size="sm" variant="outline">
-                  <Link to="/runs/$runId/live" params={{ runId: run.id }}>
-                    Live view
-                    <ArrowRightUp className="ml-1 size-4" />
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          )}
 
           {run.status === "failed" && run.error_message && (
             <Card className="border-rose-500/30 bg-rose-500/5">
@@ -487,9 +493,11 @@ function RunDetailPage() {
 
 function MetaItem({
   label,
+  className,
   children,
 }: {
   label: string
+  className?: string
   children: React.ReactNode
 }) {
   return (
@@ -497,7 +505,7 @@ function MetaItem({
       <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
         {label}
       </dt>
-      <dd className="text-sm">{children}</dd>
+      <dd className={cn("text-sm", className)}>{children}</dd>
     </div>
   )
 }

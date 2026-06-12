@@ -280,7 +280,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             ),
         },
         "clinicalstatus_required": {
-            "enabled": True,
+            "enabled": False,
             "severity": "warning",
             "category": "completeness",
             "description": (

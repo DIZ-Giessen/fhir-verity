@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { Check, ChevronsUpDown, ExternalLink, Loader2 } from "lucide-react"
+import {
+  AlertTriangleIcon,
+  Check,
+  ChevronsUpDown,
+  ExternalLink,
+  Loader2,
+} from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -33,6 +39,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
+import { DangerTriangle } from "@solar-icons/react-perf/category/style/LineDuotone"
+
+const DEFAULT_UNCHECKED_TYPES = new Set(["Condition", "Observation"])
 
 interface StartValidationDialogProps {
   open: boolean
@@ -59,10 +69,12 @@ export function StartValidationDialog({
   const [pickedServer, setPickedServer] = useState<string>()
   const seededRef = useRef(false)
 
-  // default-select all types whenever the dialog opens
+  // default-select all types except DEFAULT_UNCHECKED_TYPES when the dialog opens
   useEffect(() => {
     if (open && allTypes.length && !seededRef.current) {
-      setSelected(new Set(allTypes))
+      setSelected(
+        new Set(allTypes.filter((rt) => !DEFAULT_UNCHECKED_TYPES.has(rt)))
+      )
       seededRef.current = true
     }
     if (!open) {
@@ -164,7 +176,7 @@ export function StartValidationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-xl!">
         <DialogHeader>
           <DialogTitle>Start validation</DialogTitle>
           <DialogDescription>
@@ -201,23 +213,44 @@ export function StartValidationDialog({
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-1">
-              {allTypes.map((rt) => (
-                <label
-                  key={rt}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg p-2 text-sm hover:bg-muted/50"
-                >
-                  <Checkbox
-                    checked={selected.has(rt)}
-                    onCheckedChange={() => toggle(rt)}
-                  />
-                  <span>{rt}</span>
-                </label>
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-1">
+                {allTypes.map((rt) => (
+                  <label
+                    key={rt}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg p-2 text-sm hover:bg-muted/50"
+                  >
+                    <Checkbox
+                      checked={selected.has(rt)}
+                      onCheckedChange={() => toggle(rt)}
+                    />
+                    <span>{rt}</span>
+                  </label>
+                ))}
+              </div>
+            </>
           )}
         </div>
+        {(Array.from(selected).includes("Condition") ||
+          Array.from(selected).includes("Observation")) && (
+          <Alert className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-50">
+            <DangerTriangle className="size-5" />
+            <AlertTitle>Attention!</AlertTitle>
 
+            <AlertDescription>
+              Validation runs for{" "}
+              <span className="font-medium text-foreground">Condition</span> and{" "}
+              <span className="font-medium text-foreground">Observation</span>{" "}
+              can take{" "}
+              <span className="font-medium text-foreground">
+                significantly longer
+              </span>
+              . We recommend starting validation for these types{" "}
+              <span className="font-medium text-foreground">one at a time</span>
+              .
+            </AlertDescription>
+          </Alert>
+        )}
         <DialogFooter>
           <Button
             variant="outline"
