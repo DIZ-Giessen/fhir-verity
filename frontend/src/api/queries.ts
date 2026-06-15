@@ -27,6 +27,13 @@ export type IssueDetail = components["schemas"]["IssueDetail"]
 export type PaginatedInvalidResources =
   components["schemas"]["PaginatedInvalidResources"]
 export type ValidationRunRead = components["schemas"]["ValidationRunRead"]
+export type ActionResult = components["schemas"]["ActionResult"]
+export type FixableTemplate = components["schemas"]["FixableTemplate"]
+export type BulkActionResult = components["schemas"]["BulkActionResult"]
+export type BulkDeleteRequest = components["schemas"]["BulkDeleteRequest"]
+export type BulkFixRequest = components["schemas"]["BulkFixRequest"]
+export type AuditLogListItem = components["schemas"]["AuditLogListItem"]
+export type AuditLogDetail = components["schemas"]["AuditLogDetail"]
 // ======================
 
 export const serverKeys = {
@@ -293,3 +300,103 @@ export async function startValidation(body: {
   return data
 }
 //!  END VALIDATION RUNS
+
+// ---------------------------------------------------------------------------
+// Resource actions
+// ----------------------------------------------------------------------
+
+export const fixTemplatesQueryOptions = () =>
+  queryOptions({
+    queryKey: ["resources", "fix-templates"],
+    queryFn: async () => {
+      const { data } = await api.GET("/resources/fix-templates")
+      return data ?? []
+    },
+    staleTime: 5 * 60_000,
+  })
+
+export async function autoFixResource(
+  serverId: string,
+  resourceType: string,
+  resourceId: string,
+  reason?: string
+) {
+  const { data } = await api.POST(
+    "/resources/{server_id}/{resource_type}/{resource_id}/auto-fix",
+    {
+      params: {
+        path: {
+          server_id: serverId,
+          resource_type: resourceType,
+          resource_id: resourceId,
+        },
+      },
+      body: { reason: reason ?? null },
+    }
+  )
+  return data
+}
+
+export async function deleteResource(
+  serverId: string,
+  resourceType: string,
+  resourceId: string,
+  reason?: string
+) {
+  const { data } = await api.DELETE(
+    "/resources/{server_id}/{resource_type}/{resource_id}",
+    {
+      params: {
+        path: {
+          server_id: serverId,
+          resource_type: resourceType,
+          resource_id: resourceId,
+        },
+      },
+      body: { reason: reason ?? null },
+    }
+  )
+  return data
+}
+
+export async function bulkDelete(body: BulkDeleteRequest) {
+  const { data } = await api.POST("/resources/bulk-delete", { body })
+  return data
+}
+
+export async function bulkFix(body: BulkFixRequest) {
+  const { data } = await api.POST("/resources/bulk-fix", { body })
+  return data
+}
+
+export interface AuditLogParams {
+  skip?: number
+  limit?: number
+  server_id?: string
+  resource_type?: string
+  action?: string
+  status_filter?: string
+}
+
+export const auditLogQueryOptions = (params: AuditLogParams = {}) =>
+  queryOptions({
+    queryKey: ["audit-log", params],
+    queryFn: async () => {
+      const { data } = await api.GET("/audit-log", {
+        params: { query: params },
+      })
+      return data
+    },
+    placeholderData: keepPreviousData,
+  })
+
+export const auditLogDetailQueryOptions = (auditId: string) =>
+  queryOptions({
+    queryKey: ["audit-log", auditId, "detail"],
+    queryFn: async () => {
+      const { data } = await api.GET("/audit-log/{audit_id}", {
+        params: { path: { audit_id: auditId } },
+      })
+      return data
+    },
+  })

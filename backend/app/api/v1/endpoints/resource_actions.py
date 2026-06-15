@@ -18,16 +18,19 @@ from app.models.fhir_server import FhirServer
 from app.models.invalid_resource import InvalidResource
 from app.schemas.resource_action import (
     ActionResult,
+    AuditLogDetail,
     AuditLogListItem,
+    AutoFixRequest,
     BulkActionError,
     BulkActionResult,
     BulkDeleteRequest,
     BulkFixRequest,
     DeleteRequest,
+    FixableTemplate,
     PaginatedAuditLog,
     PatchRequest,
 )
-from app.services.fix_templates import get_patch_template, has_template
+from app.services.fix_templates import get_patch_template, has_template, list_templates
 from app.services.fhir_auth import build_httpx_auth
 
 router = APIRouter()
@@ -667,4 +670,168 @@ async def list_audit_log(
         skip=skip,
         limit=limit,
         items=[AuditLogListItem.model_validate(r) for r in rows],
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /resources/fix-templates
+# ---------------------------------------------------------------------------
+@router.get("/resources/fix-templates", response_model=list[FixableTemplate])
+async def list_fix_templates():
+    """All (resource_type, rule) combos the frontend may offer a one-click fix for."""
+    return [FixableTemplate(**t) for t in list_templates()]
+
+
+# ---------------------------------------------------------------------------
+# POST /resources/{server_id}/{resource_type}/{resource_id}/auto-fix
+# ---------------------------------------------------------------------------
+@router.post(
+    "/resources/{server_id}/{resource_type}/{resource_id}/auto-fix",
+    response_model=ActionResult,
+)
+async def auto_fix_resource(
+    server_id: UUID,
+    resource_type: str,
+    resource_id: str,
+    payload: Optional[AutoFixRequest] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Apply every available template for the rules this resource actually violates,
+    accumulated into a single PATCH. Backend is authoritative: it reads the rules
+    from invalid_resources, not from the client.
+    Returns 400 if none of the resource's rules has a template.
+    """
+    server = await _load_server(server_id, db)
+    auth_config = server.auth_config or {}
+    base_url = str(server.base_url).rstrip("/")
+
+    inv = await _find_invalid_resource(server_id, resource_type, resource_id, db)
+    if inv is None:
+        raise HTTPException(
+            status_code=404, detail="No invalid_resources entry for this resource"
+        )
+
+    rules = {
+        i.get("rule")
+        for i in (inv.metrics or {}).get("issues_detail", [])
+        if i.get("rule")
+    }
+    fixable_rules = [r for r in rules if has_template(resource_type, r)]
+    if not fixable_rules:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"No patch template for any rule on {resource_type}/{resource_id}. "
+                "Use delete instead."
+            ),
+        )
+
+    resource_before: Optional[dict] = None
+    fhir_status: Optional[str] = None
+    status = AuditStatus.SUCCESS
+    error_message: Optional[str] = None
+    patch_body: list[dict] = []
+
+    timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
+    auth = build_httpx_auth(auth_config)
+    async with httpx.AsyncClient(timeout=timeout, auth=auth) as client:
+        try:
+            resource_before, etag = await _fetch_resource_with_etag(
+                base_url, resource_type, resource_id, client
+            )
+            if resource_before is None:
+                status = AuditStatus.FAILED
+                error_message = "Resource not found on FHIR server"
+                fhir_status = "404"
+            else:
+                for rule in fixable_rules:
+                    patch_body.extend(
+                        get_patch_template(
+                            resource_type, rule, resource=resource_before
+                        )
+                        or []
+                    )
+                if not patch_body:
+                    status = AuditStatus.FAILED
+                    error_message = "Templates produced no operations (already clean?)"
+                else:
+                    headers = {
+                        "Content-Type": "application/json-patch+json",
+                        "Accept": "application/fhir+json",
+                    }
+                    if etag:
+                        headers["If-Match"] = etag
+                    url = f"{base_url}/{resource_type}/{resource_id}"
+                    resp = await client.patch(url, json=patch_body, headers=headers)
+                    fhir_status = str(resp.status_code)
+                    if resp.status_code in (200, 201):
+                        await db.delete(inv)
+                    else:
+                        status = AuditStatus.FAILED
+                        error_message = f"FHIR server returned {resp.status_code}: {resp.text[:300]}"
+        except httpx.HTTPError as exc:
+            status = AuditStatus.FAILED
+            error_message = str(exc)[:500]
+            logger.error(
+                "AUTO-FIX failed for %s/%s: %s", resource_type, resource_id, exc
+            )
+
+    audit = AuditLog(
+        server_id=server_id,
+        server_base_url=base_url,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        invalid_resource_id=inv.id,
+        action=AuditAction.PATCH,
+        fhir_request_payload=patch_body or None,
+        fhir_response_status=fhir_status,
+        resource_before=resource_before,
+        status=status,
+        error_message=error_message,
+        reason=payload.reason if payload else None,
+        executed_at=datetime.now(timezone.utc),
+    )
+    db.add(audit)
+    await db.commit()
+    await db.refresh(audit)
+
+    return ActionResult(
+        id=audit.id,
+        action=audit.action.value,
+        status=audit.status.value,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        fhir_response_status=fhir_status,
+        error_message=error_message,
+        executed_at=audit.executed_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /audit-log/{audit_id}
+# ---------------------------------------------------------------------------
+@router.get("/audit-log/{audit_id}", response_model=AuditLogDetail)
+async def get_audit_log(audit_id: UUID, db: AsyncSession = Depends(get_db)):
+    row = (
+        await db.execute(select(AuditLog).where(AuditLog.id == audit_id))
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Audit log entry not found")
+
+    return AuditLogDetail(
+        id=row.id,
+        server_id=row.server_id,
+        server_base_url=row.server_base_url,
+        resource_type=row.resource_type,
+        resource_id=row.resource_id,
+        invalid_resource_id=row.invalid_resource_id,
+        action=row.action.value,
+        fhir_request_payload=row.fhir_request_payload,
+        fhir_response_status=row.fhir_response_status,
+        resource_before=row.resource_before,
+        status=row.status.value,
+        error_message=row.error_message,
+        reason=row.reason,
+        executed_at=row.executed_at,
     )

@@ -1,18 +1,24 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
-  Sparkles,
+  Trash2,
+  Wrench,
+  XIcon,
 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 
 import {
+  autoFixResource,
+  deleteResource,
+  fixTemplatesQueryOptions,
   type InvalidResourceRead,
   invalidResourcesQueryOptions,
   resourceTypesQueryOptions,
+  runQueryOptions,
   runSummaryQueryOptions,
 } from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
@@ -44,6 +50,18 @@ import {
 import { dateFormatter } from "@/lib/functions/runs"
 import type { InvalidResourcesParams } from "@/lib/interface"
 import { Restart } from "@solar-icons/react-perf/category/style/LineDuotone"
+import { toast } from "sonner"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Separator } from "@/components/ui/separator"
 
 export const Route = createFileRoute("/runs/$runId_/invalid-resources")({
   component: InvalidResourcesPage,
@@ -63,10 +81,6 @@ const SEVERITY_ORDER: Record<string, number> = {
   error: 0,
   warning: 1,
   info: 2,
-}
-
-function fhirResourceUrl(r: InvalidResourceRead): string {
-  return `${r.server_base_url.replace(/\/$/, "")}/${r.resource_type}/${r.resource_id}`
 }
 
 function InvalidResourcesPage() {
@@ -96,6 +110,18 @@ function InvalidResourcesPage() {
   const listQ = useQuery(invalidResourcesQueryOptions(runId, params))
   const typesQ = useQuery(resourceTypesQueryOptions())
   const summaryQ = useQuery(runSummaryQueryOptions(runId))
+
+  const runQ = useQuery(runQueryOptions(runId))
+  const fixTemplatesQ = useQuery(fixTemplatesQueryOptions())
+  const serverId = runQ.data?.server_id
+
+  const fixableSet = useMemo(
+    () =>
+      new Set(
+        (fixTemplatesQ.data ?? []).map((t) => `${t.resource_type}:${t.rule}`)
+      ),
+    [fixTemplatesQ.data]
+  )
 
   const ruleOptions = useMemo(() => {
     const set = new Set<string>()
@@ -247,10 +273,9 @@ function InvalidResourcesPage() {
                         (SEVERITY_ORDER[a] ?? 9) - (SEVERITY_ORDER[b] ?? 9)
                     )
                     return (
-                      <>
+                      <Fragment key={r.id}>
                         <TableRow
-                          key={r.id}
-                          className="cursor-pointerl"
+                          className="cursor-pointer"
                           onClick={() => toggleExpand(r.id)}
                         >
                           <TableCell>
@@ -319,40 +344,23 @@ function InvalidResourcesPage() {
                                     ))}
                                   </ul>
                                 </div>
-
-                                <div className="rounded-lg border border-dashed p-3">
-                                  <div className="mt-2 flex gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled
-                                      className="gap-1"
-                                    >
-                                      <Sparkles className="h-3.5 w-3.5" />
-                                      Suggest fix
-                                    </Button>
-                                    <Button
-                                      asChild
-                                      size="sm"
-                                      variant="outline"
-                                      className="gap-1"
-                                    >
-                                      <a
-                                        href={fhirResourceUrl(r)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                      >
-                                        <ExternalLink className="h-3.5 w-3.5" />
-                                        Open on FHIR server
-                                      </a>
-                                    </Button>
-                                  </div>
-                                </div>
+                                {serverId && (
+                                  <ResourceActions
+                                    serverId={serverId}
+                                    runId={runId}
+                                    resource={r}
+                                    fixable={r.issues_detail.some((i) =>
+                                      fixableSet.has(
+                                        `${r.resource_type}:${i.rule}`
+                                      )
+                                    )}
+                                  />
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
                         )}
-                      </>
+                      </Fragment>
                     )
                   })}
                 </TableBody>
@@ -395,5 +403,185 @@ function InvalidResourcesPage() {
         )}
       </Card>
     </div>
+  )
+}
+
+function ResourceActions({
+  serverId,
+  runId,
+  resource,
+  fixable,
+}: {
+  serverId: string
+  runId: string
+  resource: InvalidResourceRead
+  fixable: boolean
+}) {
+  const qc = useQueryClient()
+  const [pending, setPending] = useState<null | "fix" | "delete">(null)
+
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: ["validation", "runs", runId] })
+
+  function handleResult(res: { error_message?: string | null } | undefined) {
+    // success signal = no error_message (robust against audit-status casing)
+    if (res && !res.error_message) {
+      toast.success(
+        `${resource.resource_type} ${resource.resource_id} updated`,
+        { classNames: { icon: "text-green-500" } }
+      )
+      invalidate()
+    } else {
+      toast.custom(
+        () => (
+          <div className="z-50 flex w-[400px] flex-col gap-3 rounded-md border bg-background! p-4 shadow-lg">
+            <div className="flex items-start gap-3">
+              <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-white">
+                <XIcon className="size-3.5" />
+              </div>
+              <div className="flex flex-1 flex-col gap-1">
+                <p className="text-sm font-semibold">Action Failed </p>
+              </div>
+            </div>
+            <Separator className="bg-border/10" />
+            <div className="text-invert-foreground/60 space-y-1 font-mono text-xs">
+              <p>{res?.error_message ?? "Action failed"}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="flex-1"
+                variant="outline"
+                onClick={() => toast.dismiss()}
+              >
+                View Logs
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1"
+                variant="destructive"
+                onClick={() => toast.dismiss()}
+              >
+                close
+              </Button>
+            </div>
+          </div>
+        ),
+        { duration: Infinity }
+      )
+    }
+    setPending(null)
+  }
+
+  const fixM = useMutation({
+    mutationFn: () =>
+      autoFixResource(serverId, resource.resource_type, resource.resource_id),
+    onSuccess: handleResult,
+    onError: (e: unknown) => {
+      toast.error(e instanceof Error ? e.message : "Fix failed")
+      setPending(null)
+    },
+  })
+
+  const delM = useMutation({
+    mutationFn: () =>
+      deleteResource(serverId, resource.resource_type, resource.resource_id),
+    onSuccess: handleResult,
+    onError: (e: unknown) => {
+      toast.error(" Delete failed", {
+        description: e instanceof Error ? e.message : "Delete failed",
+      })
+      setPending(null)
+    },
+  })
+
+  const busy = fixM.isPending || delM.isPending
+  const fhirUrl = `${resource.server_base_url.replace(/\/$/, "")}/${resource.resource_type}/${resource.resource_id}`
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-2">
+        {fixable && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            className="gap-1"
+            onClick={() => setPending("fix")}
+          >
+            <Wrench className="h-3.5 w-3.5" />
+            Fix
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          className="gap-1 text-red-600 hover:text-red-600 dark:text-red-400"
+          onClick={() => setPending("delete")}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </Button>
+        <Button asChild size="sm" variant="outline" className="gap-1">
+          <a href={fhirUrl} target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="h-3.5 w-3.5" />
+            Open on FHIR server
+          </a>
+        </Button>
+      </div>
+
+      <AlertDialog
+        open={pending !== null}
+        onOpenChange={(o) => !o && !busy && setPending(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pending === "delete"
+                ? "Delete resource?"
+                : "Apply automatic fix?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                {pending === "delete" ? (
+                  <>
+                    Permanently deletes{" "}
+                    <span className="font-mono">
+                      {resource.resource_type}/{resource.resource_id}
+                    </span>{" "}
+                    from the FHIR server. This cannot be undone.
+                  </>
+                ) : (
+                  <>
+                    Removes the forbidden fields from{" "}
+                    <span className="font-mono">
+                      {resource.resource_type}/{resource.resource_id}
+                    </span>{" "}
+                    using the predefined template (ETag-checked).
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              className={
+                pending === "delete" ? "bg-red-600 hover:bg-red-700" : ""
+              }
+              onClick={(e) => {
+                e.preventDefault()
+                if (pending === "delete") delM.mutate()
+                else fixM.mutate()
+              }}
+            >
+              {busy ? "Working..." : pending === "delete" ? "Delete" : "Fix"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

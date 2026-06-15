@@ -95,3 +95,13 @@ def has_template(resource_type: str, rule_key: str) -> bool:
     return rule_key in _STATIC_TEMPLATES.get(
         resource_type, {}
     ) or rule_key in _DYNAMIC_TEMPLATES.get(resource_type, {})
+
+
+def list_templates() -> list[dict[str, str]]:
+    """All (resource_type, rule) combos that have a deterministic patch template."""
+    seen: set[tuple[str, str]] = set()
+    for mapping in (_STATIC_TEMPLATES, _DYNAMIC_TEMPLATES):
+        for rt, rules in mapping.items():
+            for rule in rules:
+                seen.add((rt, rule))
+    return [{"resource_type": rt, "rule": rule} for rt, rule in sorted(seen)]

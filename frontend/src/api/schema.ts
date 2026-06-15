@@ -515,6 +515,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/resources/fix-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fix Templates
+         * @description All (resource_type, rule) combos the frontend may offer a one-click fix for.
+         */
+        get: operations["list_fix_templates_resources_fix_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/resources/{server_id}/{resource_type}/{resource_id}/auto-fix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Auto Fix Resource
+         * @description Apply every available template for the rules this resource actually violates,
+         *     accumulated into a single PATCH. Backend is authoritative: it reads the rules
+         *     from invalid_resources, not from the client.
+         *     Returns 400 if none of the resource's rules has a template.
+         */
+        post: operations["auto_fix_resource_resources__server_id___resource_type___resource_id__auto_fix_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit-log/{audit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Audit Log */
+        get: operations["get_audit_log_audit_log__audit_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -541,6 +601,46 @@ export interface components {
             fhir_response_status?: string | null;
             /** Error Message */
             error_message?: string | null;
+            /**
+             * Executed At
+             * Format: date-time
+             */
+            executed_at: string;
+        };
+        /** AuditLogDetail */
+        AuditLogDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Server Id
+             * Format: uuid
+             */
+            server_id: string;
+            /** Server Base Url */
+            server_base_url: string;
+            /** Resource Type */
+            resource_type: string;
+            /** Resource Id */
+            resource_id: string;
+            /** Invalid Resource Id */
+            invalid_resource_id?: string | null;
+            /** Action */
+            action: string;
+            /** Fhir Request Payload */
+            fhir_request_payload?: unknown | null;
+            /** Fhir Response Status */
+            fhir_response_status?: string | null;
+            /** Resource Before */
+            resource_before?: unknown | null;
+            /** Status */
+            status: string;
+            /** Error Message */
+            error_message?: string | null;
+            /** Reason */
+            reason?: string | null;
             /**
              * Executed At
              * Format: date-time
@@ -574,6 +674,14 @@ export interface components {
              * Format: date-time
              */
             executed_at: string;
+        };
+        /**
+         * AutoFixRequest
+         * @description Model for a Auto Fix Request
+         */
+        AutoFixRequest: {
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * BulkActionError
@@ -748,6 +856,16 @@ export interface components {
             } | null;
             /** Is Active */
             is_active?: boolean | null;
+        };
+        /**
+         * FixableTemplate
+         * @description Model for a Fixable Template
+         */
+        FixableTemplate: {
+            /** Resource Type */
+            resource_type: string;
+            /** Rule */
+            rule: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2133,6 +2251,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedAuditLog"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_fix_templates_resources_fix_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixableTemplate"][];
+                };
+            };
+        };
+    };
+    auto_fix_resource_resources__server_id___resource_type___resource_id__auto_fix_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+                resource_type: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AutoFixRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_audit_log_audit_log__audit_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                audit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogDetail"];
                 };
             };
             /** @description Validation Error */
