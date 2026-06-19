@@ -5,6 +5,7 @@ Validation logic for all supported FHIR resource types.
 import asyncio
 import logging
 from datetime import datetime, timezone
+import random
 from typing import Any
 from time import monotonic
 from uuid import UUID
@@ -27,8 +28,9 @@ logger = logging.getLogger(__name__)
 class BaseValidator:
     """Base class for all resource validators."""
 
-    PAGE_SIZE = 500
-    MAX_RETRIES = 3
+    PAGE_SIZE = 1000
+    MAX_RETRIES = 5
+    RETRYABLE_STATUS = {429, 502, 503, 504}
 
     def __init__(
         self,
@@ -54,22 +56,52 @@ class BaseValidator:
                 resp = await self.client.get(url, headers=headers)
                 resp.raise_for_status()
                 return resp.json()
-            except (httpx.ReadError, httpx.ConnectError, httpx.TimeoutException) as e:
-                last_exc = e
-                wait = 2**attempt
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status not in self.RETRYABLE_STATUS or attempt == self.MAX_RETRIES:
+                    logger.error(
+                        "HTTP %s at %s (attempt %s/%s)",
+                        status,
+                        url,
+                        attempt,
+                        self.MAX_RETRIES,
+                    )
+                    raise
+                last_exc = exc
+                retry_after = exc.response.headers.get("Retry-After", "")
+                wait = (
+                    float(retry_after)
+                    if retry_after.isdigit()
+                    else min(2**attempt, 60) + random.uniform(0, 1)
+                )
                 logger.warning(
-                    "Attempt %s/%s failed for %s: %s. Retrying in %ss...",
+                    "HTTP %s at %s, retry %s/%s in %.1fs",
+                    status,
+                    url,
                     attempt,
                     self.MAX_RETRIES,
-                    url,
-                    e,
                     wait,
                 )
                 await asyncio.sleep(wait)
-            except httpx.HTTPStatusError as exc:
-                logger.error("HTTP %s at %s", exc.response.status_code, url)
-                raise
-
+            except (
+                httpx.ReadError,
+                httpx.ConnectError,
+                httpx.TimeoutException,
+                httpx.RemoteProtocolError,
+            ) as e:
+                last_exc = e
+                if attempt == self.MAX_RETRIES:
+                    raise
+                wait = min(2**attempt, 60) + random.uniform(0, 1)
+                logger.warning(
+                    "Network error at %s: %s, retry %s/%s in %.1fs",
+                    url,
+                    e,
+                    attempt,
+                    self.MAX_RETRIES,
+                    wait,
+                )
+                await asyncio.sleep(wait)
         raise last_exc
 
     async def save_invalid(
