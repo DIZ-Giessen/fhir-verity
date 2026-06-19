@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { AlertTriangle, CheckCircle2, ChevronLeft } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { runQueryOptions } from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { env } from "@/lib/env"
 import { cn } from "@/lib/utils"
+import type { LiveMetrics, LogEntry, MetricPoint } from "@/lib/interface"
+import { MOMENTUM } from "@/lib/functions"
+import LiveLineChart from "@/components/charts/live-line-chart"
+import LiveLine from "@/components/charts/live-line"
+import { ChartTooltip } from "@/components/charts/tooltip"
+import { intervalToDuration } from "date-fns"
 
 export const Route = createFileRoute("/runs/$runId_/live")({
   component: LivePage,
@@ -20,34 +26,32 @@ export const Route = createFileRoute("/runs/$runId_/live")({
 
 type WsMessage = { type?: string } & Record<string, unknown>
 
-interface LiveMetrics {
-  totalProcessed: number
-  totalInvalid: number
-  rps: number | null
-  elapsedSeconds: number | null
-  currentResource: string | null
-  pagesDone: number | null
-  progressPercent: number | null
-  etaSeconds: number | null
-}
-
-interface LogEntry {
-  id: number
-  time: string
-  type: string
-  msg: string
-}
-
 type ConnState = "connecting" | "connected" | "disconnected" | "error"
 
 const nf = new Intl.NumberFormat()
 const num = (v: unknown) => (typeof v === "number" ? v : null)
 const str = (v: unknown) => (typeof v === "string" ? v : null)
 const fmt = (n: number | null) => (n == null ? "—" : nf.format(n))
-function fmtTime(s: number): string {
-  if (s < 60) return `${s}s`
-  const m = Math.floor(s / 60)
-  return `${m}m ${s % 60}s`
+
+function fmtTime(seconds: number): string {
+  const {
+    days = 0,
+    hours = 0,
+    minutes = 0,
+    seconds: secs = 0,
+  } = intervalToDuration({
+    start: 0,
+    end: seconds * 1000,
+  })
+
+  return [
+    days ? `${days}d` : null,
+    hours ? `${hours}h` : null,
+    minutes ? `${minutes}m` : null,
+    secs ? `${secs}s` : null,
+  ]
+    .filter(Boolean)
+    .join(" ")
 }
 
 const CONN_META: Record<
@@ -77,7 +81,7 @@ const CONN_META: Record<
 }
 
 const LOG_TYPE_STYLES: Record<string, string> = {
-  progress: "text-primary",
+  progress: "text-orange-500",
   completed: "text-emerald-500",
   failed: "text-red-500",
   resource_start: "text-amber-500",
@@ -93,6 +97,7 @@ function LivePage() {
   const { runId } = Route.useParams()
   const queryClient = useQueryClient()
   const runQ = useQuery(runQueryOptions(runId))
+  const [history, setHistory] = useState<MetricPoint[]>([])
 
   const [conn, setConn] = useState<ConnState>("connecting")
   const [runState, setRunState] = useState<string>("running")
@@ -173,6 +178,18 @@ function LivePage() {
             pagesDone: num(data.pages_done),
             progressPercent: num(data.progress_percent),
             etaSeconds: num(data.eta_seconds),
+          })
+          setHistory((prev) => {
+            const next = [
+              ...prev,
+              {
+                time: Date.now() / 1000,
+                processed: num(data.total_processed) ?? 0,
+                invalid: num(data.total_invalid) ?? 0,
+                rps: num(data.resources_per_second) ?? 0,
+              },
+            ]
+            return next.length > 300 ? next.slice(-300) : next
           })
           pushLog(
             "progress",
@@ -315,11 +332,33 @@ function LivePage() {
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiTile label="Processed" value={fmt(metrics.totalProcessed)} accent />
-        <KpiTile label="Invalid" value={fmt(metrics.totalInvalid)} />
+        <KpiTile
+          label="Processed"
+          value={fmt(metrics.totalProcessed)}
+          accent
+          chart={
+            <Sparkline
+              data={history}
+              dataKey="processed"
+              stroke="var(--primary)"
+            />
+          }
+        />
+        <KpiTile
+          label="Invalid"
+          value={fmt(metrics.totalInvalid)}
+          chart={
+            <Sparkline
+              data={history}
+              dataKey="invalid"
+              stroke="var(--destructive)"
+            />
+          }
+        />
         <KpiTile
           label="Resources / s"
           value={metrics.rps != null ? fmt(metrics.rps) : "—"}
+          chart={<Sparkline data={history} dataKey="rps" momentum />}
         />
         <KpiTile
           label="Elapsed"
@@ -336,7 +375,7 @@ function LivePage() {
         <CardContent className="space-y-3 py-5">
           <div className="flex items-center justify-between">
             <Badge variant="outline">{metrics.currentResource ?? "—"}</Badge>
-            <span className="text-sm text-muted-foreground tabular-nums">
+            <span className="text-lg font-medium text-orange-500 tabular-nums">
               {metrics.progressPercent != null
                 ? `${metrics.progressPercent}%`
                 : "—"}
@@ -347,7 +386,7 @@ function LivePage() {
               className={cn(
                 "h-full rounded-full transition-all duration-500",
                 runState === "running"
-                  ? "bg-primary"
+                  ? "bg-orange-500"
                   : runState === "failed"
                     ? "bg-red-500"
                     : "bg-emerald-500"
@@ -367,7 +406,11 @@ function LivePage() {
               <span className="pl-1.5 text-foreground">
                 {metrics.etaSeconds != null
                   ? fmtTime(metrics.etaSeconds)
-                  : "finished"}
+                  : runState === "completed"
+                    ? "finished"
+                    : runState === "failed"
+                      ? "Error"
+                      : "undefined"}
               </span>
             </span>
           </div>
@@ -425,25 +468,72 @@ function KpiTile({
   label,
   value,
   accent,
+  chart,
 }: {
   label: string
   value: string
   accent?: boolean
+  chart?: ReactNode
 }) {
   return (
     <Card className="shadow-2xs">
-      <CardContent className="py-5">
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          {label}
-        </p>
-        <p
-          className={`mt-1 text-2xl font-semibold tabular-nums ${
-            accent ? "text-primary" : ""
-          }`}
-        >
-          {value}
-        </p>
+      <CardContent className="py-2">
+        <div className="flex w-full flex-col gap-3">
+          <div className="">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              {label}
+            </p>
+            <p
+              className={`mt-1 text-2xl font-semibold tabular-nums ${
+                accent ? "text-primary" : ""
+              }`}
+            >
+              {value}
+            </p>
+          </div>
+          {chart}
+        </div>
       </CardContent>
     </Card>
+  )
+}
+function Sparkline({
+  data,
+  dataKey,
+  stroke,
+  momentum,
+}: {
+  data: MetricPoint[]
+  dataKey: "processed" | "invalid" | "rps"
+  stroke?: string
+  momentum?: boolean
+}) {
+  if (data.length < 2) return <div className="h-10 w-full shrink-0 sm:w-24" />
+
+  // Die LiveLineChart liest intern hart `point.value` und erwartet { time, value }[].
+  // Deshalb auf den einen Metrik-Wert mappen statt das Multi-Key-history zu reichen.
+  const points = data.map((d) => ({ time: d.time, value: d[dataKey] }))
+  const latest = points[points.length - 1].value
+
+  return (
+    <div className="h-full w-[70%] flex-1 shrink-0">
+      <LiveLineChart
+        className="h-20!"
+        data={points}
+        value={latest}
+        window={8}
+        margin={{ top: 4, right: 10, bottom: 40, left: 4 }}
+      >
+        <LiveLine
+          dataKey="value"
+          stroke={momentum ? undefined : stroke}
+          strokeWidth={1.5}
+          dotSize={3}
+          badge={true}
+          momentumColors={momentum ? MOMENTUM : undefined}
+        />
+        <ChartTooltip />
+      </LiveLineChart>
+    </div>
   )
 }

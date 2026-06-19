@@ -45,3 +45,29 @@ export interface InvalidResourcesParams {
   severity?: string | null
   only_current_run?: boolean
 }
+
+// ?  LIVE PROGRESS
+export interface MetricPoint {
+  time: number
+  processed: number
+  invalid: number
+  rps: number
+}
+
+export interface LiveMetrics {
+  totalProcessed: number
+  totalInvalid: number
+  rps: number | null
+  elapsedSeconds: number | null
+  currentResource: string | null
+  pagesDone: number | null
+  progressPercent: number | null
+  etaSeconds: number | null
+}
+
+export interface LogEntry {
+  id: number
+  time: string
+  type: string
+  msg: string
+}
