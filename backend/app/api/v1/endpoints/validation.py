@@ -88,6 +88,70 @@ async def start_validation(
     return new_run
 
 
+@router.post("/validation/runs/{run_id}/resume", response_model=ValidationRunRead)
+async def resume_validation(
+    run_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Resume a run interrupted by a full process crash (status FAILED or
+    CANCELLED). Each resource type continues from the _lastUpdated watermark in
+    ValidationRun.checkpoint; already-completed types are skipped. Transient
+    paging failures mid-run are self-healed by iter_pages and need no resume.
+    """
+    run = (
+        await db.execute(select(ValidationRun).where(ValidationRun.id == run_id))
+    ).scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=404, detail="Validation run not found")
+
+    if run.status == ValidationStatus.RUNNING:
+        raise HTTPException(status_code=409, detail="Run is already running")
+    if run.status == ValidationStatus.COMPLETED:
+        raise HTTPException(status_code=409, detail="Run is already completed")
+
+    server = (
+        await db.execute(select(FhirServer).where(FhirServer.id == run.server_id))
+    ).scalar_one_or_none()
+    if not server or not server.is_active:
+        raise HTTPException(
+            status_code=404, detail="FHIR Server not found or is not active"
+        )
+
+    run.status = ValidationStatus.RUNNING
+    run.error_message = None
+    run.finished_at = None
+    await db.commit()
+    await db.refresh(run)
+
+    background_tasks.add_task(
+        run_validation_task,
+        run.id,
+        str(server.base_url),
+        run.resource_types,  # gleiche Scope wie beim ursprünglichen Lauf
+        server.auth_config or {},
+        server.id,
+    )
+    return run
+
+
+async def _mark_type_completed(run_id: UUID, resource_type: str, db: AsyncSession):
+    """Record a resource type as fully validated in the run's checkpoint."""
+    run = (
+        await db.execute(select(ValidationRun).where(ValidationRun.id == run_id))
+    ).scalar_one_or_none()
+    if not run:
+        return
+    cp = dict(run.checkpoint or {})
+    completed = list(cp.get("_completed", []))
+    if resource_type not in completed:
+        completed.append(resource_type)
+    cp["_completed"] = completed
+    run.checkpoint = cp
+    await db.commit()
+
+
 async def run_validation_task(
     run_id: UUID,
     base_url: str,
@@ -105,6 +169,18 @@ async def run_validation_task(
                 else list(VALIDATORS.keys())
             )
 
+            # Resume-aware: types already fully validated in a prior attempt are
+            # skipped; an in-progress type resumes from its _lastUpdated watermark
+            # inside iter_pages automatically.
+            run = (
+                await db.execute(
+                    select(ValidationRun).where(ValidationRun.id == run_id)
+                )
+            ).scalar_one_or_none()
+            completed = (
+                set((run.checkpoint or {}).get("_completed", [])) if run else set()
+            )
+
             # Build Time Out
             timeout = httpx.Timeout(connect=10.0, read=300.0, write=10.0, pool=10.0)
             auth = build_httpx_auth(auth_config)
@@ -112,6 +188,9 @@ async def run_validation_task(
                 for res_type in to_validate:
                     validator_class = VALIDATORS.get(res_type)
                     if not validator_class:
+                        continue
+
+                    if res_type in completed:
                         continue
 
                     await broadcast_progress(
@@ -129,6 +208,7 @@ async def run_validation_task(
                         client, base_url, auth_config, server_id=server_id
                     )
                     await validator.validate_and_save(run_id, db)
+                    await _mark_type_completed(run_id, res_type, db)
 
             # Run als abgeschlossen markieren
             stmt = select(ValidationRun).where(ValidationRun.id == run_id)
