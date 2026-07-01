@@ -51,3 +51,6 @@ class ValidationRun(Base, TimestampMixin):
         nullable=False,
         server_default="{}",
     )
+    checkpoint: Mapped[dict] = mapped_column(
+        JSON, default=dict, nullable=False, server_default="{}"
+    )

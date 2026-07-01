@@ -6,7 +6,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 import random
-from typing import Any
+from typing import Any, AsyncIterator
 from time import monotonic
 from uuid import UUID
 
@@ -31,6 +31,9 @@ class BaseValidator:
     PAGE_SIZE = 1000
     MAX_RETRIES = 5
     RETRYABLE_STATUS = {429, 502, 503, 504}
+    CHECKPOINT_EVERY_N_PAGES = 25
+    MAX_REANCHORS = 5
+    REANCHOR_STATUS = {404, 408, 410, 429, 500, 502, 503, 504}
 
     def __init__(
         self,
@@ -44,7 +47,7 @@ class BaseValidator:
         self.auth_config = auth_config or {}
         self.server_id = server_id
 
-    async def fetch_bundle(self, url: str) -> dict:
+    async def fetch_bundle(self, url: str, params: dict | None = None) -> dict:
         """Fetch a FHIR bundle with retry logic."""
 
         headers = {"Accept": "application/fhir+json"}
@@ -53,7 +56,7 @@ class BaseValidator:
         last_exc = None
         for attempt in range(1, self.MAX_RETRIES + 1):
             try:
-                resp = await self.client.get(url, headers=headers)
+                resp = await self.client.get(url, headers=headers, params=params)
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPStatusError as exc:
@@ -103,6 +106,144 @@ class BaseValidator:
                 )
                 await asyncio.sleep(wait)
         raise last_exc
+
+    @staticmethod
+    def _parse_dt(raw: str | None):
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _next_link(bundle: dict) -> str | None:
+        return next(
+            (l["url"] for l in bundle.get("link", []) if l.get("relation") == "next"),
+            None,
+        )
+
+    @classmethod
+    def _max_last_updated(cls, entries: list[dict]) -> str | None:
+        best_raw, best_dt = None, None
+        for e in entries:
+            raw = e.get("resource", {}).get("meta", {}).get("lastUpdated")
+            dt = cls._parse_dt(raw)
+            if dt and (best_dt is None or dt > best_dt):
+                best_dt, best_raw = dt, raw
+        return best_raw
+
+    @classmethod
+    def _is_reanchorable(cls, exc: Exception) -> bool:
+        # 400/401/403 = Config-/Auth-Fehler -> Re-Anchor hilft nicht, propagieren.
+        if isinstance(exc, httpx.HTTPStatusError):
+            return exc.response.status_code in cls.REANCHOR_STATUS
+        return isinstance(exc, httpx.HTTPError)  # Netzwerkfehler -> re-anchorbar
+
+    async def _load_watermark(
+        self, run_id: UUID, resource_type: str, db: AsyncSession
+    ) -> str | None:
+        run = (
+            await db.execute(select(ValidationRun).where(ValidationRun.id == run_id))
+        ).scalar_one_or_none()
+        cp = (run.checkpoint or {}).get(resource_type) if run else None
+        return cp.get("last_updated") if cp else None
+
+    async def _persist_watermark(
+        self, run_id: UUID, resource_type: str, watermark: str | None, db: AsyncSession
+    ):
+        if watermark is None:
+            return
+        run = (
+            await db.execute(select(ValidationRun).where(ValidationRun.id == run_id))
+        ).scalar_one_or_none()
+        if not run:
+            return
+        cp = dict(run.checkpoint or {})
+        cp[resource_type] = {"last_updated": watermark}
+        run.checkpoint = cp
+        await db.commit()
+
+    async def iter_pages(
+        self, resource_type: str, run_id: UUID, db: AsyncSession
+    ) -> AsyncIterator[list[dict]]:
+        """
+        Yield pages of entries for a resource type, sorted ascending by
+        _lastUpdated. Survives dead paging sessions: on a hard fetch failure
+        (404/410 expired Blaze token, or a 5xx/network error that outlived the
+        per-request retries) the crawl re-anchors with _lastUpdated=ge{watermark}
+        and continues, instead of failing the whole run.
+
+        The watermark is the highest _lastUpdated of the last fully consumed
+        page, persisted to ValidationRun.checkpoint. Because the crawl is sorted
+        ascending, everything below the watermark is guaranteed processed. On
+        re-anchor we use `ge` (not `gt`) so resources that share the boundary
+        _lastUpdated (whole bulk-import transactions on Blaze) are not skipped;
+        the overlap is idempotent via save_invalid's ON CONFLICT.
+        """
+        watermark = await self._load_watermark(run_id, resource_type, db)
+        watermark_dt = self._parse_dt(watermark)
+        stalled = 0
+        pages_since_cp = 0
+
+        while True:
+            leg_start_watermark = watermark
+            leg_exc: Exception | None = None
+            params = {"_count": self.PAGE_SIZE, "_sort": "_lastUpdated"}
+            if watermark is not None:
+                params["_lastUpdated"] = f"ge{watermark}"
+            url = f"{self.base_url}/{resource_type}"
+            first = True
+
+            try:
+                while url:
+                    bundle = await self.fetch_bundle(url, params if first else None)
+                    first = False
+                    entries = bundle.get("entry", [])
+                    if entries:
+                        yield entries  # consumer validates + commits its page work
+                        page_wm = self._max_last_updated(entries)
+                        page_dt = self._parse_dt(page_wm)
+                        if page_dt and (watermark_dt is None or page_dt > watermark_dt):
+                            watermark, watermark_dt = page_wm, page_dt
+                        pages_since_cp += 1
+                        if pages_since_cp >= self.CHECKPOINT_EVERY_N_PAGES:
+                            await self._persist_watermark(
+                                run_id, resource_type, watermark, db
+                            )
+                            pages_since_cp = 0
+                    url = self._next_link(bundle)
+            except httpx.HTTPError as exc:
+                leg_exc = exc
+
+            await self._persist_watermark(run_id, resource_type, watermark, db)
+
+            if leg_exc is None:
+                return  # type vollständig gecrawlt
+
+            if watermark is None or not self._is_reanchorable(leg_exc):
+                raise leg_exc
+
+            if watermark == leg_start_watermark:  # Leg kam nicht vom Fleck
+                stalled += 1
+                if stalled >= self.MAX_REANCHORS:
+                    logger.error(
+                        "Giving up on %s after %s stalled re-anchors at _lastUpdated=%s",
+                        resource_type,
+                        stalled,
+                        watermark,
+                    )
+                    raise leg_exc
+            else:
+                stalled = 0
+
+            logger.warning(
+                "Re-anchoring %s from _lastUpdated>=%s after: %s",
+                resource_type,
+                watermark,
+                leg_exc,
+            )
+            await asyncio.sleep(min(2**stalled, 30))
 
     async def save_invalid(
         self,
@@ -333,11 +474,7 @@ class PatientValidator(BaseValidator):
 
         estimated_total = await self._fetch_total("Patient")
 
-        url = f"{self.base_url}/Patient?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("Patient", run_id, db):
             pages_done += 1
 
             page_patient_ids = [
@@ -583,15 +720,6 @@ class PatientValidator(BaseValidator):
                 start_time=start_time,
             )
 
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
-            )
-
 
 # =============================================================================
 # ENCOUNTER
@@ -610,11 +738,7 @@ class EncounterValidator(BaseValidator):
 
         estimated_total = await self._fetch_total("Encounter")
 
-        url = f"{self.base_url}/Encounter?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("Encounter", run_id, db):
             pages_done += 1
 
             page_processed = 0
@@ -809,15 +933,6 @@ class EncounterValidator(BaseValidator):
                 start_time=start_time,
             )
 
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
-            )
-
 
 # =============================================================================
 # OBSERVATION
@@ -834,26 +949,20 @@ class ObservationValidator(BaseValidator):
         pages_done = 0
         cumulative_processed = 0
         cumulative_invalid = 0
-
         estimated_total = await self._fetch_total("Observation")
 
-        url = f"{self.base_url}/Observation?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("Observation", run_id, db):
             pages_done += 1
-
             page_processed = 0
             page_invalid = 0
 
             for entry in entries:
+
                 page_processed += 1
                 resource = entry.get("resource", {})
                 rid = resource.get("id", "")
                 issues = []
                 metrics = self._build_metrics(config)
-
                 # ======== privacy: ===========
                 #
                 # value_string_cleartext_forbidden
@@ -997,7 +1106,6 @@ class ObservationValidator(BaseValidator):
                     await self.save_invalid(
                         run_id, "Observation", rid, issues, metrics, db
                     )
-
             cumulative_processed += page_processed
             cumulative_invalid += page_invalid
 
@@ -1013,14 +1121,6 @@ class ObservationValidator(BaseValidator):
                 pages_done=pages_done,
                 estimated_total=estimated_total,
                 start_time=start_time,
-            )
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
             )
 
         logger.info("Observation validation complete for run %s", run_id)
@@ -1043,11 +1143,7 @@ class MedicationValidator(BaseValidator):
 
         estimated_total = await self._fetch_total("Medication")
 
-        url = f"{self.base_url}/Medication?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("Medication", run_id, db):
             pages_done += 1
             page_processed = 0
             page_invalid = 0
@@ -1132,15 +1228,6 @@ class MedicationValidator(BaseValidator):
                 start_time=start_time,
             )
 
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
-            )
-
         logger.info("Medication validation complete for run %s", run_id)
 
 
@@ -1161,11 +1248,7 @@ class MedicationRequestValidator(BaseValidator):
         cumulative_invalid = 0
         estimated_total = await self._fetch_total("MedicationRequest")
 
-        url = f"{self.base_url}/MedicationRequest?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("MedicationRequest", run_id, db):
             pages_done += 1
             page_processed = 0
             page_invalid = 0
@@ -1297,15 +1380,6 @@ class MedicationRequestValidator(BaseValidator):
                 start_time=start_time,
             )
 
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
-            )
-
         logger.info("MedicationRequest validation complete for run %s", run_id)
 
 
@@ -1328,11 +1402,7 @@ class MedicationAdministrationValidator(BaseValidator):
         cumulative_invalid = 0
         estimated_total = await self._fetch_total("MedicationAdministration")
 
-        url = f"{self.base_url}/MedicationAdministration?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("MedicationAdministration", run_id, db):
             pages_done += 1
             page_processed = 0
             page_invalid = 0
@@ -1471,14 +1541,6 @@ class MedicationAdministrationValidator(BaseValidator):
                 estimated_total=estimated_total,
                 start_time=start_time,
             )
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
-            )
 
         logger.info("MedicationAdministration validation complete for run %s", run_id)
 
@@ -1500,11 +1562,7 @@ class ConditionValidator(BaseValidator):
 
         estimated_total = await self._fetch_total("Condition")
 
-        url = f"{self.base_url}/Condition?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("Condition", run_id, db):
             pages_done += 1
             page_processed = 0
             page_invalid = 0
@@ -1644,15 +1702,6 @@ class ConditionValidator(BaseValidator):
                 start_time=start_time,
             )
 
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
-            )
-
         logger.info("Condition validation complete for run %s", run_id)
 
 
@@ -1673,11 +1722,7 @@ class ProcedureValidator(BaseValidator):
 
         estimated_total = await self._fetch_total("Procedure")
 
-        url = f"{self.base_url}/Procedure?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("Procedure", run_id, db):
             pages_done += 1
             page_processed = 0
             page_invalid = 0
@@ -1799,15 +1844,6 @@ class ProcedureValidator(BaseValidator):
                 start_time=start_time,
             )
 
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
-            )
-
         logger.info("Procedure validation complete for run %s", run_id)
 
 
@@ -1828,11 +1864,7 @@ class DiagnosticReportValidator(BaseValidator):
 
         estimated_total = await self._fetch_total("DiagnosticReport")
 
-        url = f"{self.base_url}/DiagnosticReport?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("DiagnosticReport", run_id, db):
             pages_done += 1
             page_processed = 0
             page_invalid = 0
@@ -1935,15 +1967,6 @@ class DiagnosticReportValidator(BaseValidator):
                 pages_done=pages_done,
                 estimated_total=estimated_total,
                 start_time=start_time,
-            )
-
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
             )
 
         logger.info("DiagnosticReport validation complete for run %s", run_id)
