@@ -10,6 +10,7 @@ import {
 } from "@solar-icons/react-perf/category/style/LineDuotone"
 
 import { cn } from "@/lib/utils"
+import { Badge } from "./ui/badge"
 
 type Role = 1 | 2 | 3
 
@@ -58,7 +59,7 @@ export function MainNav({ role = 3 }: MainNavProps) {
             key={item.to}
             to={item.to}
             className={cn(
-              "inline-flex items-center gap-2 rounded-2xl px-4 py-1.5 text-sm transition-colors ease-in",
+              "relative inline-flex items-center gap-2 rounded-2xl px-4 py-1.5 text-sm transition-colors ease-in",
               isActive
                 ? "bg-accent font-medium text-orange-500"
                 : "text-foreground hover:bg-accent/60 hover:text-orange-500"
@@ -66,6 +67,14 @@ export function MainNav({ role = 3 }: MainNavProps) {
           >
             <Icon className="size-4" aria-hidden />
             <span>{item.label}</span>
+            {item.to === "/cleanup" && (
+              <Badge
+                variant="outline"
+                className="absolute -top-1.5 -right-3 scale-75 border-orange-500 text-[10px] text-orange-500"
+              >
+                BETA
+              </Badge>
+            )}
           </Link>
         )
       })}

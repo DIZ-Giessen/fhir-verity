@@ -1,13 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Play,
-  Trash2,
-  Wrench,
-  XCircle,
-} from "lucide-react"
+import { AlertTriangle, CheckCircle2, Play, XCircle } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
@@ -51,6 +44,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Corkscrew,
+  NotificationLinesRemove,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
 
 export const Route = createFileRoute("/cleanup")({ component: CleanupPage })
 
@@ -182,28 +179,38 @@ function CleanupPage() {
         </p>
       </div>
 
-      <Card className="shadow-2xs">
+      <Card className="shadow-none">
         <CardHeader className="gap-4">
-          <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
-            <TabsList>
-              <TabsTrigger value="delete" className="gap-1">
-                <Trash2 className="h-3.5 w-3.5" />
+          <Tabs
+            value={mode}
+            onValueChange={(v) => setMode(v as Mode)}
+            className="w-full"
+          >
+            <TabsList className="w-full">
+              <TabsTrigger
+                value="delete"
+                className="gap-1 data-[state=active]:text-orange-500 data-[state=active]:dark:text-orange-500"
+              >
+                <NotificationLinesRemove className="h-3.5 w-3.5" />
                 Delete
               </TabsTrigger>
-              <TabsTrigger value="fix" className="gap-1">
-                <Wrench className="h-3.5 w-3.5" />
+              <TabsTrigger
+                value="fix"
+                className="gap-1 data-[state=active]:text-orange-500 data-[state=active]:dark:text-orange-500"
+              >
+                <Corkscrew className="h-3.5 w-3.5" />
                 Fix
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          <CardTitle className="text-base">
+          <CardTitle className="mt-4 text-base">
             {mode === "delete"
               ? "Delete invalid resources matching a filter"
               : "Apply a patch template to a (resource type, rule) combination"}
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+        <CardContent className="grid gap-4 sm:grid-cols-6">
           <div className="space-y-1.5">
             <Label>Server</Label>
             <Select value={serverId} onValueChange={setServerId}>
@@ -298,7 +305,7 @@ function CleanupPage() {
             <Input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. Cleanup of non-pseudonymized encounters after MII audit"
+              placeholder="This is optional."
             />
           </div>
         </CardContent>

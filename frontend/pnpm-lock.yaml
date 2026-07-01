@@ -56,6 +56,12 @@ importers:
       '@visx/event':
         specifier: 4.0.1-alpha.0
         version: 4.0.1-alpha.0
+      '@visx/gradient':
+        specifier: 4.0.1-alpha.0
+        version: 4.0.1-alpha.0(react@19.2.6)
+      '@visx/grid':
+        specifier: 4.0.1-alpha.0
+        version: 4.0.1-alpha.0(react@19.2.6)
       '@visx/responsive':
         specifier: 4.0.1-alpha.0
         version: 4.0.1-alpha.0(react@19.2.6)
@@ -2491,6 +2497,16 @@ packages:
 
   '@visx/event@4.0.1-alpha.0':
     resolution: {integrity: sha512-EQqCMSv/s8NbFjo+hz3FKsvvYfP+2QslsFJ/24/O5l/W+7UC6J6aAvO0ujVwrTwdYbuQ+vhxKi1xdPdKR/qj1g==}
+
+  '@visx/gradient@4.0.1-alpha.0':
+    resolution: {integrity: sha512-HxkxLdThV/gPaulw+t7/ESo7AtqIBq9IlHIkHi7lQqXe0Yl+x8rpM3KYlYqEZjtihD9CeEaVJjBbdY7fQb54IA==}
+    peerDependencies:
+      react: ^16.14.0 || ^17.0.0-0 || ^18.0.0-0 || ^19.0.0-0
+
+  '@visx/grid@4.0.1-alpha.0':
+    resolution: {integrity: sha512-rycutGmTHO+znNdPumheWMglm7YfpffvRwUkVy5zy4WoORIuKTMkDxwnOzHG2xMxU3EE/YCd37xFV5AxA30yeg==}
+    peerDependencies:
+      react: ^16.14.0 || ^17.0.0-0 || ^18.0.0-0 || ^19.0.0-0
 
   '@visx/group@4.0.1-alpha.0':
     resolution: {integrity: sha512-V19l7iQ7jccBv8kao/EByuI6o4xtxzzLV9nqVI1hRvmdzTVsuLpqlwzYCZUXJaTVvUWf8s4D2SQFjGkj/Nw+0w==}
@@ -7396,6 +7412,22 @@ snapshots:
     dependencies:
       '@types/react': 19.2.15
       '@visx/point': 4.0.1-alpha.0
+
+  '@visx/gradient@4.0.1-alpha.0(react@19.2.6)':
+    dependencies:
+      '@types/react': 19.2.15
+      react: 19.2.6
+
+  '@visx/grid@4.0.1-alpha.0(react@19.2.6)':
+    dependencies:
+      '@types/react': 19.2.15
+      '@visx/curve': 4.0.1-alpha.0
+      '@visx/group': 4.0.1-alpha.0(react@19.2.6)
+      '@visx/point': 4.0.1-alpha.0
+      '@visx/scale': 4.0.1-alpha.0
+      '@visx/shape': 4.0.1-alpha.0(react@19.2.6)
+      classnames: 2.5.1
+      react: 19.2.6
 
   '@visx/group@4.0.1-alpha.0(react@19.2.6)':
     dependencies:

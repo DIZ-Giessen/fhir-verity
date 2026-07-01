@@ -330,46 +330,6 @@ function LivePage() {
         </Card>
       )}
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiTile
-          label="Processed"
-          value={fmt(metrics.totalProcessed)}
-          accent
-          chart={
-            <Sparkline
-              data={history}
-              dataKey="processed"
-              stroke="var(--primary)"
-            />
-          }
-        />
-        <KpiTile
-          label="Invalid"
-          value={fmt(metrics.totalInvalid)}
-          chart={
-            <Sparkline
-              data={history}
-              dataKey="invalid"
-              stroke="var(--destructive)"
-            />
-          }
-        />
-        <KpiTile
-          label="Resources / s"
-          value={metrics.rps != null ? fmt(metrics.rps) : "—"}
-          chart={<Sparkline data={history} dataKey="rps" momentum />}
-        />
-        <KpiTile
-          label="Elapsed"
-          value={
-            metrics.elapsedSeconds != null
-              ? fmtTime(metrics.elapsedSeconds)
-              : "—"
-          }
-        />
-      </div>
-
       {/* Progress */}
       <Card className="shadow-2xs">
         <CardContent className="space-y-3 py-5">
@@ -416,6 +376,46 @@ function LivePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* KPI tiles */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiTile
+          label="Processed"
+          value={fmt(metrics.totalProcessed)}
+          accent
+          chart={
+            <Sparkline
+              data={history}
+              dataKey="processed"
+              stroke="var(--primary)"
+            />
+          }
+        />
+        <KpiTile
+          label="Invalid"
+          value={fmt(metrics.totalInvalid)}
+          chart={
+            <Sparkline
+              data={history}
+              dataKey="invalid"
+              stroke="var(--destructive)"
+            />
+          }
+        />
+        <KpiTile
+          label="Resources / s"
+          value={metrics.rps != null ? fmt(metrics.rps) : "—"}
+          chart={<Sparkline data={history} dataKey="rps" momentum />}
+        />
+        <KpiTile
+          label="Elapsed"
+          value={
+            metrics.elapsedSeconds != null
+              ? fmtTime(metrics.elapsedSeconds)
+              : "—"
+          }
+        />
+      </div>
 
       {/* Event log */}
       <Card className="shadow-2xs">
@@ -485,7 +485,7 @@ function KpiTile({
             </p>
             <p
               className={`mt-1 text-2xl font-semibold tabular-nums ${
-                accent ? "text-primary" : ""
+                accent ? "text-orange-500" : ""
               }`}
             >
               {value}
@@ -526,8 +526,8 @@ function Sparkline({
       >
         <LiveLine
           dataKey="value"
-          stroke={momentum ? undefined : stroke}
-          strokeWidth={1.5}
+          stroke={stroke}
+          strokeWidth={2}
           dotSize={3}
           badge={true}
           momentumColors={momentum ? MOMENTUM : undefined}
