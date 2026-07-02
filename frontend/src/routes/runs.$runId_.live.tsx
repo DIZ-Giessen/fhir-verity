@@ -141,9 +141,9 @@ function LivePage() {
   }, [runQ.data])
 
   // auto-scroll log
-  useEffect(() => {
+  /* useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [log])
+  }, [log]) */
 
   // WebSocket lifecycle
   useEffect(() => {

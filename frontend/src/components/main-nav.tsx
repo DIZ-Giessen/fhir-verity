@@ -67,14 +67,6 @@ export function MainNav({ role = 3 }: MainNavProps) {
           >
             <Icon className="size-4" aria-hidden />
             <span>{item.label}</span>
-            {item.to === "/cleanup" && (
-              <Badge
-                variant="outline"
-                className="absolute -top-1.5 -right-3 scale-75 border-orange-500 text-[10px] text-orange-500"
-              >
-                BETA
-              </Badge>
-            )}
           </Link>
         )
       })}

@@ -299,6 +299,13 @@ export async function startValidation(body: {
   const { data } = await api.POST("/api/v1/validation/start", { body })
   return data
 }
+
+export async function resumeValidation(runId: string) {
+  const { data } = await api.POST("/api/v1/validation/runs/{run_id}/resume", {
+    params: { path: { run_id: runId } },
+  })
+  return data
+}
 //!  END VALIDATION RUNS
 
 // ---------------------------------------------------------------------------

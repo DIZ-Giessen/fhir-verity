@@ -1,12 +1,14 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
+import { toPng } from "html-to-image"
+import { useRef } from "react"
 import {
-  Activity,
   AlertTriangle,
   ArrowRight,
   ChevronLeft,
   Loader,
   Loader2,
+  RefreshCw,
 } from "lucide-react"
 import { useMemo, useState } from "react"
 import {
@@ -22,6 +24,7 @@ import {
 
 import {
   type PerResourceStats,
+  resumeValidation,
   runQueryOptions,
   runSummaryQueryOptions,
   serverQueryOptions,
@@ -109,13 +112,27 @@ const gaugeConfig = {
 function RunDetailPage() {
   const { runId } = Route.useParams()
   const [showBar, setShowBar] = useState(false)
-
+  const chartRef = useRef<HTMLDivElement>(null)
   const runQ = useQuery({
     ...runQueryOptions(runId),
     // poll while the run is still in progress, stop once it settles
     refetchInterval: (q) => (q.state.data?.status === "running" ? 5000 : false),
   })
   const summaryQ = useQuery(runSummaryQueryOptions(runId))
+
+  const queryClient = useQueryClient()
+
+  const resumeMutation = useMutation({
+    mutationFn: () => resumeValidation(runId),
+    onSuccess: () => {
+      toast.success("Run wird fortgesetzt…")
+      queryClient.invalidateQueries({
+        queryKey: runQueryOptions(runId).queryKey,
+      })
+    },
+    onError: (e) =>
+      toast.error("Fortsetzen fehlgeschlagen", { description: String(e) }),
+  })
 
   const run = runQ.data
   const serverQ = useQuery({
@@ -143,10 +160,24 @@ function RunDetailPage() {
     return rows.sort((a, b) => b.count - a.count)
   }, [summaryQ.data])
 
-  const exportAsPNG = () => {
-    /*TODO: export the chart as a PNG */
-    toast.info("Exporting chart as PNG… will be implemented in the future")
+  const exportAsPNG = async () => {
+    if (!chartRef.current) return
+    try {
+      const dataUrl = await toPng(chartRef.current, {
+        cacheBust: true,
+        pixelRatio: 2, // schärfer für Retina / zum Teilen
+        backgroundColor: getComputedStyle(document.body).backgroundColor,
+      })
+      const link = document.createElement("a")
+      link.download = `run-${run?.id ?? "chart"}.png`
+      link.href = dataUrl
+      link.click()
+      toast.success("Chart als PNG exportiert")
+    } catch (e) {
+      toast.error("Export fehlgeschlagen", { description: String(e) })
+    }
   }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -157,15 +188,30 @@ function RunDetailPage() {
           <ChevronLeft className="mr-1 h-4 w-4" />
           Back to runs
         </Link>
-        <Button asChild size="sm">
-          <Link
-            to="/runs/$runId/invalid-resources"
-            params={{ runId: run?.id ?? "" }}
+        {run?.status === "failed" || run?.status === "cancelled" ? (
+          <Button
+            size="sm"
+            onClick={() => resumeMutation.mutate()}
+            disabled={resumeMutation.isPending}
           >
-            View all invalid resources
-            <ArrowRight className="ml-1 h-4 w-4" />
-          </Link>
-        </Button>
+            {resumeMutation.isPending ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1 h-4 w-4" />
+            )}
+            Resume run
+          </Button>
+        ) : (
+          <Button asChild size="sm">
+            <Link
+              to="/runs/$runId/invalid-resources"
+              params={{ runId: run?.id ?? "" }}
+            >
+              View all invalid resources
+              <ArrowRight className="ml-1 h-4 w-4" />
+            </Link>
+          </Button>
+        )}
       </div>
 
       {runQ.isPending ? (
@@ -342,76 +388,81 @@ function RunDetailPage() {
               </Button>
             </div>
           </div>
-          {/* --- Bar chart: processed vs invalid per type ---------------- */}
-          <Card className={cn(showBar ? "" : "hidden")}>
-            <CardHeader>
-              <CardTitle className="text-base">Resources by type</CardTitle>
-              <CardDescription>
-                Processed and invalid counts for each validated resource type.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {run.per_resource_stats.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  No per-type statistics for this run yet.
-                </p>
-              ) : (
-                <ChartContainer config={barConfig} className="h-[280px] w-full">
-                  <BarChart
-                    accessibilityLayer={false}
-                    data={run.per_resource_stats.map((s) => ({
-                      type: s.resource_type,
-                      processed: s.processed,
-                      invalid: s.invalid,
-                    }))}
-                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+          <div ref={chartRef} className="space-y-6 py-4">
+            {/* --- Bar chart: processed vs invalid per type ---------------- */}
+            <Card className={cn(showBar ? "" : "hidden", "shadow-xs")}>
+              <CardHeader>
+                <CardTitle className="text-base">Resources by type</CardTitle>
+                <CardDescription>
+                  Processed and invalid counts for each validated resource type.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {run.per_resource_stats.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    No per-type statistics for this run yet.
+                  </p>
+                ) : (
+                  <ChartContainer
+                    config={barConfig}
+                    className="h-[280px] w-full"
                   >
-                    <CartesianGrid vertical={false} />
-                    <XAxis
-                      dataKey="type"
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={10}
-                      fontSize={12}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      tickLine={false}
-                      axisLine={false}
-                      width={80}
-                    />
-                    <ChartTooltip
-                      cursor={false}
-                      content={<ChartTooltipContent />}
-                    />
-                    <Bar
-                      dataKey="processed"
-                      fill="var(--color-processed)"
-                      radius={[8, 8, 0, 0]}
-                      type="number"
-                    />
-                    <Bar
-                      dataKey="invalid"
-                      fill="var(--color-invalid)"
-                      radius={[8, 8, 0, 0]}
-                      type="number"
-                    />
-                  </BarChart>
-                </ChartContainer>
-              )}
-            </CardContent>
-          </Card>
+                    <BarChart
+                      accessibilityLayer={false}
+                      data={run.per_resource_stats.map((s) => ({
+                        type: s.resource_type,
+                        processed: s.processed,
+                        invalid: s.invalid,
+                      }))}
+                      margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid vertical={false} />
+                      <XAxis
+                        dataKey="type"
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={10}
+                        fontSize={12}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        tickLine={false}
+                        axisLine={false}
+                        width={80}
+                      />
+                      <ChartTooltip
+                        cursor={false}
+                        content={<ChartTooltipContent />}
+                      />
+                      <Bar
+                        dataKey="processed"
+                        fill="var(--color-processed)"
+                        radius={[8, 8, 0, 0]}
+                        type="number"
+                      />
+                      <Bar
+                        dataKey="invalid"
+                        fill="var(--color-invalid)"
+                        radius={[8, 8, 0, 0]}
+                        type="number"
+                      />
+                    </BarChart>
+                  </ChartContainer>
+                )}
+              </CardContent>
+            </Card>
 
-          {/* --- Radial gauges: invalid rate per type -------------------- */}
-          {run.per_resource_stats.length > 0 && (
-            <div className={cn(!showBar ? "" : "hidden")}>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {run.per_resource_stats.map((s) => (
-                  <RateGauge key={s.resource_type} stat={s} />
-                ))}
+            {/* --- Radial gauges: invalid rate per type -------------------- */}
+            {run.per_resource_stats.length > 0 && (
+              <div className={cn(!showBar ? "" : "hidden")}>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {run.per_resource_stats.map((s) => (
+                    <RateGauge key={s.resource_type} stat={s} />
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* --- Per-rule breakdown -------------------------------------- */}
           <Card className="shadow-2xs">
@@ -522,7 +573,7 @@ function RateGauge({ stat }: { stat: PerResourceStats }) {
   ]
 
   return (
-    <Card className="p-4">
+    <Card className="p-4 shadow-xs">
       <CardContent className="flex items-center gap-4 p-0">
         <div className="relative flex items-center justify-center">
           <ChartContainer config={gaugeConfig} className="h-[95px] w-[95px]">
