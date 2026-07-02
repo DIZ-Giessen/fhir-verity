@@ -13,9 +13,16 @@ from sqlalchemy import and_, desc, func, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import (
+    get_current_user,
+    require_role,
+    server_access,
+    load_server_scoped,
+)
 from app.models.audit_log import AuditAction, AuditLog, AuditStatus
 from app.models.fhir_server import FhirServer
 from app.models.invalid_resource import InvalidResource
+from app.models.user import User, UserRole
 from app.schemas.resource_action import (
     ActionResult,
     AuditLogDetail,
@@ -40,15 +47,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-async def _load_server(server_id: UUID, db: AsyncSession) -> FhirServer:
-    server = (
-        await db.execute(select(FhirServer).where(FhirServer.id == server_id))
-    ).scalar_one_or_none()
-    if not server:
-        raise HTTPException(status_code=404, detail="FHIR server not found")
-    return server
-
-
 async def _fetch_resource_with_etag(
     base_url: str,
     resource_type: str,
@@ -61,9 +59,6 @@ async def _fetch_resource_with_etag(
     if resp.status_code == 404:
         return None, None
     resp.raise_for_status()
-
-    if resp.status_code == 410:
-        return
     return resp.json(), resp.headers.get("ETag")
 
 
@@ -89,17 +84,17 @@ async def _find_invalid_resource(
     response_model=ActionResult,
 )
 async def delete_resource(
-    server_id: UUID,
     resource_type: str,
     resource_id: str,
     payload: Optional[DeleteRequest] = None,
+    server: FhirServer = Depends(server_access(UserRole.editor.value)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Delete a FHIR resource from the source server (with ETag-based optimistic locking).
     On success: also removes the entry from invalid_resources.
     """
-    server = await _load_server(server_id, db)
     auth_config = server.auth_config or {}
     base_url = str(server.base_url).rstrip("/")
 
@@ -128,15 +123,12 @@ async def delete_resource(
                     headers["If-Match"] = etag
 
                 url = f"{base_url}/{resource_type}/{resource_id}"
-                resp = await client.delete(
-                    url,
-                    headers=headers,
-                )
+                resp = await client.delete(url, headers=headers)
                 fhir_status = str(resp.status_code)
 
                 if resp.status_code in (200, 204):
                     inv = await _find_invalid_resource(
-                        server_id, resource_type, resource_id, db
+                        server.id, resource_type, resource_id, db
                     )
                     if inv:
                         await db.delete(inv)
@@ -150,15 +142,12 @@ async def delete_resource(
             error_message = str(exc)[:500]
             logger.error("DELETE failed for %s/%s: %s", resource_type, resource_id, exc)
 
-    # Resolve invalid_resource_id BEFORE deletion may have removed it
-    # (use stored reference from the lookup above if we want — simplification: re-lookup,
-    # which will return None if delete succeeded — that's fine for audit traceability).
     inv_for_link = await _find_invalid_resource(
-        server_id, resource_type, resource_id, db
+        server.id, resource_type, resource_id, db
     )
 
     audit = AuditLog(
-        server_id=server_id,
+        server_id=server.id,
         server_base_url=base_url,
         resource_type=resource_type,
         resource_id=resource_id,
@@ -169,7 +158,8 @@ async def delete_resource(
         resource_before=resource_before,
         status=status,
         error_message=error_message,
-        reason=payload.reason,
+        reason=payload.reason if payload else None,
+        actor_id=user.id,
         executed_at=datetime.now(timezone.utc),
     )
     db.add(audit)
@@ -195,6 +185,7 @@ async def delete_resource(
 async def bulk_delete_resources(
     payload: BulkDeleteRequest,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(UserRole.editor.value)),
 ):
     """
     Bulk-delete invalid resources matching a filter.
@@ -207,11 +198,10 @@ async def bulk_delete_resources(
     (max 20 concurrent), removes successful entries from invalid_resources,
     and writes one audit log entry per attempt.
     """
-    server = await _load_server(payload.server_id, db)
+    server = await load_server_scoped(payload.server_id, user, db)
     auth_config = server.auth_config or {}
     base_url = str(server.base_url).rstrip("/")
 
-    # ---- Load matching invalid_resources ----
     base_filters = [InvalidResource.server_id == payload.server_id]
     if payload.resource_type:
         base_filters.append(InvalidResource.resource_type == payload.resource_type)
@@ -219,7 +209,6 @@ async def bulk_delete_resources(
     stmt = select(InvalidResource).where(and_(*base_filters))
     rows = (await db.execute(stmt)).scalars().all()
 
-    # Post-filter by rule/severity by inspecting JSON
     if payload.rule or payload.severity:
         filtered = []
         for row in rows:
@@ -244,7 +233,6 @@ async def bulk_delete_resources(
             elapsed_seconds=0.0,
         )
 
-    # ---- Execute deletes in parallel ----
     start = monotonic()
     semaphore = asyncio.Semaphore(20)
     audit_entries: list[AuditLog] = []
@@ -303,6 +291,7 @@ async def bulk_delete_resources(
                 status=audit_status,
                 error_message=error_message,
                 reason=payload.reason,
+                actor_id=user.id,
                 executed_at=datetime.now(timezone.utc),
             )
             audit_entries.append(audit)
@@ -320,7 +309,6 @@ async def bulk_delete_resources(
 
         await asyncio.gather(*[delete_one(row) for row in rows])
 
-    # ---- Bulk-write to DB ----
     db.add_all(audit_entries)
     if succeeded_invalid_ids:
         await db.execute(
@@ -336,7 +324,7 @@ async def bulk_delete_resources(
         failed=len(errors),
         dry_run=False,
         elapsed_seconds=round(elapsed, 2),
-        errors=errors[:50],  # truncate error list in response
+        errors=errors[:50],
     )
 
 
@@ -347,6 +335,7 @@ async def bulk_delete_resources(
 async def bulk_fix_resources(
     payload: BulkFixRequest,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(UserRole.editor.value)),
 ):
     """
     Bulk-PATCH invalid resources matching (server_id, resource_type, rule).
@@ -365,18 +354,16 @@ async def bulk_fix_resources(
             ),
         )
 
-    server = await _load_server(payload.server_id, db)
+    server = await load_server_scoped(payload.server_id, user, db)
     auth_config = server.auth_config or {}
     base_url = str(server.base_url).rstrip("/")
 
-    # ---- Load matching invalid_resources ----
     stmt = select(InvalidResource).where(
         InvalidResource.server_id == payload.server_id,
         InvalidResource.resource_type == payload.resource_type,
     )
     rows = (await db.execute(stmt)).scalars().all()
 
-    # Post-filter: must have the specified rule in its issues_detail
     filtered = []
     for row in rows:
         issues = (row.metrics or {}).get("issues_detail", [])
@@ -395,7 +382,6 @@ async def bulk_fix_resources(
             elapsed_seconds=0.0,
         )
 
-    # ---- Execute patches in parallel ----
     start = monotonic()
     semaphore = asyncio.Semaphore(20)
     audit_entries: list[AuditLog] = []
@@ -426,8 +412,6 @@ async def bulk_fix_resources(
                         error_message = "Resource not found on FHIR server"
                         fhir_status = "404"
                     else:
-                        # Generate patch ops from template
-                        # (dynamic templates inspect the resource body)
                         patch_body = (
                             get_patch_template(
                                 payload.resource_type,
@@ -480,6 +464,7 @@ async def bulk_fix_resources(
                 status=audit_status,
                 error_message=error_message,
                 reason=payload.reason,
+                actor_id=user.id,
                 executed_at=datetime.now(timezone.utc),
             )
             audit_entries.append(audit)
@@ -524,17 +509,17 @@ async def bulk_fix_resources(
     response_model=ActionResult,
 )
 async def patch_resource(
-    server_id: UUID,
     resource_type: str,
     resource_id: str,
     payload: PatchRequest,
+    server: FhirServer = Depends(server_access(UserRole.editor.value)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Apply JSON Patch operations (RFC 6902) to a FHIR resource.
     Content-Type: application/json-patch+json
     """
-    server = await _load_server(server_id, db)
     auth_config = server.auth_config or {}
     base_url = str(server.base_url).rstrip("/")
 
@@ -570,16 +555,12 @@ async def patch_resource(
                     headers["If-Match"] = etag
 
                 url = f"{base_url}/{resource_type}/{resource_id}"
-                resp = await client.patch(
-                    url,
-                    json=patch_body,
-                    headers=headers,
-                )
+                resp = await client.patch(url, json=patch_body, headers=headers)
                 fhir_status = str(resp.status_code)
 
                 if resp.status_code in (200, 201):
                     inv = await _find_invalid_resource(
-                        server_id, resource_type, resource_id, db
+                        server.id, resource_type, resource_id, db
                     )
                     if inv:
                         await db.delete(inv)
@@ -594,11 +575,11 @@ async def patch_resource(
             logger.error("PATCH failed for %s/%s: %s", resource_type, resource_id, exc)
 
     inv_for_link = await _find_invalid_resource(
-        server_id, resource_type, resource_id, db
+        server.id, resource_type, resource_id, db
     )
 
     audit = AuditLog(
-        server_id=server_id,
+        server_id=server.id,
         server_base_url=base_url,
         resource_type=resource_type,
         resource_id=resource_id,
@@ -610,6 +591,7 @@ async def patch_resource(
         status=status,
         error_message=error_message,
         reason=payload.reason,
+        actor_id=user.id,
         executed_at=datetime.now(timezone.utc),
     )
     db.add(audit)
@@ -639,9 +621,11 @@ async def list_audit_log(
     resource_type: Optional[str] = None,
     action: Optional[str] = None,
     status_filter: Optional[str] = None,
+    actor_id: Optional[UUID] = None,
+    _: User = Depends(require_role(UserRole.admin.value)),
     db: AsyncSession = Depends(get_db),
 ):
-    """Audir Logs"""
+    """Audit log (admin only)."""
     filters = []
     if server_id:
         filters.append(AuditLog.server_id == server_id)
@@ -651,6 +635,8 @@ async def list_audit_log(
         filters.append(AuditLog.action == action)
     if status_filter:
         filters.append(AuditLog.status == status_filter)
+    if actor_id:
+        filters.append(AuditLog.actor_id == actor_id)
 
     where_clause = and_(*filters) if filters else None
 
@@ -690,10 +676,11 @@ async def list_fix_templates():
     response_model=ActionResult,
 )
 async def auto_fix_resource(
-    server_id: UUID,
     resource_type: str,
     resource_id: str,
     payload: Optional[AutoFixRequest] = None,
+    server: FhirServer = Depends(server_access(UserRole.editor.value)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -702,11 +689,10 @@ async def auto_fix_resource(
     from invalid_resources, not from the client.
     Returns 400 if none of the resource's rules has a template.
     """
-    server = await _load_server(server_id, db)
     auth_config = server.auth_config or {}
     base_url = str(server.base_url).rstrip("/")
 
-    inv = await _find_invalid_resource(server_id, resource_type, resource_id, db)
+    inv = await _find_invalid_resource(server.id, resource_type, resource_id, db)
     if inv is None:
         raise HTTPException(
             status_code=404, detail="No invalid_resources entry for this resource"
@@ -778,7 +764,7 @@ async def auto_fix_resource(
             )
 
     audit = AuditLog(
-        server_id=server_id,
+        server_id=server.id,
         server_base_url=base_url,
         resource_type=resource_type,
         resource_id=resource_id,
@@ -790,6 +776,7 @@ async def auto_fix_resource(
         status=status,
         error_message=error_message,
         reason=payload.reason if payload else None,
+        actor_id=user.id,
         executed_at=datetime.now(timezone.utc),
     )
     db.add(audit)
@@ -812,7 +799,11 @@ async def auto_fix_resource(
 # GET /audit-log/{audit_id}
 # ---------------------------------------------------------------------------
 @router.get("/audit-log/{audit_id}", response_model=AuditLogDetail)
-async def get_audit_log(audit_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_audit_log(
+    audit_id: UUID,
+    _: User = Depends(require_role(UserRole.admin.value)),
+    db: AsyncSession = Depends(get_db),
+):
     row = (
         await db.execute(select(AuditLog).where(AuditLog.id == audit_id))
     ).scalar_one_or_none()
@@ -833,5 +824,6 @@ async def get_audit_log(audit_id: UUID, db: AsyncSession = Depends(get_db)):
         status=row.status.value,
         error_message=row.error_message,
         reason=row.reason,
+        actor_id=row.actor_id,
         executed_at=row.executed_at,
     )

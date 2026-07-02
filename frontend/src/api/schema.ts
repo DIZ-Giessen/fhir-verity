@@ -114,13 +114,13 @@ export interface paths {
         };
         /**
          * List Fhir Servers
-         * @description List all FHIR servers.
+         * @description List FHIR servers. Admins see all, others only their own.
          */
         get: operations["list_fhir_servers_api_v1_servers_get"];
         put?: never;
         /**
          * Create Fhir Server
-         * @description Create a new FHIR server.
+         * @description Create a new FHIR server. The creating user becomes the owner.
          */
         post: operations["create_fhir_server_api_v1_servers_post"];
         delete?: never;
@@ -145,7 +145,7 @@ export interface paths {
         post?: never;
         /**
          * Delete FHIR server
-         * @description Delete FHIR Servers
+         * @description Delete FHIR Server
          */
         delete: operations["delete_fhir_server_api_v1_servers__server_id__delete"];
         options?: never;
@@ -527,7 +527,7 @@ export interface paths {
         };
         /**
          * List Audit Log
-         * @description Audir Logs
+         * @description Audit log (admin only).
          */
         get: operations["list_audit_log_audit_log_get"];
         put?: never;
@@ -596,6 +596,40 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Users */
+        get: operations["list_users_api_v1_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update User Role */
+        patch: operations["update_user_role_api_v1_users__user_id__role_patch"];
         trace?: never;
     };
 }
@@ -692,6 +726,8 @@ export interface components {
             status: string;
             /** Error Message */
             error_message?: string | null;
+            /** Actor Id */
+            actor_id?: string | null;
             /**
              * Executed At
              * Format: date-time
@@ -851,6 +887,8 @@ export interface components {
              * @enum {string}
              */
             auth_type: "none" | "basic" | "oauth2_client_credentials";
+            /** Owner Id */
+            owner_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1202,6 +1240,15 @@ export interface components {
             full_name?: string | null;
             /** Role */
             role: string;
+        };
+        /**
+         * UserRole
+         * @enum {string}
+         */
+        UserRole: "viewer" | "editor" | "admin";
+        /** UserRoleUpdate */
+        UserRoleUpdate: {
+            role: components["schemas"]["UserRole"];
         };
         /** ValidationError */
         ValidationError: {
@@ -2147,9 +2194,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                server_id: string;
                 resource_type: string;
                 resource_id: string;
+                server_id: string;
             };
             cookie?: never;
         };
@@ -2184,9 +2231,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                server_id: string;
                 resource_type: string;
                 resource_id: string;
+                server_id: string;
             };
             cookie?: never;
         };
@@ -2291,6 +2338,7 @@ export interface operations {
                 resource_type?: string | null;
                 action?: string | null;
                 status_filter?: string | null;
+                actor_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -2343,9 +2391,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                server_id: string;
                 resource_type: string;
                 resource_id: string;
+                server_id: string;
             };
             cookie?: never;
         };
@@ -2393,6 +2441,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditLogDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_users_api_v1_users_get: {
+        parameters: {
+            query?: {
+                skip?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_user_role_api_v1_users__user_id__role_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserRoleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
                 };
             };
             /** @description Validation Error */

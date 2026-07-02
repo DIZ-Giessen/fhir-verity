@@ -35,10 +35,25 @@ from app.services.fhir_report_service import generate_and_post_reports
 from app.models.invalid_resource import InvalidResource
 from app.services.fhir_auth import build_httpx_auth
 
+from app.core.security import get_current_user, load_server_scoped
+from app.models.user import User, UserRole
+
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+
+async def _load_run_scoped(run_id: UUID, user: User, db: AsyncSession) -> ValidationRun:
+    """Load a run, enforcing ownership through its server.
+    404 if the run is missing or its server isn't visible to this user."""
+    run = (
+        await db.execute(select(ValidationRun).where(ValidationRun.id == run_id))
+    ).scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=404, detail="Validation run not found")
+    await load_server_scoped(run.server_id, user, db)  # raises 404 if not owned
+    return run
 
 
 @router.post("/validation/start", response_model=ValidationRunRead)
@@ -46,19 +61,13 @@ async def start_validation(
     request: ValidationStartRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Start a new validation run asynchronously."""
 
-    # verify if server exists
-    stmt = select(FhirServer).where(
-        FhirServer.id == request.server_id,
-        FhirServer.is_active.is_(True),
-    )
-
-    result = await db.execute(stmt)
-    server = result.scalar_one_or_none()
-
-    if not server:
+    # Ownership scope (404 for foreign servers), then active check.
+    server = await load_server_scoped(request.server_id, user, db)
+    if not server.is_active:
         raise HTTPException(
             status_code=404, detail="FHIR Server not found or is not active"
         )
@@ -93,6 +102,7 @@ async def resume_validation(
     run_id: UUID,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Resume a run interrupted by a full process crash (status FAILED or
@@ -111,10 +121,8 @@ async def resume_validation(
     if run.status == ValidationStatus.COMPLETED:
         raise HTTPException(status_code=409, detail="Run is already completed")
 
-    server = (
-        await db.execute(select(FhirServer).where(FhirServer.id == run.server_id))
-    ).scalar_one_or_none()
-    if not server or not server.is_active:
+    server = await load_server_scoped(run.server_id, user, db)
+    if not server.is_active:
         raise HTTPException(
             status_code=404, detail="FHIR Server not found or is not active"
         )
@@ -274,12 +282,13 @@ async def run_validation_task(
 @router.get("/validation/runs", response_model=PaginatedRuns)
 async def list_validation_runs(
     skip: int = 0,
-    limit: int = 20,
+    limit: int = 50,
     status: Optional[str] = None,
     server_id: Optional[UUID] = None,
     started_after: Optional[datetime] = None,
     started_before: Optional[datetime] = None,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Pagined list of validation runs. Supports filterig by status, server amd time range. Sorted by started_at DESC
@@ -296,20 +305,27 @@ async def list_validation_runs(
 
     where_clause = and_(*filters) if filters else None
 
-    # Count total for Pagination metadata
+    is_admin = user.role == UserRole.admin.value
+
     count_stmt = select(func.count(ValidationRun.id))
+    page_stmt = select(ValidationRun)
+    if not is_admin:
+        count_stmt = count_stmt.join(
+            FhirServer, FhirServer.id == ValidationRun.server_id
+        ).where(FhirServer.owner_id == user.id)
+        page_stmt = page_stmt.join(
+            FhirServer, FhirServer.id == ValidationRun.server_id
+        ).where(FhirServer.owner_id == user.id)
     if where_clause is not None:
         count_stmt = count_stmt.where(where_clause)
+        page_stmt = page_stmt.where(where_clause)
+
     total = (await db.execute(count_stmt)).scalar_one()
 
-    # Fetch page
-    stmt = select(ValidationRun).order_by(desc(ValidationRun.started_at))
-    if where_clause is not None:
-        stmt = stmt.where(where_clause)
-    stmt = stmt.offset(skip).limit(limit)
-
-    result = await db.execute(stmt)
-
+    page_stmt = (
+        page_stmt.order_by(desc(ValidationRun.started_at)).offset(skip).limit(limit)
+    )
+    result = await db.execute(page_stmt)
     runs = result.scalars().all()
 
     return PaginatedRuns(
@@ -327,15 +343,12 @@ async def list_validation_runs(
 async def get_validation_run(
     run_id: UUID,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Detail view of a single validation run, including per-resource breakdown.
     """
-    stmt = select(ValidationRun).where(ValidationRun.id == run_id)
-    result = await db.execute(stmt)
-    run = result.scalar_one_or_none()
-    if not run:
-        raise HTTPException(status_code=404, detail="Validation run not found")
+    run = await _load_run_scoped(run_id, user, db)
 
     per_resource = []
     for resource_type, stats in (run.per_resource_stats or {}).items():
@@ -389,6 +402,7 @@ async def list_invalid_resources(
     severity: Optional[str] = None,
     only_current_run: bool = False,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Paginated invalid resources for a given run, with optional filters.
@@ -396,11 +410,7 @@ async def list_invalid_resources(
     AFTER fetching, since JSON-level filtering isn't portable across DBs.
     For very large result sets this should be migrated to JSONB + GIN index.
     """
-    run_stmt = select(ValidationRun).where(ValidationRun.id == run_id)
-    run_result = await db.execute(run_stmt)
-    run = run_result.scalar_one_or_none()
-    if not run:
-        raise HTTPException(status_code=404, detail="Validation run not found")
+    run = await _load_run_scoped(run_id, user, db)
 
     base_filters = [InvalidResource.server_id == run.server_id]
     if only_current_run:
@@ -488,15 +498,13 @@ async def list_invalid_resources(
 async def get_run_summary(
     run_id: UUID,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Aggregated summary: total counts and rule-violation breakdown
     per resource type. Used for heatmaps and dashboard tiles.
     """
-    run_stmt = select(ValidationRun).where(ValidationRun.id == run_id)
-    run = (await db.execute(run_stmt)).scalar_one_or_none()
-    if not run:
-        raise HTTPException(status_code=404, detail="Validation run not found")
+    run = await _load_run_scoped(run_id, user, db)
 
     inv_stmt = select(InvalidResource).where(
         InvalidResource.server_id == run.server_id,

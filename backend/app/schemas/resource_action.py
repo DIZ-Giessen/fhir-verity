@@ -54,6 +54,7 @@ class AuditLogListItem(BaseModel):
     action: str
     status: str
     error_message: Optional[str] = None
+    actor_id: Optional[UUID] = None
     executed_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

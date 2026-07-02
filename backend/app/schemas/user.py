@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from app.models.user import UserRole
+
 
 class UserRead(BaseModel):
     """User Model"""
@@ -16,3 +18,7 @@ class UserRead(BaseModel):
     role: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserRoleUpdate(BaseModel):
+    role: UserRole

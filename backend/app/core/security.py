@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.user import User, UserRole
+from app.models.fhir_server import FhirServer
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -140,3 +141,54 @@ def require_roles_by_method(read_min: str, write_min: str):
         return user
 
     return _dep
+
+
+async def load_server_scoped(
+    server_id: uuid.UUID,
+    user: User,
+    db: AsyncSession,
+) -> FhirServer:
+    """Load a server enforcing ownership: non-admins may only touch their own.
+
+    Returns 404 (not 403) for foreign servers so their existence is not leaked.
+    """
+    server = (
+        await db.execute(select(FhirServer).where(FhirServer.id == server_id))
+    ).scalar_one_or_none()
+    if server is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "FHIR server not found")
+    if user.role != UserRole.admin.value and server.owner_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "FHIR server not found")
+    return server
+
+
+def server_access(min_role: str = UserRole.viewer.value):
+    """Dependency for path endpoints carrying `server_id`: checks role capability
+    AND ownership scope in one step, returning the resolved server."""
+
+    async def _dep(
+        server_id: uuid.UUID,
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> FhirServer:
+        if ROLE_ORDER.get(user.role, -1) < ROLE_ORDER[min_role]:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                f"Requires '{min_role}' role or higher",
+            )
+        return await load_server_scoped(server_id, user, db)
+
+    return _dep
+
+
+async def ensure_dev_user(db: AsyncSession) -> None:
+    """Persist the dev-bypass user so owner_id/actor_id FKs resolve when AUTH_ENABLED=false."""
+    if settings.AUTH_ENABLED:
+        return
+    dev = _dev_user()
+    exists = (
+        await db.execute(select(User).where(User.id == dev.id))
+    ).scalar_one_or_none()
+    if exists is None:
+        db.add(dev)
+        await db.commit()
