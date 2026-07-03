@@ -54,6 +54,7 @@ class AuditLogListItem(BaseModel):
     action: str
     status: str
     error_message: Optional[str] = None
+    actor_id: Optional[UUID] = None
     executed_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -106,3 +107,33 @@ class BulkFixRequest(BaseModel):
     rule: str
     dry_run: bool = False
     reason: Optional[str] = None
+
+
+class FixableTemplate(BaseModel):
+    """Model for a Fixable Template"""
+
+    resource_type: str
+    rule: str
+
+
+class AutoFixRequest(BaseModel):
+    """Model for a Auto Fix Request"""
+
+    reason: Optional[str] = None
+
+
+class AuditLogDetail(BaseModel):
+    id: UUID
+    server_id: UUID
+    server_base_url: str
+    resource_type: str
+    resource_id: str
+    invalid_resource_id: Optional[UUID] = None
+    action: str
+    fhir_request_payload: Optional[Any] = None
+    fhir_response_status: Optional[str] = None
+    resource_before: Optional[Any] = None
+    status: str
+    error_message: Optional[str] = None
+    reason: Optional[str] = None
+    executed_at: datetime

@@ -11,7 +11,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
+from app.core.security import get_current_user, server_access
 from app.models.fhir_server import FhirServer
+from app.models.user import User, UserRole
 from app.schemas.server import (
     FhirServerCreate,
     FhirServerRead,
@@ -30,11 +32,12 @@ router = APIRouter()
     "/servers", response_model=FhirServerRead, status_code=status.HTTP_201_CREATED
 )
 async def create_fhir_server(
-    server_in: FhirServerCreate, db: AsyncSession = Depends(get_db)
+    server_in: FhirServerCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    """Create a new FHIR server."""
+    """Create a new FHIR server. The creating user becomes the owner."""
     base_url_str = str(server_in.base_url)
-    # Prüfen ob Base-Url schon existiert.
     stmt = select(FhirServer).where(FhirServer.base_url == base_url_str)
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
@@ -50,6 +53,7 @@ async def create_fhir_server(
         project_id=server_in.project_id,
         auth_config=server_in.auth_config,
         is_active=True,
+        owner_id=user.id,
     )
 
     db.add(new_server)
@@ -61,10 +65,16 @@ async def create_fhir_server(
 
 @router.get("/servers", response_model=list[FhirServerRead])
 async def list_fhir_servers(
-    db: AsyncSession = Depends(get_db), skip: int = 0, limit: int = 100
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    skip: int = 0,
+    limit: int = 100,
 ):
-    """List all FHIR servers."""
-    stmt = select(FhirServer).offset(skip).limit(limit)
+    """List FHIR servers. Admins see all, others only their own."""
+    stmt = select(FhirServer)
+    if user.role != UserRole.admin.value:
+        stmt = stmt.where(FhirServer.owner_id == user.id)
+    stmt = stmt.offset(skip).limit(limit)
     result = await db.execute(stmt)
     return [_to_read(s) for s in result.scalars().all()]
 
@@ -79,6 +89,7 @@ def _to_read(server: FhirServer) -> FhirServerRead:
         is_active=server.is_active,
         has_auth_config=server.auth_config is not None,
         auth_type=cfg["type"],
+        owner_id=server.owner_id,
         created_at=server.created_at,
         updated_at=server.updated_at,
     )
@@ -90,21 +101,11 @@ def _to_read(server: FhirServer) -> FhirServerRead:
     summary="Update FHIR server",
 )
 async def update_fhir_server(
-    server_id: UUID,
     payload: FhirServerUpdate,
+    server: FhirServer = Depends(server_access()),
     db: AsyncSession = Depends(get_db),
 ) -> FhirServerRead:
     """Update FHIR Server"""
-    stmt = select(FhirServer).where(FhirServer.id == server_id)
-    result = await db.execute(stmt)
-    server = result.scalar_one_or_none()
-
-    if server is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="FHIR server not found",
-        )
-
     updates = payload.model_dump(exclude_unset=True)
     if "base_url" in updates and updates["base_url"] is not None:
         updates["base_url"] = str(updates["base_url"])
@@ -131,31 +132,12 @@ async def update_fhir_server(
     summary="Delete FHIR server",
 )
 async def delete_fhir_server(
-    server_id: UUID,
+    server: FhirServer = Depends(server_access()),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Delete FHIR Servers"""
-    stmt = select(FhirServer).where(FhirServer.id == server_id)
-    result = await db.execute(stmt)
-    server = result.scalar_one_or_none()
-
-    if server is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="FHIR server not found",
-        )
-
+    """Delete FHIR Server"""
     await db.delete(server)
     await db.commit()
-
-
-async def _get_server_or_404(server_id: UUID, db: AsyncSession) -> FhirServer:
-    server = (
-        await db.execute(select(FhirServer).where(FhirServer.id == server_id))
-    ).scalar_one_or_none()
-    if server is None:
-        raise HTTPException(status_code=404, detail="FHIR server not found")
-    return server
 
 
 def _auth_read(cfg: dict) -> ServerAuthRead:
@@ -169,20 +151,18 @@ def _auth_read(cfg: dict) -> ServerAuthRead:
 
 
 @router.get("/servers/{server_id}/auth", response_model=ServerAuthRead)
-async def get_server_auth(server_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_server_auth(server: FhirServer = Depends(server_access())):
     """Return the non-secret parts of a server's auth config."""
-    server = await _get_server_or_404(server_id, db)
     return _auth_read(normalize_auth_config(server.auth_config))
 
 
 @router.patch("/servers/{server_id}/auth", response_model=ServerAuthRead)
 async def update_server_auth(
-    server_id: UUID,
     payload: ServerAuthUpdate,
+    server: FhirServer = Depends(server_access()),
     db: AsyncSession = Depends(get_db),
 ):
     """Replace a server's auth. Omitted secrets keep their existing value."""
-    server = await _get_server_or_404(server_id, db)
     existing = normalize_auth_config(server.auth_config)
 
     if payload.type == "none":
@@ -240,23 +220,18 @@ async def update_server_auth(
 
 
 @router.get("/servers/{server_id}", response_model=FhirServerRead)
-async def get_fhir_server(server_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_fhir_server(server: FhirServer = Depends(server_access())):
     """Single FHIR server details."""
-    server = await _get_server_or_404(server_id, db)
     return _to_read(server)
 
 
 @router.get("/servers/{server_id}/metadata", response_model=ServerMetadata)
-async def get_server_metadata(
-    server_id: UUID,
-    db: AsyncSession = Depends(get_db),
-):
+async def get_server_metadata(server: FhirServer = Depends(server_access())):
     """
     Connection test: fetch the FHIR server's CapabilityStatement and report
     version + response time. Returns ok=false instead of raising so the
     frontend can render a clean error state.
     """
-    server = await _get_server_or_404(server_id, db)
     auth = build_httpx_auth(server.auth_config)
     base_url = str(server.base_url).rstrip("/")
     url = f"{base_url}/metadata"
@@ -292,12 +267,8 @@ async def get_server_metadata(
     "/servers/{server_id}/resource-counts",
     response_model=list[ResourceCount],
 )
-async def get_server_resource_counts(
-    server_id: UUID,
-    db: AsyncSession = Depends(get_db),
-):
+async def get_server_resource_counts(server: FhirServer = Depends(server_access())):
     """`_summary=count` per supported resource type, fired in parallel."""
-    server = await _get_server_or_404(server_id, db)
     auth = build_httpx_auth(server.auth_config)
     base_url = str(server.base_url).rstrip("/")
 

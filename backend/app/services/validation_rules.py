@@ -5,7 +5,8 @@ Validation logic for all supported FHIR resource types.
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any
+import random
+from typing import Any, AsyncIterator
 from time import monotonic
 from uuid import UUID
 
@@ -27,8 +28,12 @@ logger = logging.getLogger(__name__)
 class BaseValidator:
     """Base class for all resource validators."""
 
-    PAGE_SIZE = 500
-    MAX_RETRIES = 3
+    PAGE_SIZE = 1000
+    MAX_RETRIES = 5
+    RETRYABLE_STATUS = {429, 502, 503, 504}
+    CHECKPOINT_EVERY_N_PAGES = 25
+    MAX_REANCHORS = 5
+    REANCHOR_STATUS = {404, 408, 410, 429, 500, 502, 503, 504}
 
     def __init__(
         self,
@@ -42,7 +47,7 @@ class BaseValidator:
         self.auth_config = auth_config or {}
         self.server_id = server_id
 
-    async def fetch_bundle(self, url: str) -> dict:
+    async def fetch_bundle(self, url: str, params: dict | None = None) -> dict:
         """Fetch a FHIR bundle with retry logic."""
 
         headers = {"Accept": "application/fhir+json"}
@@ -51,26 +56,156 @@ class BaseValidator:
         last_exc = None
         for attempt in range(1, self.MAX_RETRIES + 1):
             try:
-                resp = await self.client.get(url, headers=headers)
+                resp = await self.client.get(url, headers=headers, params=params)
                 resp.raise_for_status()
                 return resp.json()
-            except (httpx.ReadError, httpx.ConnectError, httpx.TimeoutException) as e:
-                last_exc = e
-                wait = 2**attempt
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status not in self.RETRYABLE_STATUS or attempt == self.MAX_RETRIES:
+                    logger.error(
+                        "HTTP %s at %s (attempt %s/%s)",
+                        status,
+                        url,
+                        attempt,
+                        self.MAX_RETRIES,
+                    )
+                    raise
+                last_exc = exc
+                retry_after = exc.response.headers.get("Retry-After", "")
+                wait = (
+                    float(retry_after)
+                    if retry_after.isdigit()
+                    else min(2**attempt, 60) + random.uniform(0, 1)
+                )
                 logger.warning(
-                    "Attempt %s/%s failed for %s: %s. Retrying in %ss...",
+                    "HTTP %s at %s, retry %s/%s in %.1fs",
+                    status,
+                    url,
                     attempt,
                     self.MAX_RETRIES,
-                    url,
-                    e,
                     wait,
                 )
                 await asyncio.sleep(wait)
-            except httpx.HTTPStatusError as exc:
-                logger.error("HTTP %s at %s", exc.response.status_code, url)
-                raise
-
+            except (
+                httpx.ReadError,
+                httpx.ConnectError,
+                httpx.TimeoutException,
+                httpx.RemoteProtocolError,
+            ) as e:
+                last_exc = e
+                if attempt == self.MAX_RETRIES:
+                    raise
+                wait = min(2**attempt, 60) + random.uniform(0, 1)
+                logger.warning(
+                    "Network error at %s: %s, retry %s/%s in %.1fs",
+                    url,
+                    e,
+                    attempt,
+                    self.MAX_RETRIES,
+                    wait,
+                )
+                await asyncio.sleep(wait)
         raise last_exc
+
+    @staticmethod
+    def _parse_dt(raw: str | None):
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _next_link(bundle: dict) -> str | None:
+        return next(
+            (l["url"] for l in bundle.get("link", []) if l.get("relation") == "next"),
+            None,
+        )
+
+    @classmethod
+    def _max_last_updated(cls, entries: list[dict]) -> str | None:
+        best_raw, best_dt = None, None
+        for e in entries:
+            raw = e.get("resource", {}).get("meta", {}).get("lastUpdated")
+            dt = cls._parse_dt(raw)
+            if dt and (best_dt is None or dt > best_dt):
+                best_dt, best_raw = dt, raw
+        return best_raw
+
+    @classmethod
+    def _is_reanchorable(cls, exc: Exception) -> bool:
+        # 400/401/403 = Config-/Auth-Fehler -> Re-Anchor hilft nicht, propagieren.
+        if isinstance(exc, httpx.HTTPStatusError):
+            return exc.response.status_code in cls.REANCHOR_STATUS
+        return isinstance(exc, httpx.HTTPError)  # Netzwerkfehler -> re-anchorbar
+
+    async def _load_watermark(
+        self, run_id: UUID, resource_type: str, db: AsyncSession
+    ) -> str | None:
+        run = (
+            await db.execute(select(ValidationRun).where(ValidationRun.id == run_id))
+        ).scalar_one_or_none()
+        cp = (run.checkpoint or {}).get(resource_type) if run else None
+        return cp.get("last_updated") if cp else None
+
+    async def _persist_watermark(
+        self, run_id: UUID, resource_type: str, watermark: str | None, db: AsyncSession
+    ):
+        if watermark is None:
+            return
+        run = (
+            await db.execute(select(ValidationRun).where(ValidationRun.id == run_id))
+        ).scalar_one_or_none()
+        if not run:
+            return
+        cp = dict(run.checkpoint or {})
+        cp[resource_type] = {"last_updated": watermark}
+        run.checkpoint = cp
+        await db.commit()
+
+    async def iter_pages(
+        self, resource_type: str, run_id: UUID, db: AsyncSession
+    ) -> AsyncIterator[list[dict]]:
+        """
+        Crawl a resource type sorted ascending by _lastUpdated, following the
+        server's next links. On resume the first search is anchored at the
+        persisted watermark (_lastUpdated=ge). No automatic re-anchoring: if a
+        page still fails after fetch_bundle's retries the error propagates, the
+        run is marked FAILED, and re-anchoring happens once, on explicit resume.
+        """
+        watermark = await self._load_watermark(run_id, resource_type, db)
+        watermark_dt = self._parse_dt(watermark)
+        pages_since_cp = 0
+
+        params = {"_count": self.PAGE_SIZE, "_sort": "_lastUpdated"}
+        if watermark is not None:
+            params["_lastUpdated"] = f"ge{watermark}"
+        url = f"{self.base_url}/{resource_type}"
+        first = True
+
+        try:
+            while url:
+                bundle = await self.fetch_bundle(url, params if first else None)
+                first = False
+                entries = bundle.get("entry", [])
+                if entries:
+                    yield entries
+                    page_wm = self._max_last_updated(entries)
+                    page_dt = self._parse_dt(page_wm)
+                    if page_dt and (watermark_dt is None or page_dt > watermark_dt):
+                        watermark, watermark_dt = page_wm, page_dt
+                    pages_since_cp += 1
+                    if pages_since_cp >= self.CHECKPOINT_EVERY_N_PAGES:
+                        await self._persist_watermark(
+                            run_id, resource_type, watermark, db
+                        )
+                        pages_since_cp = 0
+                url = self._next_link(bundle)
+        finally:
+            # persist even if the crawl raises, so resume starts from the last
+            # processed page, not from the last periodic checkpoint.
+            await self._persist_watermark(run_id, resource_type, watermark, db)
 
     async def save_invalid(
         self,
@@ -301,11 +436,7 @@ class PatientValidator(BaseValidator):
 
         estimated_total = await self._fetch_total("Patient")
 
-        url = f"{self.base_url}/Patient?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("Patient", run_id, db):
             pages_done += 1
 
             page_patient_ids = [
@@ -551,15 +682,6 @@ class PatientValidator(BaseValidator):
                 start_time=start_time,
             )
 
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
-            )
-
 
 # =============================================================================
 # ENCOUNTER
@@ -578,11 +700,7 @@ class EncounterValidator(BaseValidator):
 
         estimated_total = await self._fetch_total("Encounter")
 
-        url = f"{self.base_url}/Encounter?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("Encounter", run_id, db):
             pages_done += 1
 
             page_processed = 0
@@ -777,15 +895,6 @@ class EncounterValidator(BaseValidator):
                 start_time=start_time,
             )
 
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
-            )
-
 
 # =============================================================================
 # OBSERVATION
@@ -802,26 +911,20 @@ class ObservationValidator(BaseValidator):
         pages_done = 0
         cumulative_processed = 0
         cumulative_invalid = 0
-
         estimated_total = await self._fetch_total("Observation")
 
-        url = f"{self.base_url}/Observation?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("Observation", run_id, db):
             pages_done += 1
-
             page_processed = 0
             page_invalid = 0
 
             for entry in entries:
+
                 page_processed += 1
                 resource = entry.get("resource", {})
                 rid = resource.get("id", "")
                 issues = []
                 metrics = self._build_metrics(config)
-
                 # ======== privacy: ===========
                 #
                 # value_string_cleartext_forbidden
@@ -965,7 +1068,6 @@ class ObservationValidator(BaseValidator):
                     await self.save_invalid(
                         run_id, "Observation", rid, issues, metrics, db
                     )
-
             cumulative_processed += page_processed
             cumulative_invalid += page_invalid
 
@@ -981,14 +1083,6 @@ class ObservationValidator(BaseValidator):
                 pages_done=pages_done,
                 estimated_total=estimated_total,
                 start_time=start_time,
-            )
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
             )
 
         logger.info("Observation validation complete for run %s", run_id)
@@ -1011,11 +1105,7 @@ class MedicationValidator(BaseValidator):
 
         estimated_total = await self._fetch_total("Medication")
 
-        url = f"{self.base_url}/Medication?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("Medication", run_id, db):
             pages_done += 1
             page_processed = 0
             page_invalid = 0
@@ -1100,15 +1190,6 @@ class MedicationValidator(BaseValidator):
                 start_time=start_time,
             )
 
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
-            )
-
         logger.info("Medication validation complete for run %s", run_id)
 
 
@@ -1129,11 +1210,7 @@ class MedicationRequestValidator(BaseValidator):
         cumulative_invalid = 0
         estimated_total = await self._fetch_total("MedicationRequest")
 
-        url = f"{self.base_url}/MedicationRequest?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("MedicationRequest", run_id, db):
             pages_done += 1
             page_processed = 0
             page_invalid = 0
@@ -1265,15 +1342,6 @@ class MedicationRequestValidator(BaseValidator):
                 start_time=start_time,
             )
 
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
-            )
-
         logger.info("MedicationRequest validation complete for run %s", run_id)
 
 
@@ -1296,11 +1364,7 @@ class MedicationAdministrationValidator(BaseValidator):
         cumulative_invalid = 0
         estimated_total = await self._fetch_total("MedicationAdministration")
 
-        url = f"{self.base_url}/MedicationAdministration?_count={self.PAGE_SIZE}"
-
-        while url:
-            bundle = await self.fetch_bundle(url)
-            entries = bundle.get("entry", [])
+        async for entries in self.iter_pages("MedicationAdministration", run_id, db):
             pages_done += 1
             page_processed = 0
             page_invalid = 0
@@ -1439,16 +1503,435 @@ class MedicationAdministrationValidator(BaseValidator):
                 estimated_total=estimated_total,
                 start_time=start_time,
             )
-            url = next(
-                (
-                    l["url"]
-                    for l in bundle.get("link", [])
-                    if l.get("relation") == "next"
-                ),
-                None,
-            )
 
         logger.info("MedicationAdministration validation complete for run %s", run_id)
+
+
+# =============================================================================
+# CONDITION
+# =============================================================================
+class ConditionValidator(BaseValidator):
+    """Condition (Diagnose) Validator."""
+
+    async def validate_and_save(self, run_id: UUID, db: AsyncSession):
+        """Validate and save Condition resources."""
+        config = await get_config_for_run(self.server_id, "Condition", db)
+
+        start_time = monotonic()
+        pages_done = 0
+        cumulative_processed = 0
+        cumulative_invalid = 0
+
+        estimated_total = await self._fetch_total("Condition")
+
+        async for entries in self.iter_pages("Condition", run_id, db):
+            pages_done += 1
+            page_processed = 0
+            page_invalid = 0
+
+            for entry in entries:
+                page_processed += 1
+                resource = entry.get("resource", {})
+                rid = resource.get("id", "")
+                issues = []
+                metrics = self._build_metrics(config)
+
+                # ========== privacy ==========
+
+                if rule_enabled(config, "note_cleartext_check"):
+                    for note in resource.get("note", []):
+                        text = note.get("text", "")
+                        if text and len(text) > 50:
+                            issues.append(
+                                {
+                                    "rule": "note_cleartext_check",
+                                    "severity": config["note_cleartext_check"][
+                                        "severity"
+                                    ],
+                                    "message": "Condition.note contains a long free-text string that may include personal data.",
+                                }
+                            )
+                            metrics["note_cleartext_check"] = False
+                            break
+
+                # ========== completeness ==========
+
+                if rule_enabled(config, "code_required"):
+                    if not resource.get("code"):
+                        issues.append(
+                            {
+                                "rule": "code_required",
+                                "severity": config["code_required"]["severity"],
+                                "message": "Condition.code is missing.",
+                            }
+                        )
+                        metrics["code_required"] = False
+
+                if rule_enabled(config, "subject_required"):
+                    if not resource.get("subject"):
+                        issues.append(
+                            {
+                                "rule": "subject_required",
+                                "severity": config["subject_required"]["severity"],
+                                "message": "Condition.subject is missing.",
+                            }
+                        )
+                        metrics["subject_required"] = False
+
+                if rule_enabled(config, "clinicalstatus_required"):
+                    if not resource.get("clinicalStatus"):
+                        issues.append(
+                            {
+                                "rule": "clinicalstatus_required",
+                                "severity": config["clinicalstatus_required"][
+                                    "severity"
+                                ],
+                                "message": "Condition.clinicalStatus is missing.",
+                            }
+                        )
+                        metrics["clinicalstatus_required"] = False
+
+                if rule_enabled(config, "verificationstatus_required"):
+                    if not resource.get("verificationStatus"):
+                        issues.append(
+                            {
+                                "rule": "verificationstatus_required",
+                                "severity": config["verificationstatus_required"][
+                                    "severity"
+                                ],
+                                "message": "Condition.verificationStatus is missing.",
+                            }
+                        )
+                        metrics["verificationstatus_required"] = False
+
+                if rule_enabled(config, "onset_present"):
+                    has_onset = any(
+                        resource.get(f)
+                        for f in [
+                            "onsetDateTime",
+                            "onsetAge",
+                            "onsetPeriod",
+                            "onsetRange",
+                            "onsetString",
+                        ]
+                    )
+                    if not has_onset:
+                        issues.append(
+                            {
+                                "rule": "onset_present",
+                                "severity": config["onset_present"]["severity"],
+                                "message": "Condition.onset[x] is missing.",
+                            }
+                        )
+                        metrics["onset_present"] = False
+
+                # ========== integrity ==========
+
+                if rule_enabled(config, "subject_reference_format"):
+                    ref = resource.get("subject", {}).get("reference", "")
+                    if ref and not self._is_reference_format(ref, "Patient"):
+                        issues.append(
+                            {
+                                "rule": "subject_reference_format",
+                                "severity": config["subject_reference_format"][
+                                    "severity"
+                                ],
+                                "message": f"Condition.subject.reference '{ref}' must follow 'Patient/{{id}}' format.",
+                            }
+                        )
+                        metrics["subject_reference_format"] = False
+
+                if issues:
+                    page_invalid += 1
+                    await self.save_invalid(
+                        run_id, "Condition", rid, issues, metrics, db
+                    )
+
+            cumulative_processed += page_processed
+            cumulative_invalid += page_invalid
+
+            await self._update_run_counters(
+                run_id, "Condition", page_processed, page_invalid, db
+            )
+
+            await self._emit_progress(
+                run_id=run_id,
+                resource_type="Condition",
+                total_processed=cumulative_processed,
+                total_invalid=cumulative_invalid,
+                pages_done=pages_done,
+                estimated_total=estimated_total,
+                start_time=start_time,
+            )
+
+        logger.info("Condition validation complete for run %s", run_id)
+
+
+# =============================================================================
+# PROCEDURE
+# =============================================================================
+class ProcedureValidator(BaseValidator):
+    """Procedure (Prozedur) Validator."""
+
+    async def validate_and_save(self, run_id: UUID, db: AsyncSession):
+        """Validate and save Procedure resources."""
+        config = await get_config_for_run(self.server_id, "Procedure", db)
+
+        start_time = monotonic()
+        pages_done = 0
+        cumulative_processed = 0
+        cumulative_invalid = 0
+
+        estimated_total = await self._fetch_total("Procedure")
+
+        async for entries in self.iter_pages("Procedure", run_id, db):
+            pages_done += 1
+            page_processed = 0
+            page_invalid = 0
+
+            for entry in entries:
+                page_processed += 1
+                resource = entry.get("resource", {})
+                rid = resource.get("id", "")
+                issues = []
+                metrics = self._build_metrics(config)
+
+                # ========== privacy ==========
+
+                if rule_enabled(config, "note_cleartext_check"):
+                    for note in resource.get("note", []):
+                        text = note.get("text", "")
+                        if text and len(text) > 50:
+                            issues.append(
+                                {
+                                    "rule": "note_cleartext_check",
+                                    "severity": config["note_cleartext_check"][
+                                        "severity"
+                                    ],
+                                    "message": "Procedure.note contains a long free-text string that may include personal data.",
+                                }
+                            )
+                            metrics["note_cleartext_check"] = False
+                            break
+
+                # ========== completeness ==========
+
+                if rule_enabled(config, "status_required"):
+                    if not resource.get("status"):
+                        issues.append(
+                            {
+                                "rule": "status_required",
+                                "severity": config["status_required"]["severity"],
+                                "message": "Procedure.status is missing.",
+                            }
+                        )
+                        metrics["status_required"] = False
+
+                if rule_enabled(config, "code_required"):
+                    if not resource.get("code"):
+                        issues.append(
+                            {
+                                "rule": "code_required",
+                                "severity": config["code_required"]["severity"],
+                                "message": "Procedure.code is missing.",
+                            }
+                        )
+                        metrics["code_required"] = False
+
+                if rule_enabled(config, "subject_required"):
+                    if not resource.get("subject"):
+                        issues.append(
+                            {
+                                "rule": "subject_required",
+                                "severity": config["subject_required"]["severity"],
+                                "message": "Procedure.subject is missing.",
+                            }
+                        )
+                        metrics["subject_required"] = False
+
+                if rule_enabled(config, "performed_required"):
+                    has_performed = (
+                        resource.get("performedDateTime")
+                        or resource.get("performedPeriod")
+                        or resource.get("performedString")
+                        or resource.get("performedAge")
+                        or resource.get("performedRange")
+                    )
+                    if not has_performed:
+                        issues.append(
+                            {
+                                "rule": "performed_required",
+                                "severity": config["performed_required"]["severity"],
+                                "message": "Procedure.performed[x] is missing.",
+                            }
+                        )
+                        metrics["performed_required"] = False
+
+                # ========== integrity ==========
+
+                if rule_enabled(config, "subject_reference_format"):
+                    ref = resource.get("subject", {}).get("reference", "")
+                    if ref and not self._is_reference_format(ref, "Patient"):
+                        issues.append(
+                            {
+                                "rule": "subject_reference_format",
+                                "severity": config["subject_reference_format"][
+                                    "severity"
+                                ],
+                                "message": f"Procedure.subject.reference '{ref}' must follow 'Patient/{{id}}' format.",
+                            }
+                        )
+                        metrics["subject_reference_format"] = False
+
+                if issues:
+                    page_invalid += 1
+                    await self.save_invalid(
+                        run_id, "Procedure", rid, issues, metrics, db
+                    )
+
+            cumulative_processed += page_processed
+            cumulative_invalid += page_invalid
+
+            await self._update_run_counters(
+                run_id, "Procedure", page_processed, page_invalid, db
+            )
+
+            await self._emit_progress(
+                run_id=run_id,
+                resource_type="Procedure",
+                total_processed=cumulative_processed,
+                total_invalid=cumulative_invalid,
+                pages_done=pages_done,
+                estimated_total=estimated_total,
+                start_time=start_time,
+            )
+
+        logger.info("Procedure validation complete for run %s", run_id)
+
+
+# =============================================================================
+# DIAGNOSTICREPORT
+# =============================================================================
+class DiagnosticReportValidator(BaseValidator):
+    """DiagnosticReport Validator."""
+
+    async def validate_and_save(self, run_id: UUID, db: AsyncSession):
+        """Validate and save DiagnosticReport resources."""
+        config = await get_config_for_run(self.server_id, "DiagnosticReport", db)
+
+        start_time = monotonic()
+        pages_done = 0
+        cumulative_processed = 0
+        cumulative_invalid = 0
+
+        estimated_total = await self._fetch_total("DiagnosticReport")
+
+        async for entries in self.iter_pages("DiagnosticReport", run_id, db):
+            pages_done += 1
+            page_processed = 0
+            page_invalid = 0
+
+            for entry in entries:
+                page_processed += 1
+                resource = entry.get("resource", {})
+                rid = resource.get("id", "")
+                issues = []
+                metrics = self._build_metrics(config)
+
+                # ========== privacy ==========
+
+                if rule_enabled(config, "note_cleartext_check"):
+                    # DiagnosticReport uses 'conclusion' (string) and 'text' (Narrative)
+                    conclusion = resource.get("conclusion", "")
+                    narrative_div = resource.get("text", {}).get("div", "")
+                    flagged = (conclusion and len(conclusion) > 50) or (
+                        narrative_div and len(narrative_div) > 100
+                    )
+                    if flagged:
+                        issues.append(
+                            {
+                                "rule": "note_cleartext_check",
+                                "severity": config["note_cleartext_check"]["severity"],
+                                "message": "DiagnosticReport.conclusion or text.div contains a long free-text string that may include personal data.",
+                            }
+                        )
+                        metrics["note_cleartext_check"] = False
+
+                # ========== completeness ==========
+
+                if rule_enabled(config, "status_required"):
+                    if not resource.get("status"):
+                        issues.append(
+                            {
+                                "rule": "status_required",
+                                "severity": config["status_required"]["severity"],
+                                "message": "DiagnosticReport.status is missing.",
+                            }
+                        )
+                        metrics["status_required"] = False
+
+                if rule_enabled(config, "code_required"):
+                    if not resource.get("code"):
+                        issues.append(
+                            {
+                                "rule": "code_required",
+                                "severity": config["code_required"]["severity"],
+                                "message": "DiagnosticReport.code is missing.",
+                            }
+                        )
+                        metrics["code_required"] = False
+
+                if rule_enabled(config, "subject_required"):
+                    if not resource.get("subject"):
+                        issues.append(
+                            {
+                                "rule": "subject_required",
+                                "severity": config["subject_required"]["severity"],
+                                "message": "DiagnosticReport.subject is missing.",
+                            }
+                        )
+                        metrics["subject_required"] = False
+
+                # ========== integrity ==========
+
+                if rule_enabled(config, "subject_reference_format"):
+                    ref = resource.get("subject", {}).get("reference", "")
+                    if ref and not self._is_reference_format(ref, "Patient"):
+                        issues.append(
+                            {
+                                "rule": "subject_reference_format",
+                                "severity": config["subject_reference_format"][
+                                    "severity"
+                                ],
+                                "message": f"DiagnosticReport.subject.reference '{ref}' must follow 'Patient/{{id}}' format.",
+                            }
+                        )
+                        metrics["subject_reference_format"] = False
+
+                if issues:
+                    page_invalid += 1
+                    await self.save_invalid(
+                        run_id, "DiagnosticReport", rid, issues, metrics, db
+                    )
+
+            cumulative_processed += page_processed
+            cumulative_invalid += page_invalid
+
+            await self._update_run_counters(
+                run_id, "DiagnosticReport", page_processed, page_invalid, db
+            )
+
+            await self._emit_progress(
+                run_id=run_id,
+                resource_type="DiagnosticReport",
+                total_processed=cumulative_processed,
+                total_invalid=cumulative_invalid,
+                pages_done=pages_done,
+                estimated_total=estimated_total,
+                start_time=start_time,
+            )
+
+        logger.info("DiagnosticReport validation complete for run %s", run_id)
 
 
 # =============================================================================
@@ -1461,4 +1944,7 @@ VALIDATORS: dict[str, type[BaseValidator]] = {
     "Medication": MedicationValidator,
     "MedicationRequest": MedicationRequestValidator,
     "MedicationAdministration": MedicationAdministrationValidator,
+    "Condition": ConditionValidator,
+    "Procedure": ProcedureValidator,
+    "DiagnosticReport": DiagnosticReportValidator,
 }

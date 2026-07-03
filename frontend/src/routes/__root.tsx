@@ -1,12 +1,11 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
-import { TanStackDevtools } from "@tanstack/react-devtools"
 import type { ReactNode } from "react"
 
 import { AuthBoundary } from "@/components/auth-boundary"
 
 import appCss from "../styles.css?url"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "sonner"
 
 export const Route = createRootRoute({
   head: () => ({
@@ -36,17 +35,12 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body className="bg-background text-foreground antialiased">
         <ThemeProvider defaultTheme="dark" storageKey="theme">
-          <AuthBoundary>{children}</AuthBoundary>
+          <AuthBoundary>
+            {children}
+
+            <Toaster position="top-center" />
+          </AuthBoundary>
         </ThemeProvider>
-        <TanStackDevtools
-          config={{ position: "bottom-right" }}
-          plugins={[
-            {
-              name: "Tanstack Router",
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-          ]}
-        />
         <Scripts />
       </body>
     </html>

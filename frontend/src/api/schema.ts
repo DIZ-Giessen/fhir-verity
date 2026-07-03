@@ -114,13 +114,13 @@ export interface paths {
         };
         /**
          * List Fhir Servers
-         * @description List all FHIR servers.
+         * @description List FHIR servers. Admins see all, others only their own.
          */
         get: operations["list_fhir_servers_api_v1_servers_get"];
         put?: never;
         /**
          * Create Fhir Server
-         * @description Create a new FHIR server.
+         * @description Create a new FHIR server. The creating user becomes the owner.
          */
         post: operations["create_fhir_server_api_v1_servers_post"];
         delete?: never;
@@ -145,7 +145,7 @@ export interface paths {
         post?: never;
         /**
          * Delete FHIR server
-         * @description Delete FHIR Servers
+         * @description Delete FHIR Server
          */
         delete: operations["delete_fhir_server_api_v1_servers__server_id__delete"];
         options?: never;
@@ -237,6 +237,29 @@ export interface paths {
          * @description Start a new validation run asynchronously.
          */
         post: operations["start_validation_api_v1_validation_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/validation/runs/{run_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Validation
+         * @description Resume a run interrupted by a full process crash (status FAILED or
+         *     CANCELLED). Each resource type continues from the _lastUpdated watermark in
+         *     ValidationRun.checkpoint; already-completed types are skipped. Transient
+         *     paging failures mid-run are self-healed by iter_pages and need no resume.
+         */
+        post: operations["resume_validation_api_v1_validation_runs__run_id__resume_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -504,7 +527,7 @@ export interface paths {
         };
         /**
          * List Audit Log
-         * @description Audir Logs
+         * @description Audit log (admin only).
          */
         get: operations["list_audit_log_audit_log_get"];
         put?: never;
@@ -513,6 +536,100 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/resources/fix-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fix Templates
+         * @description All (resource_type, rule) combos the frontend may offer a one-click fix for.
+         */
+        get: operations["list_fix_templates_resources_fix_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/resources/{server_id}/{resource_type}/{resource_id}/auto-fix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Auto Fix Resource
+         * @description Apply every available template for the rules this resource actually violates,
+         *     accumulated into a single PATCH. Backend is authoritative: it reads the rules
+         *     from invalid_resources, not from the client.
+         *     Returns 400 if none of the resource's rules has a template.
+         */
+        post: operations["auto_fix_resource_resources__server_id___resource_type___resource_id__auto_fix_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit-log/{audit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Audit Log */
+        get: operations["get_audit_log_audit_log__audit_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Users */
+        get: operations["list_users_api_v1_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update User Role */
+        patch: operations["update_user_role_api_v1_users__user_id__role_patch"];
         trace?: never;
     };
 }
@@ -547,6 +664,46 @@ export interface components {
              */
             executed_at: string;
         };
+        /** AuditLogDetail */
+        AuditLogDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Server Id
+             * Format: uuid
+             */
+            server_id: string;
+            /** Server Base Url */
+            server_base_url: string;
+            /** Resource Type */
+            resource_type: string;
+            /** Resource Id */
+            resource_id: string;
+            /** Invalid Resource Id */
+            invalid_resource_id?: string | null;
+            /** Action */
+            action: string;
+            /** Fhir Request Payload */
+            fhir_request_payload?: unknown | null;
+            /** Fhir Response Status */
+            fhir_response_status?: string | null;
+            /** Resource Before */
+            resource_before?: unknown | null;
+            /** Status */
+            status: string;
+            /** Error Message */
+            error_message?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Executed At
+             * Format: date-time
+             */
+            executed_at: string;
+        };
         /** AuditLogListItem */
         AuditLogListItem: {
             /**
@@ -569,11 +726,21 @@ export interface components {
             status: string;
             /** Error Message */
             error_message?: string | null;
+            /** Actor Id */
+            actor_id?: string | null;
             /**
              * Executed At
              * Format: date-time
              */
             executed_at: string;
+        };
+        /**
+         * AutoFixRequest
+         * @description Model for a Auto Fix Request
+         */
+        AutoFixRequest: {
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * BulkActionError
@@ -720,6 +887,8 @@ export interface components {
              * @enum {string}
              */
             auth_type: "none" | "basic" | "oauth2_client_credentials";
+            /** Owner Id */
+            owner_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -748,6 +917,16 @@ export interface components {
             } | null;
             /** Is Active */
             is_active?: boolean | null;
+        };
+        /**
+         * FixableTemplate
+         * @description Model for a Fixable Template
+         */
+        FixableTemplate: {
+            /** Resource Type */
+            resource_type: string;
+            /** Rule */
+            rule: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1061,6 +1240,15 @@ export interface components {
             full_name?: string | null;
             /** Role */
             role: string;
+        };
+        /**
+         * UserRole
+         * @enum {string}
+         */
+        UserRole: "viewer" | "editor" | "admin";
+        /** UserRoleUpdate */
+        UserRoleUpdate: {
+            role: components["schemas"]["UserRole"];
         };
         /** ValidationError */
         ValidationError: {
@@ -1646,6 +1834,37 @@ export interface operations {
             };
         };
     };
+    resume_validation_api_v1_validation_runs__run_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationRunRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_validation_runs_api_v1_validation_runs_get: {
         parameters: {
             query?: {
@@ -1975,9 +2194,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                server_id: string;
                 resource_type: string;
                 resource_id: string;
+                server_id: string;
             };
             cookie?: never;
         };
@@ -2012,9 +2231,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                server_id: string;
                 resource_type: string;
                 resource_id: string;
+                server_id: string;
             };
             cookie?: never;
         };
@@ -2119,6 +2338,7 @@ export interface operations {
                 resource_type?: string | null;
                 action?: string | null;
                 status_filter?: string | null;
+                actor_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -2133,6 +2353,161 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedAuditLog"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_fix_templates_resources_fix_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixableTemplate"][];
+                };
+            };
+        };
+    };
+    auto_fix_resource_resources__server_id___resource_type___resource_id__auto_fix_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resource_type: string;
+                resource_id: string;
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AutoFixRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_audit_log_audit_log__audit_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                audit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_users_api_v1_users_get: {
+        parameters: {
+            query?: {
+                skip?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_user_role_api_v1_users__user_id__role_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserRoleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
                 };
             };
             /** @description Validation Error */

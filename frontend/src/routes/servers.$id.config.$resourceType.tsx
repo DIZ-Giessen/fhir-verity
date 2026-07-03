@@ -119,7 +119,10 @@ function ResourceConfigPage() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">
-              {resourceType}
+              {resourceType} rules for server{" "}
+              <span className="font-mono text-orange-500/70">
+                {id.slice(0, 8)}
+              </span>
             </h1>
             {data?.is_server_specific ? (
               <Badge variant="secondary">Server override</Badge>
@@ -178,7 +181,7 @@ function ResourceConfigPage() {
           return (
             <section
               key={category}
-              className="mx-auto max-w-4xl space-y-2 rounded-xl border bg-sidebar-accent/20 px-1 pt-5"
+              className="mx-auto max-w-6xl space-y-2 rounded-xl border bg-sidebar-accent/20 px-1 pt-5"
             >
               <h2
                 className={cn(

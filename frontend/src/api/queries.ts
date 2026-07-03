@@ -1,7 +1,8 @@
-import { queryOptions } from "@tanstack/react-query"
+import { keepPreviousData, queryOptions } from "@tanstack/react-query"
 
 import { api, ApiError } from "@/lib/api-client"
 import type { components } from "./schema"
+import type { InvalidResourcesParams } from "@/lib/interface"
 
 export type FhirServer = components["schemas"]["FhirServerRead"]
 export type FhirServerCreate = components["schemas"]["FhirServerCreate"]
@@ -18,7 +19,23 @@ export type ResourceCount = components["schemas"]["ResourceCount"]
 export type ValidationRunListItem =
   components["schemas"]["ValidationRunListItem"]
 export type RunSummary = components["schemas"]["RunSummary"]
-
+export type ValidationRunDetail = components["schemas"]["ValidationRunDetail"]
+export type PerResourceStats = components["schemas"]["PerResourceStats"]
+export type ResourceTypeSummary = components["schemas"]["ResourceTypeSummary"]
+export type InvalidResourceRead = components["schemas"]["InvalidResourceRead"]
+export type IssueDetail = components["schemas"]["IssueDetail"]
+export type PaginatedInvalidResources =
+  components["schemas"]["PaginatedInvalidResources"]
+export type ValidationRunRead = components["schemas"]["ValidationRunRead"]
+export type ActionResult = components["schemas"]["ActionResult"]
+export type FixableTemplate = components["schemas"]["FixableTemplate"]
+export type BulkActionResult = components["schemas"]["BulkActionResult"]
+export type BulkDeleteRequest = components["schemas"]["BulkDeleteRequest"]
+export type BulkFixRequest = components["schemas"]["BulkFixRequest"]
+export type AuditLogListItem = components["schemas"]["AuditLogListItem"]
+export type AuditLogDetail = components["schemas"]["AuditLogDetail"]
+export type UserRoleUpdate = components["schemas"]["UserRoleUpdate"]
+export type Role = UserRoleUpdate["role"] // "viewer" | "editor" | "admin"
 // ======================
 
 export const serverKeys = {
@@ -249,3 +266,179 @@ export const runsQueryOptions = (limit = 50) =>
       return data
     },
   })
+export const runQueryOptions = (runId: string) =>
+  queryOptions({
+    queryKey: ["validation", "runs", runId, "detail"],
+    queryFn: async () => {
+      const { data } = await api.GET("/api/v1/validation/runs/{run_id}", {
+        params: { path: { run_id: runId } },
+      })
+      return data
+    },
+  })
+
+export const invalidResourcesQueryOptions = (
+  runId: string,
+  params: InvalidResourcesParams = {}
+) =>
+  queryOptions({
+    queryKey: ["validation", "runs", runId, "invalid-resources", params],
+    queryFn: async () => {
+      const { data } = await api.GET(
+        "/api/v1/validation/runs/{run_id}/invalid-resources",
+        { params: { path: { run_id: runId }, query: params } }
+      )
+      return data
+    },
+    placeholderData: keepPreviousData,
+  })
+
+//!  START VALIDATION RUNS
+export async function startValidation(body: {
+  server_id: string
+  resource_types: string[]
+}) {
+  const { data } = await api.POST("/api/v1/validation/start", { body })
+  return data
+}
+
+export async function resumeValidation(runId: string) {
+  const { data } = await api.POST("/api/v1/validation/runs/{run_id}/resume", {
+    params: { path: { run_id: runId } },
+  })
+  return data
+}
+//!  END VALIDATION RUNS
+
+// ---------------------------------------------------------------------------
+// Resource actions
+// ----------------------------------------------------------------------
+
+export const fixTemplatesQueryOptions = () =>
+  queryOptions({
+    queryKey: ["resources", "fix-templates"],
+    queryFn: async () => {
+      const { data } = await api.GET("/resources/fix-templates")
+      return data ?? []
+    },
+    staleTime: 5 * 60_000,
+  })
+
+export async function autoFixResource(
+  serverId: string,
+  resourceType: string,
+  resourceId: string,
+  reason?: string
+) {
+  const { data } = await api.POST(
+    "/resources/{server_id}/{resource_type}/{resource_id}/auto-fix",
+    {
+      params: {
+        path: {
+          server_id: serverId,
+          resource_type: resourceType,
+          resource_id: resourceId,
+        },
+      },
+      body: { reason: reason ?? null },
+    }
+  )
+  return data
+}
+
+export async function deleteResource(
+  serverId: string,
+  resourceType: string,
+  resourceId: string,
+  reason?: string
+) {
+  const { data } = await api.DELETE(
+    "/resources/{server_id}/{resource_type}/{resource_id}",
+    {
+      params: {
+        path: {
+          server_id: serverId,
+          resource_type: resourceType,
+          resource_id: resourceId,
+        },
+      },
+      body: { reason: reason ?? null },
+    }
+  )
+  return data
+}
+
+export async function bulkDelete(body: BulkDeleteRequest) {
+  const { data } = await api.POST("/resources/bulk-delete", { body })
+  return data
+}
+
+export async function bulkFix(body: BulkFixRequest) {
+  const { data } = await api.POST("/resources/bulk-fix", { body })
+  return data
+}
+
+export interface AuditLogParams {
+  skip?: number
+  limit?: number
+  server_id?: string
+  resource_type?: string
+  action?: string
+  status_filter?: string
+}
+
+export const auditLogQueryOptions = (params: AuditLogParams = {}) =>
+  queryOptions({
+    queryKey: ["audit-log", params],
+    queryFn: async () => {
+      const { data } = await api.GET("/audit-log", {
+        params: { query: params },
+      })
+      return data
+    },
+    placeholderData: keepPreviousData,
+  })
+
+export const auditLogDetailQueryOptions = (auditId: string) =>
+  queryOptions({
+    queryKey: ["audit-log", auditId, "detail"],
+    queryFn: async () => {
+      const { data } = await api.GET("/audit-log/{audit_id}", {
+        params: { path: { audit_id: auditId } },
+      })
+      return data
+    },
+  })
+
+// ---------------------------------------------------------------------------
+// Users & roles (admin)
+// ---------------------------------------------------------------------------
+
+const ROLE_ORDER: Record<Role, number> = { viewer: 0, editor: 1, admin: 2 }
+
+/** True if `role` meets or exceeds `min`. Mirrors the backend ROLE_ORDER. */
+export function hasRole(role: string | null | undefined, min: Role): boolean {
+  if (!role) return false
+  return (ROLE_ORDER[role as Role] ?? -1) >= ROLE_ORDER[min]
+}
+
+export const userKeys = {
+  all: ["users"] as const,
+}
+
+export const usersQueryOptions = () =>
+  queryOptions({
+    queryKey: userKeys.all,
+    queryFn: async () => {
+      const { data } = await api.GET("/api/v1/users")
+      return data ?? []
+    },
+  })
+
+export async function updateUserRole(userId: string, role: Role) {
+  const { data } = await api.PATCH("/api/v1/users/{user_id}/role", {
+    params: { path: { user_id: userId } },
+    body: { role },
+  })
+  return data
+}

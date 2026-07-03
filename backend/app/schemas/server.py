@@ -29,6 +29,7 @@ class FhirServerRead(BaseModel):
     is_active: bool
     has_auth_config: bool = False
     auth_type: Literal["none", "basic", "oauth2_client_credentials"] = "none"
+    owner_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 

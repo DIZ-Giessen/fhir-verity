@@ -67,7 +67,12 @@ class AuditLog(Base, TimestampMixin):
     reason = Column(Text, nullable=True)
 
     # Who triggered this (for when auth is added later)
-    executed_by = Column(String, nullable=True)
+    actor_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     executed_at = Column(
         DateTime(timezone=True),
         default=datetime.now,
