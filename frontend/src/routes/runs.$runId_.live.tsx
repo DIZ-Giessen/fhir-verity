@@ -1,7 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { AlertTriangle, CheckCircle2, ChevronLeft } from "lucide-react"
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 
 import { runQueryOptions } from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
@@ -285,6 +291,11 @@ function LivePage() {
   const pct = metrics.progressPercent ?? (runState === "completed" ? 100 : 0)
   const c = CONN_META[conn]
 
+  const elapsed = intervalToDuration({
+    start: 0,
+    end: (metrics.elapsedSeconds ?? 0) * 1000,
+  })
+
   return (
     <div className="space-y-6">
       <Link
@@ -312,12 +323,17 @@ function LivePage() {
       </div>
 
       {runState === "completed" && (
-        <Card className="border-emerald-500/30 bg-emerald-500/5">
+        <Card className="border-emerald-500/30 bg-emerald-500/5 shadow-xs dark:bg-emerald-50/5">
           <CardContent className="flex items-center gap-3 py-4">
             <CheckCircle2 className="h-5 w-5 text-emerald-500" />
             <p className="text-sm font-medium">
               This run has finished — showing final results.
             </p>
+            <Button asChild variant="outline">
+              <Link to="/runs/$runId/invalid-resources" params={{ runId }}>
+                View invalid resources
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -409,10 +425,30 @@ function LivePage() {
         />
         <KpiTile
           label="Elapsed"
-          value={
-            metrics.elapsedSeconds != null
-              ? fmtTime(metrics.elapsedSeconds)
-              : "—"
+          content={
+            <div className="mt-6 flex items-center divide-x rounded-xl text-3xl tabular-nums">
+              {elapsed.days! > 0 && (
+                <span className="flex items-center justify-center p-2">
+                  {elapsed.days}
+                  <span className="text-muted-foreground">d</span>
+                </span>
+              )}
+
+              <span className="flex items-center justify-center p-2">
+                {(elapsed.hours ?? 0).toString().padStart(2, "0")}
+                <span className="text-muted-foreground">h</span>
+              </span>
+
+              <span className="flex items-center justify-center p-2">
+                {(elapsed.minutes ?? 0).toString().padStart(2, "0")}
+                <span className="text-muted-foreground">m</span>
+              </span>
+
+              <span className="flex items-center justify-center p-2">
+                {(elapsed.seconds ?? 0).toString().padStart(2, "0")}
+                <span className="text-muted-foreground">s</span>
+              </span>
+            </div>
           }
         />
       </div>
@@ -467,11 +503,13 @@ function LivePage() {
 function KpiTile({
   label,
   value,
+  content,
   accent,
   chart,
 }: {
   label: string
-  value: string
+  value?: string
+  content?: React.ReactNode
   accent?: boolean
   chart?: ReactNode
 }) {
@@ -483,16 +521,21 @@ function KpiTile({
             <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
               {label}
             </p>
-            <p
-              className={`mt-1 text-2xl font-semibold tabular-nums ${
-                accent ? "text-orange-500" : ""
-              }`}
-            >
-              {value}
-            </p>
+            {content ?? (
+              <p
+                className={`mt-1 text-2xl font-semibold tabular-nums ${
+                  accent ? "text-orange-500" : ""
+                }`}
+              >
+                {value}
+              </p>
+            )}
           </div>
           {chart}
         </div>
+        {/*  {label === "Elapsed" ? 
+        
+      } */}
       </CardContent>
     </Card>
   )

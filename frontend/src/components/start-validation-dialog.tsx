@@ -1,12 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import {
-  AlertTriangleIcon,
-  Check,
-  ChevronsUpDown,
-  ExternalLink,
-  Loader2,
-} from "lucide-react"
+import { Check, ChevronsUpDown, ExternalLink, Loader2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -42,7 +36,18 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { DangerTriangle } from "@solar-icons/react-perf/category/style/LineDuotone"
 
-const DEFAULT_UNCHECKED_TYPES = new Set(["Condition", "Observation"])
+const DEFAULT_UNCHECKED_TYPES = new Set([
+  "Condition",
+  "Observation",
+  "Medication",
+  "MedicationAdministration",
+  "MedicationStatement",
+  "Procedure",
+  "DiagnosticReport",
+  "MedicationRequest",
+  "Patient",
+  "Encounter",
+])
 
 interface StartValidationDialogProps {
   open: boolean

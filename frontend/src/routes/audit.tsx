@@ -14,6 +14,7 @@ import {
   auditLogQueryOptions,
   resourceTypesQueryOptions,
   serversQueryOptions,
+  usersQueryOptions,
 } from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -78,6 +79,16 @@ function AuditPage() {
   const listQ = useQuery(auditLogQueryOptions(params))
   const serversQ = useQuery(serversQueryOptions())
   const typesQ = useQuery(resourceTypesQueryOptions())
+
+  const usersQ = useQuery(usersQueryOptions())
+
+  const actorName = useMemo(() => {
+    const m = new Map(
+      (usersQ.data ?? []).map((u) => [u.id, u.username || u.email || u.id])
+    )
+    return (id: string | null | undefined) =>
+      id ? (m.get(id) ?? id) : "System"
+  }, [usersQ.data])
 
   const serverName = useMemo(() => {
     const m = new Map((serversQ.data ?? []).map((s) => [s.id, s.name]))
@@ -210,6 +221,7 @@ function AuditPage() {
                     <TableHead>Resource</TableHead>
                     <TableHead>Server</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>User</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -243,6 +255,7 @@ function AuditPage() {
                           <TableCell className="text-xs">
                             {serverName(a.server_id)}
                           </TableCell>
+
                           <TableCell>
                             <Badge
                               variant="outline"
@@ -251,11 +264,14 @@ function AuditPage() {
                               {a.status}
                             </Badge>
                           </TableCell>
+                          <TableCell className="text-xs">
+                            {actorName(a.actor_id)}
+                          </TableCell>
                         </TableRow>
 
                         {isOpen && (
                           <TableRow key={`${a.id}-detail`}>
-                            <TableCell colSpan={6} className="bg-muted/30 p-0">
+                            <TableCell colSpan={7} className="bg-muted/30 p-0">
                               <AuditDetail auditId={a.id} />
                             </TableCell>
                           </TableRow>
