@@ -168,82 +168,44 @@ class BaseValidator:
         self, resource_type: str, run_id: UUID, db: AsyncSession
     ) -> AsyncIterator[list[dict]]:
         """
-        Yield pages of entries for a resource type, sorted ascending by
-        _lastUpdated. Survives dead paging sessions: on a hard fetch failure
-        (404/410 expired Blaze token, or a 5xx/network error that outlived the
-        per-request retries) the crawl re-anchors with _lastUpdated=ge{watermark}
-        and continues, instead of failing the whole run.
-
-        The watermark is the highest _lastUpdated of the last fully consumed
-        page, persisted to ValidationRun.checkpoint. Because the crawl is sorted
-        ascending, everything below the watermark is guaranteed processed. On
-        re-anchor we use `ge` (not `gt`) so resources that share the boundary
-        _lastUpdated (whole bulk-import transactions on Blaze) are not skipped;
-        the overlap is idempotent via save_invalid's ON CONFLICT.
+        Crawl a resource type sorted ascending by _lastUpdated, following the
+        server's next links. On resume the first search is anchored at the
+        persisted watermark (_lastUpdated=ge). No automatic re-anchoring: if a
+        page still fails after fetch_bundle's retries the error propagates, the
+        run is marked FAILED, and re-anchoring happens once, on explicit resume.
         """
         watermark = await self._load_watermark(run_id, resource_type, db)
         watermark_dt = self._parse_dt(watermark)
-        stalled = 0
         pages_since_cp = 0
 
-        while True:
-            leg_start_watermark = watermark
-            leg_exc: Exception | None = None
-            params = {"_count": self.PAGE_SIZE, "_sort": "_lastUpdated"}
-            if watermark is not None:
-                params["_lastUpdated"] = f"ge{watermark}"
-            url = f"{self.base_url}/{resource_type}"
-            first = True
+        params = {"_count": self.PAGE_SIZE, "_sort": "_lastUpdated"}
+        if watermark is not None:
+            params["_lastUpdated"] = f"ge{watermark}"
+        url = f"{self.base_url}/{resource_type}"
+        first = True
 
-            try:
-                while url:
-                    bundle = await self.fetch_bundle(url, params if first else None)
-                    first = False
-                    entries = bundle.get("entry", [])
-                    if entries:
-                        yield entries  # consumer validates + commits its page work
-                        page_wm = self._max_last_updated(entries)
-                        page_dt = self._parse_dt(page_wm)
-                        if page_dt and (watermark_dt is None or page_dt > watermark_dt):
-                            watermark, watermark_dt = page_wm, page_dt
-                        pages_since_cp += 1
-                        if pages_since_cp >= self.CHECKPOINT_EVERY_N_PAGES:
-                            await self._persist_watermark(
-                                run_id, resource_type, watermark, db
-                            )
-                            pages_since_cp = 0
-                    url = self._next_link(bundle)
-            except httpx.HTTPError as exc:
-                leg_exc = exc
-
+        try:
+            while url:
+                bundle = await self.fetch_bundle(url, params if first else None)
+                first = False
+                entries = bundle.get("entry", [])
+                if entries:
+                    yield entries
+                    page_wm = self._max_last_updated(entries)
+                    page_dt = self._parse_dt(page_wm)
+                    if page_dt and (watermark_dt is None or page_dt > watermark_dt):
+                        watermark, watermark_dt = page_wm, page_dt
+                    pages_since_cp += 1
+                    if pages_since_cp >= self.CHECKPOINT_EVERY_N_PAGES:
+                        await self._persist_watermark(
+                            run_id, resource_type, watermark, db
+                        )
+                        pages_since_cp = 0
+                url = self._next_link(bundle)
+        finally:
+            # persist even if the crawl raises, so resume starts from the last
+            # processed page, not from the last periodic checkpoint.
             await self._persist_watermark(run_id, resource_type, watermark, db)
-
-            if leg_exc is None:
-                return  # type vollständig gecrawlt
-
-            if watermark is None or not self._is_reanchorable(leg_exc):
-                raise leg_exc
-
-            if watermark == leg_start_watermark:  # Leg kam nicht vom Fleck
-                stalled += 1
-                if stalled >= self.MAX_REANCHORS:
-                    logger.error(
-                        "Giving up on %s after %s stalled re-anchors at _lastUpdated=%s",
-                        resource_type,
-                        stalled,
-                        watermark,
-                    )
-                    raise leg_exc
-            else:
-                stalled = 0
-
-            logger.warning(
-                "Re-anchoring %s from _lastUpdated>=%s after: %s",
-                resource_type,
-                watermark,
-                leg_exc,
-            )
-            await asyncio.sleep(min(2**stalled, 30))
 
     async def save_invalid(
         self,

@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as CleanupRouteImport } from './routes/cleanup'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as UsersIndexRouteImport } from './routes/users/index'
 import { Route as ServersIndexRouteImport } from './routes/servers.index'
 import { Route as RunsIndexRouteImport } from './routes/runs.index'
 import { Route as ServersIdRouteImport } from './routes/servers.$id'
@@ -53,6 +54,11 @@ const AuditRoute = AuditRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UsersIndexRoute = UsersIndexRouteImport.update({
+  id: '/users/',
+  path: '/users/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ServersIndexRoute = ServersIndexRouteImport.update({
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/servers/$id': typeof ServersIdRouteWithChildren
   '/runs/': typeof RunsIndexRoute
   '/servers/': typeof ServersIndexRoute
+  '/users/': typeof UsersIndexRoute
   '/runs/$runId/invalid-resources': typeof RunsRunIdInvalidResourcesRoute
   '/runs/$runId/live': typeof RunsRunIdLiveRoute
   '/servers/$id/': typeof ServersIdIndexRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/runs/$runId': typeof RunsRunIdRoute
   '/runs': typeof RunsIndexRoute
   '/servers': typeof ServersIndexRoute
+  '/users': typeof UsersIndexRoute
   '/runs/$runId/invalid-resources': typeof RunsRunIdInvalidResourcesRoute
   '/runs/$runId/live': typeof RunsRunIdLiveRoute
   '/servers/$id': typeof ServersIdIndexRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/servers/$id': typeof ServersIdRouteWithChildren
   '/runs/': typeof RunsIndexRoute
   '/servers/': typeof ServersIndexRoute
+  '/users/': typeof UsersIndexRoute
   '/runs/$runId_/invalid-resources': typeof RunsRunIdInvalidResourcesRoute
   '/runs/$runId_/live': typeof RunsRunIdLiveRoute
   '/servers/$id/': typeof ServersIdIndexRoute
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/servers/$id'
     | '/runs/'
     | '/servers/'
+    | '/users/'
     | '/runs/$runId/invalid-resources'
     | '/runs/$runId/live'
     | '/servers/$id/'
@@ -179,6 +189,7 @@ export interface FileRouteTypes {
     | '/runs/$runId'
     | '/runs'
     | '/servers'
+    | '/users'
     | '/runs/$runId/invalid-resources'
     | '/runs/$runId/live'
     | '/servers/$id'
@@ -196,6 +207,7 @@ export interface FileRouteTypes {
     | '/servers/$id'
     | '/runs/'
     | '/servers/'
+    | '/users/'
     | '/runs/$runId_/invalid-resources'
     | '/runs/$runId_/live'
     | '/servers/$id/'
@@ -210,6 +222,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RunsRoute: typeof RunsRouteWithChildren
   ServersRoute: typeof ServersRouteWithChildren
+  UsersIndexRoute: typeof UsersIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -254,6 +267,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/users/': {
+      id: '/users/'
+      path: '/users'
+      fullPath: '/users/'
+      preLoaderRoute: typeof UsersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/servers/': {
@@ -374,6 +394,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RunsRoute: RunsRouteWithChildren,
   ServersRoute: ServersRouteWithChildren,
+  UsersIndexRoute: UsersIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

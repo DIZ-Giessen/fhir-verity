@@ -34,6 +34,8 @@ export type BulkDeleteRequest = components["schemas"]["BulkDeleteRequest"]
 export type BulkFixRequest = components["schemas"]["BulkFixRequest"]
 export type AuditLogListItem = components["schemas"]["AuditLogListItem"]
 export type AuditLogDetail = components["schemas"]["AuditLogDetail"]
+export type UserRoleUpdate = components["schemas"]["UserRoleUpdate"]
+export type Role = UserRoleUpdate["role"] // "viewer" | "editor" | "admin"
 // ======================
 
 export const serverKeys = {
@@ -407,3 +409,36 @@ export const auditLogDetailQueryOptions = (auditId: string) =>
       return data
     },
   })
+
+// ---------------------------------------------------------------------------
+// Users & roles (admin)
+// ---------------------------------------------------------------------------
+
+const ROLE_ORDER: Record<Role, number> = { viewer: 0, editor: 1, admin: 2 }
+
+/** True if `role` meets or exceeds `min`. Mirrors the backend ROLE_ORDER. */
+export function hasRole(role: string | null | undefined, min: Role): boolean {
+  if (!role) return false
+  return (ROLE_ORDER[role as Role] ?? -1) >= ROLE_ORDER[min]
+}
+
+export const userKeys = {
+  all: ["users"] as const,
+}
+
+export const usersQueryOptions = () =>
+  queryOptions({
+    queryKey: userKeys.all,
+    queryFn: async () => {
+      const { data } = await api.GET("/api/v1/users")
+      return data ?? []
+    },
+  })
+
+export async function updateUserRole(userId: string, role: Role) {
+  const { data } = await api.PATCH("/api/v1/users/{user_id}/role", {
+    params: { path: { user_id: userId } },
+    body: { role },
+  })
+  return data
+}

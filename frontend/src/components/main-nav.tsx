@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query"
 import { Link, useRouterState } from "@tanstack/react-router"
 import { type LucideIcon } from "lucide-react"
 
@@ -7,15 +8,14 @@ import {
   PlayCircle,
   NotificationLinesRemove,
   ClipboardList,
+  UsersGroupRounded,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
 
+import { hasRole, meQueryOptions, type Role } from "@/api/queries"
 import { cn } from "@/lib/utils"
-import { Badge } from "./ui/badge"
-
-type Role = 1 | 2 | 3
 
 type NavItem = {
-  to: "/" | "/servers" | "/runs" | "/cleanup" | "/audit"
+  to: "/" | "/servers" | "/runs" | "/cleanup" | "/audit" | "/users"
   label: string
   icon: LucideIcon
   minRole?: Role
@@ -29,20 +29,19 @@ const navItems: NavItem[] = [
     to: "/cleanup",
     label: "Cleanup",
     icon: NotificationLinesRemove,
-    minRole: 2,
+    minRole: "editor",
   },
-  { to: "/audit", label: "Audit", icon: ClipboardList, minRole: 3 },
+  { to: "/audit", label: "Audit", icon: ClipboardList, minRole: "admin" },
+  { to: "/users", label: "Users", icon: UsersGroupRounded, minRole: "admin" },
 ]
 
-interface MainNavProps {
-  role?: Role
-}
-
-export function MainNav({ role = 3 }: MainNavProps) {
+export function MainNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const { data: me } = useQuery(meQueryOptions())
+  const role = me?.role
 
   const visible = navItems.filter(
-    (item) => item.minRole === undefined || role >= item.minRole
+    (item) => item.minRole === undefined || hasRole(role, item.minRole)
   )
 
   return (
