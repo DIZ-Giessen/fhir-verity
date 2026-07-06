@@ -35,6 +35,9 @@ export type BulkFixRequest = components["schemas"]["BulkFixRequest"]
 export type AuditLogListItem = components["schemas"]["AuditLogListItem"]
 export type AuditLogDetail = components["schemas"]["AuditLogDetail"]
 export type UserRoleUpdate = components["schemas"]["UserRoleUpdate"]
+
+export type UserPreferencesUpdate =
+  components["schemas"]["UserPreferencesUpdate"]
 export type Role = UserRoleUpdate["role"] // "viewer" | "editor" | "admin"
 // ======================
 
@@ -440,5 +443,10 @@ export async function updateUserRole(userId: string, role: Role) {
     params: { path: { user_id: userId } },
     body: { role },
   })
+  return data
+}
+
+export async function updateMyPreferences(body: UserPreferencesUpdate) {
+  const { data } = await api.PATCH("/api/v1/users/me/preferences", { body })
   return data
 }

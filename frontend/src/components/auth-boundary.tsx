@@ -12,11 +12,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
   useEffect(() => setMounted(true), [])
 
   if (!mounted) {
-    return (
-      <Centered>
-        <div className="animate-pulse">Loading... </div>
-      </Centered>
-    )
+    return <Centered>Loading...</Centered>
   }
 
   return <AuthGate>{children}</AuthGate>
@@ -29,11 +25,7 @@ function AuthGate({ children }: { children: ReactNode }) {
   const { data, isPending } = useQuery(meQueryOptions())
 
   if (isPending) {
-    return (
-      <Centered>
-        <div className="animate-pulse">Loading... </div>
-      </Centered>
-    )
+    return <Centered>Loading...</Centered>
   }
 
   const isAuthenticated = data != null
@@ -57,7 +49,7 @@ function AuthGate({ children }: { children: ReactNode }) {
 function Centered({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-svh items-center justify-center">
-      <p className="text-sm text-muted-foreground">{children}</p>
+      <p className="animate-pulse text-sm text-muted-foreground">{children}</p>
     </div>
   )
 }
