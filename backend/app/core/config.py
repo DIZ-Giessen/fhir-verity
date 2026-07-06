@@ -34,7 +34,17 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_SECRET: str
     INITIAL_ADMIN_USERS: str = ""
 
+    # --- SMTP (email notifications) ---
+    EMAIL_ENABLED: bool = True
+    EMAIL_HOST: str = ""
+    EMAIL_HOST_PORT: int = 465
+    EMAIL_ADDRESS: str = ""  # From-Adresse
+    EMAIL_USER: str = ""
+    EMAIL_PASSWORD: str = ""
+
     class Config:
+        """Config Class"""
+
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"
