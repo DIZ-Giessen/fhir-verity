@@ -2,17 +2,12 @@ import { useQuery } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { ChevronLeft, ChevronRight, Play } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  PolarAngleAxis,
-  PolarGrid,
-  Radar,
-  RadarChart,
-  XAxis,
-  YAxis,
-} from "recharts"
+
+import { AreaChart } from "@/components/charts/area-chart"
+import { Area } from "@/components/charts/area"
+import { XAxis } from "@/components/charts/x-axis"
+import { Grid } from "@/components/charts/grid"
+import { ChartTooltip } from "@/components/charts/tooltip"
 
 import {
   type ValidationRunListItem,
@@ -24,17 +19,11 @@ import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart"
+
 import {
   Popover,
   PopoverContent,
@@ -55,7 +44,6 @@ import {
   Documents,
   InfoCircle,
   NotificationLinesRemove,
-  Sidebar,
   SquareTopDown,
   Star2,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
@@ -95,6 +83,7 @@ function bucketByMonth(
     buckets.push({
       key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
       label: monthLabelFormatter.format(d),
+      date: new Date(d.getFullYear(), d.getMonth(), 1), // neu
       invalid: 0,
       runs: 0,
     })
@@ -124,7 +113,6 @@ function RunsPage() {
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [startOpen, setStartOpen] = useState(false)
-  const [showCharts, setShowCharts] = useState(true)
   const serverMap = useMemo(() => {
     const map = new Map<
       string,
@@ -141,7 +129,6 @@ function RunsPage() {
     [runsQ.data]
   )
 
-  const totalInvalid = monthly.reduce((sum, b) => sum + b.invalid, 0)
   const totalRuns = monthly.reduce((sum, b) => sum + b.runs, 0)
 
   return (
@@ -168,35 +155,14 @@ function RunsPage() {
               <Play className="size-4" />
               Start a new run
             </Button>
-            <Button
-              variant="outline"
-              size="icon-lg"
-              onClick={() => setShowCharts(!showCharts)}
-            >
-              <Sidebar
-                className={cn(
-                  "size-5 rotate-270 transition-transform duration-500 ease-out",
-                  !showCharts && "rotate-90"
-                )}
-              />
-            </Button>
           </div>
         </div>
 
-        <div
-          className={cn("grid gap-6 lg:grid-cols-2", !showCharts && "hidden")}
-        >
-          <RadarCard
-            data={monthly}
-            totalInvalid={totalInvalid}
-            loading={runsQ.isPending}
-          />
-          <BarCard
-            data={monthly}
-            totalRuns={totalRuns}
-            loading={runsQ.isPending}
-          />
-        </div>
+        <BarCard
+          data={monthly}
+          totalRuns={totalRuns}
+          loading={runsQ.isPending}
+        />
 
         <RunsTable
           runs={runsQ.data?.items ?? []}
@@ -213,62 +179,6 @@ function RunsPage() {
 // Charts
 // ---------------------------------------------------------------------------
 
-const radarConfig = {
-  invalid: { label: "Invalid", color: "hsl(0 72% 51%)" },
-} satisfies ChartConfig
-
-function RadarCard({
-  data,
-  totalInvalid,
-  loading,
-}: {
-  data: MonthlyBucket[]
-  totalInvalid: number
-  loading: boolean
-}) {
-  return (
-    <Card className="shadow-2xs">
-      <CardHeader className="items-center">
-        <CardTitle className="text-base">
-          Invalid resources — last 8 months
-        </CardTitle>
-        <CardDescription>
-          Sum of invalid resources per month across completed runs.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="pb-0">
-        {loading ? (
-          <Skeleton className="mx-auto aspect-square max-h-[260px] w-full max-w-[300px]" />
-        ) : (
-          <ChartContainer
-            config={radarConfig}
-            className="mx-auto aspect-square max-h-[260px]"
-          >
-            <RadarChart data={data}>
-              <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-              <PolarAngleAxis dataKey="label" />
-              <PolarGrid />
-              <Radar
-                dataKey="invalid"
-                fill="var(--color-invalid)"
-                fillOpacity={0.6}
-                dot={{ r: 4, fillOpacity: 1 }}
-              />
-            </RadarChart>
-          </ChartContainer>
-        )}
-      </CardContent>
-      <CardFooter className="text-sm text-muted-foreground">
-        {totalInvalid.toLocaleString()} total invalid across the window
-      </CardFooter>
-    </Card>
-  )
-}
-
-const barConfig = {
-  runs: { label: "Runs", color: "hsl(24.6 95% 53.1%)" },
-} satisfies ChartConfig
-
 function BarCard({
   data,
   totalRuns,
@@ -279,57 +189,42 @@ function BarCard({
   loading: boolean
 }) {
   return (
-    <Card className="shadow-2xs">
-      <CardHeader className="items-center">
+    <div className="border-none shadow-none">
+      {/*  <CardHeader className="items-center">
         <CardTitle className="text-base">
           Validation activity — last 8 months
         </CardTitle>
         <CardDescription>Number of completed runs per month.</CardDescription>
-      </CardHeader>
-      <CardContent className="pb-0">
+      </CardHeader> */}
+      <div className="pb-0">
         {loading ? (
           <Skeleton className="h-[260px] w-full" />
         ) : (
-          <ChartContainer config={barConfig} className="h-[260px] w-full">
+          <div className="w-full">
             <AreaChart
-              accessibilityLayer
-              data={data}
-              margin={{
-                left: 12,
-                right: 12,
-              }}
+              className="max-h-96"
+              data={data.map((b) => ({ ...b, date: b.date.toISOString() }))}
+              xDataKey="date"
+              aspectRatio="2 / 1"
+              margin={{ top: 8, right: 12, bottom: 32, left: 40 }}
             >
-              <CartesianGrid vertical={false} />
-              <XAxis
-                dataKey="label"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-              />
-              <YAxis
-                allowDecimals={false}
-                tickLine={false}
-                axisLine={false}
-                width={28}
-              />
-              <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+              <Grid horizontal />
               <Area
                 dataKey="runs"
-                type="bump"
-                fill="var(--color-runs)"
-                stroke="var(--color-runs)"
+                fill="hsl(24.6 95% 53.1%)"
                 fillOpacity={0.2}
-                stackId="a"
-                /*  radius={[6, 6, 0, 0]} */
+                fadeEdges
               />
+              <XAxis numTicks={8} />
+              <ChartTooltip />
             </AreaChart>
-          </ChartContainer>
+          </div>
         )}
-      </CardContent>
+      </div>
       <CardFooter className="text-sm text-muted-foreground">
         {totalRuns} total runs across the window
       </CardFooter>
-    </Card>
+    </div>
   )
 }
 

@@ -11,16 +11,13 @@ import {
   RefreshCw,
 } from "lucide-react"
 import { useMemo, useState } from "react"
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  PolarAngleAxis,
-  RadialBar,
-  RadialBarChart,
-  XAxis,
-  YAxis,
-} from "recharts"
+import { PolarAngleAxis, RadialBar, RadialBarChart } from "recharts"
+
+import { BarChart } from "@/components/charts/bar-chart"
+import { Bar } from "@/components/charts/bar"
+import { BarXAxis } from "@/components/charts/bar-x-axis"
+import { Grid } from "@/components/charts/grid"
+import { ChartTooltip } from "@/components/charts/tooltip"
 
 import {
   type PerResourceStats,
@@ -39,12 +36,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart"
+import { ChartContainer, type ChartConfig } from "@/components/ui/chart"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -71,6 +63,7 @@ import {
 } from "@solar-icons/react-perf/category/style/LineDuotone"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { ValueYAxis } from "@/components/charts/value-y-axis"
 
 export const Route = createFileRoute("/runs/$runId")({
   component: RunDetailPage,
@@ -95,11 +88,6 @@ function gaugeColor(rate: number): string {
   if (rate === 0) return "hsl(142 71% 45%)"
   return "hsl(142 71% 45%)"
 }
-
-const barConfig = {
-  processed: { label: "Processed", color: "hsl(217 91% 60%)" },
-  invalid: { label: "Invalid", color: "hsl(0 72% 51%)" },
-} satisfies ChartConfig
 
 const gaugeConfig = {
   value: { label: "Invalid rate" },
@@ -403,51 +391,34 @@ function RunDetailPage() {
                     No per-type statistics for this run yet.
                   </p>
                 ) : (
-                  <ChartContainer
-                    config={barConfig}
-                    className="h-[280px] w-full"
-                  >
+                  <div className="w-full">
                     <BarChart
-                      accessibilityLayer={false}
                       data={run.per_resource_stats.map((s) => ({
                         type: s.resource_type,
                         processed: s.processed,
                         invalid: s.invalid,
                       }))}
-                      margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                      barWidth={70}
+                      className="max-h-96"
+                      xDataKey="type"
+                      margin={{ top: 8, right: 8, bottom: 40, left: 56 }}
                     >
-                      <CartesianGrid vertical={false} />
-                      <XAxis
-                        dataKey="type"
-                        tickLine={false}
-                        axisLine={false}
-                        tickMargin={10}
-                        fontSize={12}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tickLine={false}
-                        axisLine={false}
-                        width={80}
-                      />
-                      <ChartTooltip
-                        cursor={false}
-                        content={<ChartTooltipContent />}
-                      />
+                      <Grid horizontal />
                       <Bar
                         dataKey="processed"
-                        fill="var(--color-processed)"
-                        radius={[8, 8, 0, 0]}
-                        type="number"
+                        fill="hsl(217 91% 60%)"
+                        lineCap="round"
                       />
                       <Bar
                         dataKey="invalid"
-                        fill="var(--color-invalid)"
-                        radius={[8, 8, 0, 0]}
-                        type="number"
+                        fill="hsl(0 72% 51%)"
+                        lineCap="round"
                       />
+                      <ValueYAxis />
+                      <BarXAxis />
+                      <ChartTooltip />
                     </BarChart>
-                  </ChartContainer>
+                  </div>
                 )}
               </CardContent>
             </Card>
