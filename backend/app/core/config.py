@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     EMAIL_ADDRESS: str = ""  # From-Adresse
     EMAIL_USER: str = ""
     EMAIL_PASSWORD: str = ""
+    EMAIL_USE_SSL: bool = False  # True = implicit SSL (465), False = STARTTLS
+    EMAIL_VERIFY_CERT: bool = True  # False nur für interne Server mit self-signed cert
 
     class Config:
         """Config Class"""

@@ -10,6 +10,8 @@ from app.core.database import get_db
 from app.core.security import require_role
 from app.models.user import User, UserRole
 from app.schemas.user import UserRead, UserRoleUpdate
+from app.core.security import get_current_user
+from app.schemas.user import UserPreferencesUpdate
 
 router = APIRouter()
 
@@ -21,6 +23,11 @@ async def list_users(
     skip: int = 0,
     limit: int = 200,
 ):
+    """
+    Returns a list of users in the system, ordered by creation date.
+
+    Accessible only to admin users. Supports pagination via `skip` and `limit` parameters.
+    """
     rows = (
         (
             await db.execute(
@@ -40,6 +47,12 @@ async def update_user_role(
     current: User = Depends(require_role(UserRole.admin.value)),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Update a user's role.
+
+    Only admins can update user roles. Cannot demote yourself from admin, or
+    remove the last remaining admin role in the system.
+    """
     target = (
         await db.execute(select(User).where(User.id == user_id))
     ).scalar_one_or_none()
@@ -68,3 +81,21 @@ async def update_user_role(
     await db.commit()
     await db.refresh(target)
     return target
+
+
+@router.patch("/users/me/preferences", response_model=UserRead)
+async def update_my_preferences(
+    payload: UserPreferencesUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update the current user's preferences.
+
+    Allows the currently authenticated user to update their personal preferences,
+    such as whether they wish to receive email notifications.
+    """
+    user.email_notifications_enabled = payload.email_notifications_enabled
+    await db.commit()
+    await db.refresh(user)
+    return user

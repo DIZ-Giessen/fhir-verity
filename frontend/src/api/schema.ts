@@ -605,7 +605,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Users */
+        /**
+         * List Users
+         * @description Returns a list of users in the system, ordered by creation date.
+         *
+         *     Accessible only to admin users. Supports pagination via `skip` and `limit` parameters.
+         */
         get: operations["list_users_api_v1_users_get"];
         put?: never;
         post?: never;
@@ -628,8 +633,37 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update User Role */
+        /**
+         * Update User Role
+         * @description Update a user's role.
+         *
+         *     Only admins can update user roles. Cannot demote yourself from admin, or
+         *     remove the last remaining admin role in the system.
+         */
         patch: operations["update_user_role_api_v1_users__user_id__role_patch"];
+        trace?: never;
+    };
+    "/api/v1/users/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update My Preferences
+         * @description Update the current user's preferences.
+         *
+         *     Allows the currently authenticated user to update their personal preferences,
+         *     such as whether they wish to receive email notifications.
+         */
+        patch: operations["update_my_preferences_api_v1_users_me_preferences_patch"];
         trace?: never;
     };
 }
@@ -1221,6 +1255,17 @@ export interface components {
             error?: string | null;
         };
         /**
+         * UserPreferencesUpdate
+         * @description Schema for updating a user's preferences.
+         *
+         *     Fields:
+         *         email_notifications_enabled (bool): Whether the user wants to receive email notifications.
+         */
+        UserPreferencesUpdate: {
+            /** Email Notifications Enabled */
+            email_notifications_enabled: boolean;
+        };
+        /**
          * UserRead
          * @description User Model
          */
@@ -1240,13 +1285,28 @@ export interface components {
             full_name?: string | null;
             /** Role */
             role: string;
+            /** Email Notifications Enabled */
+            email_notifications_enabled: boolean;
         };
         /**
          * UserRole
+         * @description Enum for user roles in the application.
+         *
+         *     - viewer: Can view resources but cannot make changes.
+         *     - editor: Can view and edit resources, but has limited administrative privileges.
+         *     - admin: Has full administrative access to all resources and settings.
+         *
+         *     Assign roles to users based on their responsibilities and required access level.
          * @enum {string}
          */
         UserRole: "viewer" | "editor" | "admin";
-        /** UserRoleUpdate */
+        /**
+         * UserRoleUpdate
+         * @description Schema for updating the user's role.
+         *
+         *     Fields:
+         *         role (UserRole): The new role to assign to the user.
+         */
         UserRoleUpdate: {
             role: components["schemas"]["UserRole"];
         };
@@ -2498,6 +2558,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UserRoleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_my_preferences_api_v1_users_me_preferences_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserPreferencesUpdate"];
             };
         };
         responses: {
