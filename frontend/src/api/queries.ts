@@ -262,7 +262,7 @@ export const runSummaryQueryOptions = (runId: string) =>
 
 // Run Query
 
-export const runsQueryOptions = (limit = 50) =>
+export const runsQueryOptions = (limit = 500) =>
   queryOptions({
     queryKey: ["validation", "runs", "all", { limit }],
     queryFn: async () => {

@@ -36,6 +36,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
+import { de } from "date-fns/locale"
 
 type Severity = "error" | "warning" | "info"
 
@@ -452,7 +453,11 @@ function DateField({
           data-empty={!value}
           className="h-8 w-full justify-between text-left text-xs font-normal data-[empty=true]:text-muted-foreground"
         >
-          {value ? format(value, "PPP") : <span>{placeholder}</span>}
+          {value ? (
+            format(value, "PPP", { locale: de })
+          ) : (
+            <span>{placeholder}</span>
+          )}
           <CalendarIcon className="h-3.5 w-3.5" data-icon="inline-end" />
         </Button>
       </PopoverTrigger>
