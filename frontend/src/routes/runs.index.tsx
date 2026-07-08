@@ -108,7 +108,7 @@ function bucketByMonth(
 // ---------------------------------------------------------------------------
 
 function RunsPage() {
-  const runsQ = useQuery(runsQueryOptions(50))
+  const runsQ = useQuery(runsQueryOptions(500))
   const serversQ = useQuery(serversQueryOptions())
 
   const [menuOpen, setMenuOpen] = useState(false)

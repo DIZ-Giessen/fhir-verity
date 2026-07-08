@@ -39,6 +39,9 @@ export type UserRoleUpdate = components["schemas"]["UserRoleUpdate"]
 export type UserPreferencesUpdate =
   components["schemas"]["UserPreferencesUpdate"]
 export type Role = UserRoleUpdate["role"] // "viewer" | "editor" | "admin"
+export type ResourceFilters = components["schemas"]["ResourceFilters"]
+export type FiltersUpdate = components["schemas"]["FiltersUpdate"]
+
 // ======================
 
 export const serverKeys = {
@@ -259,7 +262,7 @@ export const runSummaryQueryOptions = (runId: string) =>
 
 // Run Query
 
-export const runsQueryOptions = (limit = 50) =>
+export const runsQueryOptions = (limit = 500) =>
   queryOptions({
     queryKey: ["validation", "runs", "all", { limit }],
     queryFn: async () => {
@@ -448,5 +451,20 @@ export async function updateUserRole(userId: string, role: Role) {
 
 export async function updateMyPreferences(body: UserPreferencesUpdate) {
   const { data } = await api.PATCH("/api/v1/users/me/preferences", { body })
+  return data
+}
+
+export async function updateServerFilters(
+  serverId: string,
+  resourceType: string,
+  filters: ResourceFilters
+) {
+  const { data } = await api.PUT(
+    "/api/v1/config/servers/{server_id}/{resource_type}/filters",
+    {
+      params: { path: { server_id: serverId, resource_type: resourceType } },
+      body: { filters },
+    }
+  )
   return data
 }

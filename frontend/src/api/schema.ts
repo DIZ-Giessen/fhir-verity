@@ -440,6 +440,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config/servers/{server_id}/{resource_type}/filters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Server Filters
+         * @description Set the FHIR search filters for a resource type on a server.
+         *     Empty filters clear the scope (validate everything again).
+         *     Creates a server override on-the-fly if none exists yet.
+         */
+        put: operations["update_server_filters_api_v1_config_servers__server_id___resource_type__filters_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/resources/{server_id}/{resource_type}/{resource_id}": {
         parameters: {
             query?: never;
@@ -953,6 +975,13 @@ export interface components {
             is_active?: boolean | null;
         };
         /**
+         * FiltersUpdate
+         * @description Payload to replace a resource type's filters for a server.
+         */
+        FiltersUpdate: {
+            filters: components["schemas"]["ResourceFilters"];
+        };
+        /**
          * FixableTemplate
          * @description Model for a Fixable Template
          */
@@ -1101,6 +1130,13 @@ export interface components {
             };
             /** Is Server Specific */
             is_server_specific: boolean;
+            /**
+             * Filters
+             * @default {}
+             */
+            filters: {
+                [key: string]: unknown;
+            };
         };
         /**
          * ResourceCount
@@ -1115,6 +1151,21 @@ export interface components {
             ok: boolean;
             /** Error */
             error?: string | null;
+        };
+        /**
+         * ResourceFilters
+         * @description Optional FHIR search filters scoping which resources get validated.
+         *     All fields optional; empty = validate everything (unchanged behaviour).
+         */
+        ResourceFilters: {
+            /** Last Updated From */
+            last_updated_from?: string | null;
+            /** Last Updated To */
+            last_updated_to?: string | null;
+            /** Profile */
+            profile?: string | null;
+            /** Tag */
+            tag?: string | null;
         };
         /** ResourceTypeSummary */
         ResourceTypeSummary: {
@@ -2245,6 +2296,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+        };
+    };
+    update_server_filters_api_v1_config_servers__server_id___resource_type__filters_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+                resource_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FiltersUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceConfig"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

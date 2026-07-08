@@ -14,11 +14,13 @@ from app.schemas.config import (
     ConfigUpdate,
     ResourceConfig,
     RuleUpdate,
+    FiltersUpdate,
 )
 from app.services.config_defaults import (
     MII_KDS_DEFAULTS,
     SUPPORTED_RESOURCE_TYPES,
 )
+from app.services.validation_filters import FilterValidationError, validate_filters
 
 router = APIRouter()
 
@@ -30,8 +32,8 @@ async def _load_effective_config(
     server_id: UUID,
     resource_type: str,
     db: AsyncSession,
-) -> tuple[dict, bool]:
-    """Returns (merged_rules, is_server_specific)."""
+) -> tuple[dict, bool, dict]:
+    """Returns (merged_rules, is_server_specific, filters)."""
     stmt_global = select(ValidationConfig).where(
         ValidationConfig.server_id.is_(None),
         ValidationConfig.resource_type == resource_type,
@@ -47,8 +49,8 @@ async def _load_effective_config(
 
     if server_cfg:
         merged = {**base, **server_cfg.rules}
-        return merged, True
-    return base, False
+        return merged, True, (server_cfg.filters or {})
+    return base, False, {}
 
 
 async def _ensure_server_exists(server_id: UUID, db: AsyncSession) -> FhirServer:
@@ -82,6 +84,7 @@ async def get_defaults(
         resource_type=resource_type,
         rules=rules,
         is_server_specific=False,
+        filters={},
     )
 
 
@@ -102,12 +105,15 @@ async def get_server_config(
         raise HTTPException(status_code=404, detail="Unsupported resource type")
 
     await _ensure_server_exists(server_id, db)
-    rules, is_specific = await _load_effective_config(server_id, resource_type, db)
+    rules, is_specific, filters = await _load_effective_config(
+        server_id, resource_type, db
+    )
 
     return ResourceConfig(
         resource_type=resource_type,
         rules=rules,
         is_server_specific=is_specific,
+        filters=filters,
     )
 
 
@@ -155,11 +161,14 @@ async def replace_server_config(
 
     await db.commit()
 
-    rules, is_specific = await _load_effective_config(server_id, resource_type, db)
+    rules, is_specific, filters = await _load_effective_config(
+        server_id, resource_type, db
+    )
     return ResourceConfig(
         resource_type=resource_type,
         rules=rules,
         is_server_specific=is_specific,
+        filters=filters,
     )
 
 
@@ -224,11 +233,14 @@ async def patch_rule(
 
     await db.commit()
 
-    rules, is_specific = await _load_effective_config(server_id, resource_type, db)
+    rules, is_specific, filters = await _load_effective_config(
+        server_id, resource_type, db
+    )
     return ResourceConfig(
         resource_type=resource_type,
         rules=rules,
         is_server_specific=is_specific,
+        filters=filters,
     )
 
 
@@ -262,3 +274,65 @@ async def delete_server_config(
 async def list_resource_types():
     """Alle Ressourcentypen, die konfiguriert werden können."""
     return SUPPORTED_RESOURCE_TYPES
+
+
+# ---------------------------------------------------------------------------
+@router.put(
+    "/config/servers/{server_id}/{resource_type}/filters",
+    response_model=ResourceConfig,
+)
+async def update_server_filters(
+    server_id: UUID,
+    resource_type: str,
+    payload: FiltersUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Set the FHIR search filters for a resource type on a server.
+    Empty filters clear the scope (validate everything again).
+    Creates a server override on-the-fly if none exists yet.
+    """
+    if resource_type not in SUPPORTED_RESOURCE_TYPES:
+        raise HTTPException(status_code=404, detail="Unsupported resource type")
+
+    await _ensure_server_exists(server_id, db)
+
+    # Validate + clean (drops empties/unknowns, checks date format & range)
+    try:
+        cleaned = validate_filters(payload.filters.model_dump(exclude_none=True))
+    except FilterValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    stmt = select(ValidationConfig).where(
+        ValidationConfig.server_id == server_id,
+        ValidationConfig.resource_type == resource_type,
+    )
+    existing = (await db.execute(stmt)).scalar_one_or_none()
+
+    now = datetime.now()
+    if existing:
+        existing.filters = cleaned  # full replace (new dict -> mutation detected)
+        existing.updated_at = now
+    else:
+        db.add(
+            ValidationConfig(
+                server_id=server_id,
+                resource_type=resource_type,
+                rules={},  # no rule override, just filters
+                filters=cleaned,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    await db.commit()
+
+    rules, is_specific, filters = await _load_effective_config(
+        server_id, resource_type, db
+    )
+    return ResourceConfig(
+        resource_type=resource_type,
+        rules=rules,
+        is_server_specific=is_specific,
+        filters=filters,
+    )

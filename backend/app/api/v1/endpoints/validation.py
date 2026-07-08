@@ -39,6 +39,8 @@ from app.core.security import get_current_user, load_server_scoped
 from app.models.user import User, UserRole
 from app.core.config import get_settings
 from app.services.email_service import build_run_notification, send_email
+from app.models.validation_config import ValidationConfig
+from app.services.validation_filters import build_filter_params, validate_filters
 
 
 router = APIRouter()
@@ -46,6 +48,39 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+
+
+async def _load_filter_params(
+    server_id: UUID, resource_type: str, db: AsyncSession
+) -> dict:
+    """Load the server-specific filter for this resource type (falling back to
+    the global default), validate it, and translate to FHIR search params.
+    Returns {} when no filter is configured -> unchanged crawl behaviour."""
+    # server-specific first, then global default (server_id IS NULL)
+    stmt = select(ValidationConfig).where(
+        ValidationConfig.resource_type == resource_type,
+        ValidationConfig.server_id == server_id,
+    )
+    cfg = (await db.execute(stmt)).scalar_one_or_none()
+    if cfg is None:
+        stmt = select(ValidationConfig).where(
+            ValidationConfig.resource_type == resource_type,
+            ValidationConfig.server_id.is_(None),
+        )
+        cfg = (await db.execute(stmt)).scalar_one_or_none()
+
+    raw = (cfg.filters if cfg else None) or {}
+    try:
+        cleaned = validate_filters(raw)
+    except Exception as e:
+        logger.warning(
+            "Invalid filters for %s on server %s, ignoring: %s",
+            resource_type,
+            server_id,
+            e,
+        )
+        return {}
+    return build_filter_params(cleaned)
 
 
 async def _load_run_scoped(run_id: UUID, user: User, db: AsyncSession) -> ValidationRun:
@@ -256,6 +291,9 @@ async def run_validation_task(
 
                     validator = validator_class(
                         client, base_url, auth_config, server_id=server_id
+                    )
+                    validator.filter_params = await _load_filter_params(
+                        server_id, res_type, db
                     )
                     await validator.validate_and_save(run_id, db)
                     await _mark_type_completed(run_id, res_type, db)
