@@ -20,6 +20,7 @@ class ResourceConfig(BaseModel):
     resource_type: str
     rules: dict[str, RuleDefinition]
     is_server_specific: bool
+    filters: dict = {}
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -36,3 +37,19 @@ class RuleUpdate(BaseModel):
     enabled: Optional[bool] = None
     severity: Optional[Literal["error", "warning", "info"]] = None
     pattern: Optional[str] = None
+
+
+class ResourceFilters(BaseModel):
+    """Optional FHIR search filters scoping which resources get validated.
+    All fields optional; empty = validate everything (unchanged behaviour)."""
+
+    last_updated_from: Optional[str] = None
+    last_updated_to: Optional[str] = None
+    profile: Optional[str] = None
+    tag: Optional[str] = None
+
+
+class FiltersUpdate(BaseModel):
+    """Payload to replace a resource type's filters for a server."""
+
+    filters: ResourceFilters

@@ -25,6 +25,7 @@ class ValidationConfig(Base, TimestampMixin):
         index=True,
     )
     resource_type = Column(String(100), nullable=False)
+    filters = Column(JSON, nullable=False, default=dict, server_default="{}")
     rules = Column(JSON, nullable=False, default=dict)
 
     __table_args__ = (

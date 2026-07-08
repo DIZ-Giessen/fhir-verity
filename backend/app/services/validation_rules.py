@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.models.invalid_resource import InvalidResource
 from app.models.validation_run import ValidationRun
 from app.services.config_service import get_config_for_run, rule_enabled
+from app.services.validation_filters import build_filter_params
 from app.api.v1.endpoints.websocket import broadcast_progress
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,44 @@ class BaseValidator:
         self.base_url = base_url.rstrip("/")
         self.auth_config = auth_config or {}
         self.server_id = server_id
+        self.filter_params: dict = {}
+
+    def _merge_params(self, base: dict) -> dict:
+        """Merge the configured filter params into a search param dict.
+
+        _lastUpdated needs special handling: the crawl watermark (ge<wm>) is the
+        resume lower bound and must replace the filter's lower bound, while the
+        filter's upper bound (le..) is always preserved. All other filter params
+        (profile, tag) are added as-is.
+        """
+        if not self.filter_params:
+            return base
+
+        merged = dict(base)
+        filt = self.filter_params
+
+        if "_lastUpdated" in filt:
+            filter_lu = filt["_lastUpdated"]
+            filter_lu = filter_lu if isinstance(filter_lu, list) else [filter_lu]
+            upper = [v for v in filter_lu if v.startswith("le")]
+            lower = [v for v in filter_lu if v.startswith("ge")]
+
+            if "_lastUpdated" in base:
+                # base already carries the watermark ge<wm>; keep it as lower
+                # bound, add only the filter's upper bound.
+                base_lu = base["_lastUpdated"]
+                base_lu = base_lu if isinstance(base_lu, list) else [base_lu]
+                merged["_lastUpdated"] = base_lu + upper
+            else:
+                # no watermark yet (fresh crawl): use the full filter range.
+                merged["_lastUpdated"] = lower + upper
+
+        for key, value in filt.items():
+            if key == "_lastUpdated":
+                continue
+            merged[key] = value
+
+        return merged
 
     async def fetch_bundle(self, url: str, params: dict | None = None) -> dict:
         """Fetch a FHIR bundle with retry logic."""
@@ -181,6 +220,8 @@ class BaseValidator:
         params = {"_count": self.PAGE_SIZE, "_sort": "_lastUpdated"}
         if watermark is not None:
             params["_lastUpdated"] = f"ge{watermark}"
+        params = self._merge_params(params)
+
         url = f"{self.base_url}/{resource_type}"
         first = True
 
@@ -387,9 +428,10 @@ class BaseValidator:
         Fetch total resource count via _summary=count.
         Returns 0 if not available or on error.
         """
-        url = f"{self.base_url}/{resource_type}?_summary=count"
+        url = f"{self.base_url}/{resource_type}"
+        params = self._merge_params({"_summary": "count"})
         try:
-            bundle = await self.fetch_bundle(url)
+            bundle = await self.fetch_bundle(url, params)
             return bundle.get("total", 0)
         except Exception as e:
             logger.warning("Could not fetch total for %s: %s", resource_type, e)
