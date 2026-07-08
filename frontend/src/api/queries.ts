@@ -35,6 +35,9 @@ export type BulkFixRequest = components["schemas"]["BulkFixRequest"]
 export type AuditLogListItem = components["schemas"]["AuditLogListItem"]
 export type AuditLogDetail = components["schemas"]["AuditLogDetail"]
 export type UserRoleUpdate = components["schemas"]["UserRoleUpdate"]
+
+export type UserPreferencesUpdate =
+  components["schemas"]["UserPreferencesUpdate"]
 export type Role = UserRoleUpdate["role"] // "viewer" | "editor" | "admin"
 // ======================
 
@@ -318,7 +321,7 @@ export const fixTemplatesQueryOptions = () =>
   queryOptions({
     queryKey: ["resources", "fix-templates"],
     queryFn: async () => {
-      const { data } = await api.GET("/resources/fix-templates")
+      const { data } = await api.GET("/api/v1/resources/fix-templates")
       return data ?? []
     },
     staleTime: 5 * 60_000,
@@ -331,7 +334,7 @@ export async function autoFixResource(
   reason?: string
 ) {
   const { data } = await api.POST(
-    "/resources/{server_id}/{resource_type}/{resource_id}/auto-fix",
+    "/api/v1/resources/{server_id}/{resource_type}/{resource_id}/auto-fix",
     {
       params: {
         path: {
@@ -353,7 +356,7 @@ export async function deleteResource(
   reason?: string
 ) {
   const { data } = await api.DELETE(
-    "/resources/{server_id}/{resource_type}/{resource_id}",
+    "/api/v1/resources/{server_id}/{resource_type}/{resource_id}",
     {
       params: {
         path: {
@@ -369,12 +372,12 @@ export async function deleteResource(
 }
 
 export async function bulkDelete(body: BulkDeleteRequest) {
-  const { data } = await api.POST("/resources/bulk-delete", { body })
+  const { data } = await api.POST("/api/v1/resources/bulk-delete", { body })
   return data
 }
 
 export async function bulkFix(body: BulkFixRequest) {
-  const { data } = await api.POST("/resources/bulk-fix", { body })
+  const { data } = await api.POST("/api/v1/resources/bulk-fix", { body })
   return data
 }
 
@@ -391,7 +394,7 @@ export const auditLogQueryOptions = (params: AuditLogParams = {}) =>
   queryOptions({
     queryKey: ["audit-log", params],
     queryFn: async () => {
-      const { data } = await api.GET("/audit-log", {
+      const { data } = await api.GET("/api/v1/audit-log", {
         params: { query: params },
       })
       return data
@@ -403,7 +406,7 @@ export const auditLogDetailQueryOptions = (auditId: string) =>
   queryOptions({
     queryKey: ["audit-log", auditId, "detail"],
     queryFn: async () => {
-      const { data } = await api.GET("/audit-log/{audit_id}", {
+      const { data } = await api.GET("/api/v1/audit-log/{audit_id}", {
         params: { path: { audit_id: auditId } },
       })
       return data
@@ -440,5 +443,10 @@ export async function updateUserRole(userId: string, role: Role) {
     params: { path: { user_id: userId } },
     body: { role },
   })
+  return data
+}
+
+export async function updateMyPreferences(body: UserPreferencesUpdate) {
+  const { data } = await api.PATCH("/api/v1/users/me/preferences", { body })
   return data
 }

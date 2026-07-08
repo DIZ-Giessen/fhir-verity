@@ -1,22 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { ChevronDown, LogOut } from "lucide-react"
+import { ChevronDown, LogOut, Play } from "lucide-react"
+import { useState } from "react"
 
-import { logout, meQueryOptions } from "@/api/queries"
+import {
+  authKeys,
+  logout,
+  meQueryOptions,
+  updateMyPreferences,
+  type AuthUser,
+} from "@/api/queries"
+import { StartValidationDialog } from "@/components/start-validation-dialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 import { initials } from "@/lib/functions"
 
-import { useState } from "react"
-import { Play } from "lucide-react"
-import { StartValidationDialog } from "@/components/start-validation-dialog"
 const ROLE_STYLES: Record<string, string> = {
   admin:
     "border-0 bg-rose-500/15 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
@@ -31,6 +38,9 @@ export function UserMenu() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [startOpen, setStartOpen] = useState(false)
+
   const logoutMutation = useMutation({
     mutationFn: logout,
     onSuccess: async () => {
@@ -39,11 +49,29 @@ export function UserMenu() {
     },
   })
 
+  const emailPref = useMutation({
+    mutationFn: (enabled: boolean) =>
+      updateMyPreferences({ email_notifications_enabled: enabled }),
+    onMutate: async (enabled) => {
+      await queryClient.cancelQueries({ queryKey: authKeys.me })
+      const previous = queryClient.getQueryData<AuthUser>(authKeys.me)
+      queryClient.setQueryData<AuthUser>(authKeys.me, (old) =>
+        old ? { ...old, email_notifications_enabled: enabled } : old
+      )
+      return { previous }
+    },
+    onError: (_err, _enabled, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(authKeys.me, ctx.previous)
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: authKeys.me })
+    },
+  })
+
   if (!user) return null
 
   const displayName = user.full_name || user.username || user.email || "User"
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [startOpen, setStartOpen] = useState(false)
+
   return (
     <>
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
@@ -74,13 +102,27 @@ export function UserMenu() {
                   </p>
                 )}
               </div>
-            </div>
-            <div className="pt-2text-xs hidden items-center justify-end">
-              <span className="hidden text-muted-foreground">Role</span>
               <Badge variant="outline" className={ROLE_STYLES[user.role] ?? ""}>
                 {user.role}
               </Badge>
             </div>
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between gap-3 p-4">
+            <div className="space-y-0.5">
+              <Label
+                htmlFor="email-notifications"
+                className="text-sm font-medium"
+              >
+                Email-Benachrichtigungen
+              </Label>
+            </div>
+            <Switch
+              id="email-notifications"
+              checked={user.email_notifications_enabled}
+              onCheckedChange={(v) => emailPref.mutate(v)}
+              disabled={emailPref.isPending}
+            />
           </div>
           <Separator />
           <div className="p-1 px-3">

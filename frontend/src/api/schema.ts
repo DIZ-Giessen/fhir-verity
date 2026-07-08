@@ -440,7 +440,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/resources/{server_id}/{resource_type}/{resource_id}": {
+    "/api/v1/resources/{server_id}/{resource_type}/{resource_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -455,7 +455,7 @@ export interface paths {
          * @description Delete a FHIR resource from the source server (with ETag-based optimistic locking).
          *     On success: also removes the entry from invalid_resources.
          */
-        delete: operations["delete_resource_resources__server_id___resource_type___resource_id__delete"];
+        delete: operations["delete_resource_api_v1_resources__server_id___resource_type___resource_id__delete"];
         options?: never;
         head?: never;
         /**
@@ -463,10 +463,10 @@ export interface paths {
          * @description Apply JSON Patch operations (RFC 6902) to a FHIR resource.
          *     Content-Type: application/json-patch+json
          */
-        patch: operations["patch_resource_resources__server_id___resource_type___resource_id__patch"];
+        patch: operations["patch_resource_api_v1_resources__server_id___resource_type___resource_id__patch"];
         trace?: never;
     };
-    "/resources/bulk-delete": {
+    "/api/v1/resources/bulk-delete": {
         parameters: {
             query?: never;
             header?: never;
@@ -487,14 +487,14 @@ export interface paths {
          *     (max 20 concurrent), removes successful entries from invalid_resources,
          *     and writes one audit log entry per attempt.
          */
-        post: operations["bulk_delete_resources_resources_bulk_delete_post"];
+        post: operations["bulk_delete_resources_api_v1_resources_bulk_delete_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/resources/bulk-fix": {
+    "/api/v1/resources/bulk-fix": {
         parameters: {
             query?: never;
             header?: never;
@@ -511,14 +511,14 @@ export interface paths {
          *     Returns 400 if no template exists — in that case use bulk-delete instead,
          *     or wait for the LLM assistant (Block 3) to generate context-aware fixes.
          */
-        post: operations["bulk_fix_resources_resources_bulk_fix_post"];
+        post: operations["bulk_fix_resources_api_v1_resources_bulk_fix_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/audit-log": {
+    "/api/v1/audit-log": {
         parameters: {
             query?: never;
             header?: never;
@@ -529,7 +529,7 @@ export interface paths {
          * List Audit Log
          * @description Audit log (admin only).
          */
-        get: operations["list_audit_log_audit_log_get"];
+        get: operations["list_audit_log_api_v1_audit_log_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -538,7 +538,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/resources/fix-templates": {
+    "/api/v1/resources/fix-templates": {
         parameters: {
             query?: never;
             header?: never;
@@ -549,7 +549,7 @@ export interface paths {
          * List Fix Templates
          * @description All (resource_type, rule) combos the frontend may offer a one-click fix for.
          */
-        get: operations["list_fix_templates_resources_fix_templates_get"];
+        get: operations["list_fix_templates_api_v1_resources_fix_templates_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -558,7 +558,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/resources/{server_id}/{resource_type}/{resource_id}/auto-fix": {
+    "/api/v1/resources/{server_id}/{resource_type}/{resource_id}/auto-fix": {
         parameters: {
             query?: never;
             header?: never;
@@ -574,14 +574,14 @@ export interface paths {
          *     from invalid_resources, not from the client.
          *     Returns 400 if none of the resource's rules has a template.
          */
-        post: operations["auto_fix_resource_resources__server_id___resource_type___resource_id__auto_fix_post"];
+        post: operations["auto_fix_resource_api_v1_resources__server_id___resource_type___resource_id__auto_fix_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/audit-log/{audit_id}": {
+    "/api/v1/audit-log/{audit_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -589,7 +589,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Audit Log */
-        get: operations["get_audit_log_audit_log__audit_id__get"];
+        get: operations["get_audit_log_api_v1_audit_log__audit_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -605,7 +605,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Users */
+        /**
+         * List Users
+         * @description Returns a list of users in the system, ordered by creation date.
+         *
+         *     Accessible only to admin users. Supports pagination via `skip` and `limit` parameters.
+         */
         get: operations["list_users_api_v1_users_get"];
         put?: never;
         post?: never;
@@ -628,8 +633,37 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update User Role */
+        /**
+         * Update User Role
+         * @description Update a user's role.
+         *
+         *     Only admins can update user roles. Cannot demote yourself from admin, or
+         *     remove the last remaining admin role in the system.
+         */
         patch: operations["update_user_role_api_v1_users__user_id__role_patch"];
+        trace?: never;
+    };
+    "/api/v1/users/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update My Preferences
+         * @description Update the current user's preferences.
+         *
+         *     Allows the currently authenticated user to update their personal preferences,
+         *     such as whether they wish to receive email notifications.
+         */
+        patch: operations["update_my_preferences_api_v1_users_me_preferences_patch"];
         trace?: never;
     };
 }
@@ -1221,6 +1255,17 @@ export interface components {
             error?: string | null;
         };
         /**
+         * UserPreferencesUpdate
+         * @description Schema for updating a user's preferences.
+         *
+         *     Fields:
+         *         email_notifications_enabled (bool): Whether the user wants to receive email notifications.
+         */
+        UserPreferencesUpdate: {
+            /** Email Notifications Enabled */
+            email_notifications_enabled: boolean;
+        };
+        /**
          * UserRead
          * @description User Model
          */
@@ -1240,13 +1285,28 @@ export interface components {
             full_name?: string | null;
             /** Role */
             role: string;
+            /** Email Notifications Enabled */
+            email_notifications_enabled: boolean;
         };
         /**
          * UserRole
+         * @description Enum for user roles in the application.
+         *
+         *     - viewer: Can view resources but cannot make changes.
+         *     - editor: Can view and edit resources, but has limited administrative privileges.
+         *     - admin: Has full administrative access to all resources and settings.
+         *
+         *     Assign roles to users based on their responsibilities and required access level.
          * @enum {string}
          */
         UserRole: "viewer" | "editor" | "admin";
-        /** UserRoleUpdate */
+        /**
+         * UserRoleUpdate
+         * @description Schema for updating the user's role.
+         *
+         *     Fields:
+         *         role (UserRole): The new role to assign to the user.
+         */
         UserRoleUpdate: {
             role: components["schemas"]["UserRole"];
         };
@@ -2189,7 +2249,7 @@ export interface operations {
             };
         };
     };
-    delete_resource_resources__server_id___resource_type___resource_id__delete: {
+    delete_resource_api_v1_resources__server_id___resource_type___resource_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -2226,7 +2286,7 @@ export interface operations {
             };
         };
     };
-    patch_resource_resources__server_id___resource_type___resource_id__patch: {
+    patch_resource_api_v1_resources__server_id___resource_type___resource_id__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -2263,7 +2323,7 @@ export interface operations {
             };
         };
     };
-    bulk_delete_resources_resources_bulk_delete_post: {
+    bulk_delete_resources_api_v1_resources_bulk_delete_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2296,7 +2356,7 @@ export interface operations {
             };
         };
     };
-    bulk_fix_resources_resources_bulk_fix_post: {
+    bulk_fix_resources_api_v1_resources_bulk_fix_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2329,7 +2389,7 @@ export interface operations {
             };
         };
     };
-    list_audit_log_audit_log_get: {
+    list_audit_log_api_v1_audit_log_get: {
         parameters: {
             query?: {
                 skip?: number;
@@ -2366,7 +2426,7 @@ export interface operations {
             };
         };
     };
-    list_fix_templates_resources_fix_templates_get: {
+    list_fix_templates_api_v1_resources_fix_templates_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2386,7 +2446,7 @@ export interface operations {
             };
         };
     };
-    auto_fix_resource_resources__server_id___resource_type___resource_id__auto_fix_post: {
+    auto_fix_resource_api_v1_resources__server_id___resource_type___resource_id__auto_fix_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2423,7 +2483,7 @@ export interface operations {
             };
         };
     };
-    get_audit_log_audit_log__audit_id__get: {
+    get_audit_log_api_v1_audit_log__audit_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2498,6 +2558,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UserRoleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_my_preferences_api_v1_users_me_preferences_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserPreferencesUpdate"];
             };
         };
         responses: {

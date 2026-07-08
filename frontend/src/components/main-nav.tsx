@@ -64,7 +64,10 @@ export function MainNav() {
                 : "text-foreground hover:bg-accent/60 hover:text-orange-500"
             )}
           >
-            <Icon className="size-4" aria-hidden />
+            <Icon
+              className={cn("size-4", item.to === "/runs" ? "size-4.5" : "")}
+              aria-hidden
+            />
             <span>{item.label}</span>
           </Link>
         )

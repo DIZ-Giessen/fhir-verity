@@ -34,6 +34,7 @@ export interface MonthlyBucket {
   key: string
   label: string
   invalid: number
+  date: Date
   runs: number
 }
 

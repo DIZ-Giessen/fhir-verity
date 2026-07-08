@@ -34,7 +34,25 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_SECRET: str
     INITIAL_ADMIN_USERS: str = ""
 
+    # --- SMTP (email notifications) ---
+    EMAIL_ENABLED: bool = True
+    EMAIL_HOST: str = ""
+    EMAIL_HOST_PORT: int = 465
+    EMAIL_ADDRESS: str = ""  # From-Adresse
+    EMAIL_USER: str = ""
+    EMAIL_PASSWORD: str = ""
+    EMAIL_USE_SSL: bool = False  # True = implicit SSL (465), False = STARTTLS
+    EMAIL_VERIFY_CERT: bool = True  # False nur für interne Server mit self-signed cert
+
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
     class Config:
+        """Config Class"""
+
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"

@@ -10,7 +10,7 @@ export function SiteHeader() {
       <div className="container mx-auto flex h-14 items-center justify-between gap-4 px-4 lg:px-6">
         <Link to="/" className="flex items-center">
           <img src="/logo-white.png" className="size-8" aria-hidden />
-          <span className="text-xl font-semibold tracking-tight">
+          <span className="hidden text-xl font-semibold tracking-tight">
             FHIR Verity
           </span>
         </Link>

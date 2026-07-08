@@ -2,11 +2,9 @@ import { createFileRoute } from "@tanstack/react-router"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { env } from "@/lib/env"
 
 export const Route = createFileRoute("/login")({ component: LoginPage })
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"
 
 function LoginPage() {
   const error =
@@ -39,7 +37,7 @@ function LoginPage() {
               className="w-full rounded-xl"
               size="lg"
               onClick={() => {
-                window.location.href = `${API_BASE_URL}/api/v1/auth/login`
+                window.location.href = `${env.API_URL}/api/v1/auth/login`
               }}
             >
               Sign in with Keycloak

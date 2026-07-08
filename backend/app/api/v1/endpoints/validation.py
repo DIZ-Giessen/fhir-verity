@@ -37,11 +37,15 @@ from app.services.fhir_auth import build_httpx_auth
 
 from app.core.security import get_current_user, load_server_scoped
 from app.models.user import User, UserRole
+from app.core.config import get_settings
+from app.services.email_service import build_run_notification, send_email
 
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+settings = get_settings()
 
 
 async def _load_run_scoped(run_id: UUID, user: User, db: AsyncSession) -> ValidationRun:
@@ -78,6 +82,7 @@ async def start_validation(
         resource_types=request.resource_types,
         status=ValidationStatus.RUNNING,
         started_at=datetime.now(),
+        triggered_by_id=user.id,
     )
 
     db.add(new_run)
@@ -92,6 +97,7 @@ async def start_validation(
         request.resource_types,
         server.auth_config or {},
         server.id,
+        server.name,
     )
 
     return new_run
@@ -140,6 +146,7 @@ async def resume_validation(
         run.resource_types,  # gleiche Scope wie beim ursprünglichen Lauf
         server.auth_config or {},
         server.id,
+        server.name,
     )
     return run
 
@@ -160,12 +167,47 @@ async def _mark_type_completed(run_id: UUID, resource_type: str, db: AsyncSessio
     await db.commit()
 
 
+async def _notify_run_finished(
+    run_id: UUID,
+    server_name: str,
+    db: AsyncSession,
+) -> None:
+    """Look up the trigger user and send a completion/failure email.
+    No-op if the run has no trigger user or the user opted out."""
+    run = (
+        await db.execute(select(ValidationRun).where(ValidationRun.id == run_id))
+    ).scalar_one_or_none()
+    if not run or not run.triggered_by_id:
+        return
+
+    user = (
+        await db.execute(select(User).where(User.id == run.triggered_by_id))
+    ).scalar_one_or_none()
+    if not user or not user.email_notifications_enabled or not user.email:
+        return
+
+    status_value = run.status.value if hasattr(run.status, "value") else str(run.status)
+    run_url = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/runs/{run_id}"
+
+    subject, body = build_run_notification(
+        recipient_name=user.full_name or user.username,
+        status=status_value,
+        server_name=server_name,
+        total_processed=run.total_processed or 0,
+        total_invalid=run.total_invalid or 0,
+        run_url=run_url,
+        error_message=run.error_message,
+    )
+    await send_email(user.email, subject, body)
+
+
 async def run_validation_task(
     run_id: UUID,
     base_url: str,
     resource_types: list[str],
     auth_config: dict,
     server_id: UUID,
+    server_name: str,
 ):
     """Asynchronous Background task"""
 
@@ -250,6 +292,8 @@ async def run_validation_task(
                 },
             )
 
+            await _notify_run_finished(run_id, server_name, db)
+
         except Exception as e:
 
             logger.error("Validation task %s failde: %s", run_id, e)
@@ -277,6 +321,8 @@ async def run_validation_task(
                     "error": str(e),
                 },
             )
+            async with AsyncSessionLocal() as notify_db:
+                await _notify_run_finished(run_id, server_name, notify_db)
 
 
 @router.get("/validation/runs", response_model=PaginatedRuns)
