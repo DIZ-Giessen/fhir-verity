@@ -11,8 +11,7 @@ RUN pnpm build
 FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
-RUN useradd -m -u 1000 appuser
 COPY --from=builder /app/.output ./.output
-USER appuser
+USER node
 EXPOSE 3000
 CMD ["node", ".output/server/index.mjs"]
