@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     EMAIL_USE_SSL: bool = False  # True = implicit SSL (465), False = STARTTLS
     EMAIL_VERIFY_CERT: bool = True  # False nur für interne Server mit self-signed cert
 
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
     class Config:
         """Config Class"""
 

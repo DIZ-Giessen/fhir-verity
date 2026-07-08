@@ -315,9 +315,9 @@ function ServerPicker({
       >
         <Command>
           <CommandInput placeholder="Search server…" />
-          <CommandList>
+          <CommandList className="overflow-y-auto!">
             <CommandEmpty>No server found.</CommandEmpty>
-            <CommandGroup>
+            <CommandGroup className="overflow-y-auto!">
               {servers.map((s) => (
                 <CommandItem
                   key={s.id}

@@ -321,7 +321,7 @@ export const fixTemplatesQueryOptions = () =>
   queryOptions({
     queryKey: ["resources", "fix-templates"],
     queryFn: async () => {
-      const { data } = await api.GET("/resources/fix-templates")
+      const { data } = await api.GET("/api/v1/resources/fix-templates")
       return data ?? []
     },
     staleTime: 5 * 60_000,
@@ -334,7 +334,7 @@ export async function autoFixResource(
   reason?: string
 ) {
   const { data } = await api.POST(
-    "/resources/{server_id}/{resource_type}/{resource_id}/auto-fix",
+    "/api/v1/resources/{server_id}/{resource_type}/{resource_id}/auto-fix",
     {
       params: {
         path: {
@@ -356,7 +356,7 @@ export async function deleteResource(
   reason?: string
 ) {
   const { data } = await api.DELETE(
-    "/resources/{server_id}/{resource_type}/{resource_id}",
+    "/api/v1/resources/{server_id}/{resource_type}/{resource_id}",
     {
       params: {
         path: {
@@ -372,12 +372,12 @@ export async function deleteResource(
 }
 
 export async function bulkDelete(body: BulkDeleteRequest) {
-  const { data } = await api.POST("/resources/bulk-delete", { body })
+  const { data } = await api.POST("/api/v1/resources/bulk-delete", { body })
   return data
 }
 
 export async function bulkFix(body: BulkFixRequest) {
-  const { data } = await api.POST("/resources/bulk-fix", { body })
+  const { data } = await api.POST("/api/v1/resources/bulk-fix", { body })
   return data
 }
 
@@ -394,7 +394,7 @@ export const auditLogQueryOptions = (params: AuditLogParams = {}) =>
   queryOptions({
     queryKey: ["audit-log", params],
     queryFn: async () => {
-      const { data } = await api.GET("/audit-log", {
+      const { data } = await api.GET("/api/v1/audit-log", {
         params: { query: params },
       })
       return data
@@ -406,7 +406,7 @@ export const auditLogDetailQueryOptions = (auditId: string) =>
   queryOptions({
     queryKey: ["audit-log", auditId, "detail"],
     queryFn: async () => {
-      const { data } = await api.GET("/audit-log/{audit_id}", {
+      const { data } = await api.GET("/api/v1/audit-log/{audit_id}", {
         params: { path: { audit_id: auditId } },
       })
       return data
