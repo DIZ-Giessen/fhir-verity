@@ -3,6 +3,7 @@ FROM node:22-slim AS builder
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml* .npmrc* ./
+RUN printf 'allowBuilds:\n  esbuild: true\n  msw: true\n  unrs-resolver: true\n' > pnpm-workspace.yaml
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
