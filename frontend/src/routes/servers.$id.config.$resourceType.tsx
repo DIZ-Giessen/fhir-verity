@@ -1,14 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { ChevronLeft } from "lucide-react"
+import { CalendarIcon, ChevronLeft } from "lucide-react"
 
 import {
   type ResourceConfig,
+  type ResourceFilters,
   type RuleUpdate,
   configKeys,
   deleteServerConfig,
   patchRule,
   serverResourceConfigQueryOptions,
+  updateServerFilters,
 } from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,6 +27,15 @@ import { Switch } from "@/components/ui/switch"
 import { ApiError } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
 import { Restart } from "@solar-icons/react-perf/category/style/LineDuotone"
+import { Label } from "@/components/ui/label"
+import { useEffect, useState } from "react"
+import { format, parse } from "date-fns"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
 
 type Severity = "error" | "warning" | "info"
 
@@ -105,6 +116,13 @@ function ResourceConfigPage() {
   const patch = (ruleKey: string, update: RuleUpdate) =>
     patchMutation.mutate({ ruleKey, update })
 
+  const filtersMutation = useMutation({
+    mutationFn: (filters: ResourceFilters) =>
+      updateServerFilters(id, resourceType, filters),
+    onSuccess: (result) => {
+      if (result) queryClient.setQueryData(queryKey, result)
+    },
+  })
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -148,6 +166,14 @@ function ResourceConfigPage() {
         </p>
       </div>
 
+      {data && (
+        <FilterCard
+          initial={(data.filters ?? {}) as ResourceFilters}
+          onSave={(f) => filtersMutation.mutate(f)}
+          saving={filtersMutation.isPending}
+          error={filtersMutation.error}
+        />
+      )}
       {isPending && (
         <div className="space-y-2">
           {Array.from({ length: 14 }).map((_, i) => (
@@ -260,5 +286,188 @@ function ResourceConfigPage() {
           )
         })}
     </div>
+  )
+}
+
+function FilterCard({
+  initial,
+  onSave,
+  saving,
+  error,
+}: {
+  initial: ResourceFilters
+  onSave: (f: ResourceFilters) => void
+  saving: boolean
+  error: unknown
+}) {
+  const [from, setFrom] = useState<Date | undefined>(
+    initial.last_updated_from ? parseYmd(initial.last_updated_from) : undefined
+  )
+  const [to, setTo] = useState<Date | undefined>(
+    initial.last_updated_to ? parseYmd(initial.last_updated_to) : undefined
+  )
+  const [profile, setProfile] = useState(initial.profile ?? "")
+  const [tag, setTag] = useState(initial.tag ?? "")
+
+  // Re-sync when the query refetches (e.g. after reset-to-defaults)
+  useEffect(() => {
+    setFrom(
+      initial.last_updated_from
+        ? parseYmd(initial.last_updated_from)
+        : undefined
+    )
+    setTo(
+      initial.last_updated_to ? parseYmd(initial.last_updated_to) : undefined
+    )
+    setProfile(initial.profile ?? "")
+    setTag(initial.tag ?? "")
+  }, [initial])
+
+  const active =
+    (initial.last_updated_from ||
+      initial.last_updated_to ||
+      initial.profile ||
+      initial.tag) != null &&
+    Boolean(
+      initial.last_updated_from ||
+      initial.last_updated_to ||
+      initial.profile ||
+      initial.tag
+    )
+
+  const submit = () =>
+    onSave({
+      last_updated_from: from ? format(from, "yyyy-MM-dd") : null,
+      last_updated_to: to ? format(to, "yyyy-MM-dd") : null,
+      profile: profile || null,
+      tag: tag || null,
+    })
+
+  const clear = () => {
+    setFrom(undefined)
+    setTo(undefined)
+    setProfile("")
+    setTag("")
+    onSave({
+      last_updated_from: null,
+      last_updated_to: null,
+      profile: null,
+      tag: null,
+    })
+  }
+
+  return (
+    <section className="mx-auto max-w-6xl space-y-4 rounded-xl border bg-sidebar-accent/20 p-5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="space-y-1">
+          <h2 className="text-sm font-medium text-orange-500">
+            Scope filters.
+          </h2>
+          <p className="text-xs text-pretty text-muted-foreground">
+            Restrict which{" "}
+            <span className="font-mono">{initial ? "" : ""}</span>resources are
+            validated. Empty = validate everything. Uses FHIR search on the
+            source server, so the crawl only fetches matching resources.
+          </p>
+        </div>
+        {active && <Badge variant="secondary">Filtered</Badge>}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Last updated from</Label>
+          <DateField value={from} onChange={setFrom} placeholder="Start date" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Last updated to</Label>
+          <DateField value={to} onChange={setTo} placeholder="End date" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Profile</Label>
+          <Input
+            value={profile}
+            onChange={(e) => setProfile(e.target.value)}
+            spellCheck={false}
+            placeholder="Your FHIR profile URL"
+            className="h-8 font-mono text-xs"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Tag</Label>
+          <Input
+            value={tag}
+            onChange={(e) => setTag(e.target.value)}
+            placeholder="system or code "
+            spellCheck={false}
+            className="h-8 font-mono text-xs"
+          />
+        </div>
+      </div>
+
+      {error instanceof ApiError && (
+        <p className="text-xs text-destructive">
+          {typeof error.body === "object" &&
+          error.body &&
+          "detail" in error.body
+            ? String((error.body as { detail: unknown }).detail)
+            : `HTTP ${error.status}`}
+        </p>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Button size="sm" onClick={submit} disabled={saving}>
+          {saving ? "Saving..." : "Apply filters"}
+        </Button>
+        {active && (
+          <Button size="sm" variant="ghost" onClick={clear} disabled={saving}>
+            Clear
+          </Button>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function parseYmd(s: string): Date | undefined {
+  // Backend stores YYYY-MM-DD; guard against partial values (e.g. "2022").
+  const d = parse(s, "yyyy-MM-dd", new Date())
+  return isNaN(d.getTime()) ? undefined : d
+}
+
+function DateField({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: Date | undefined
+  onChange: (d: Date | undefined) => void
+  placeholder: string
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          data-empty={!value}
+          className="h-8 w-full justify-between text-left text-xs font-normal data-[empty=true]:text-muted-foreground"
+        >
+          {value ? format(value, "PPP") : <span>{placeholder}</span>}
+          <CalendarIcon className="h-3.5 w-3.5" data-icon="inline-end" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={value}
+          captionLayout="dropdown"
+          onSelect={(d) => {
+            onChange(d)
+            setOpen(false)
+          }}
+          defaultMonth={value}
+        />
+      </PopoverContent>
+    </Popover>
   )
 }

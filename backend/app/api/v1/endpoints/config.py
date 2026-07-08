@@ -301,7 +301,7 @@ async def update_server_filters(
     try:
         cleaned = validate_filters(payload.filters.model_dump(exclude_none=True))
     except FilterValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     stmt = select(ValidationConfig).where(
         ValidationConfig.server_id == server_id,
