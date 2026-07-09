@@ -8,7 +8,7 @@ Server zurückgeschrieben.
 
 Das Tool ist als Ersatz für eine bestehende, schwer wartbare Mirth-Connect-Lösung entstanden und von Anfang an so gebaut, dass es an jedem DIZ oder alle andere FHIR Basierte Instituten ohne Codeänderung deploybar ist.
 
-## Wofür das hier gut ist
+## Ziel
 
 Bestehende FHIR-Validatoren prüfen einzelne Ressourcen oder Bundles gegen Profile. Was in der Praxis fehlt, ist zweierlei: die Prüfung eines
 **kompletten Server-Bestands** in einem Durchlauf, und Qualitätskriterien, die über reine Profilkonformität hinausgehen — etwa ob Pseudonymisierung
