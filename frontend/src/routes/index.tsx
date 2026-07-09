@@ -2,7 +2,7 @@ import {
   ArrowRightUp,
   SquareBottomUp,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/")({
   component: HomePage,
