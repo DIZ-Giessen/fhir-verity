@@ -47,7 +47,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-import { FhirResourcesPopover } from "./runs.index"
+import { FhirResourcesPopover } from "./index"
 import {
   dateFormatter,
   formatDuration,
