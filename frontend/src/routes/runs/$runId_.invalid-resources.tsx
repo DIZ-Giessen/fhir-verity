@@ -1,14 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ExternalLink,
-  Trash2,
-  Wrench,
-  XIcon,
-} from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight, XIcon } from "lucide-react"
 import { Fragment, useEffect, useMemo, useState } from "react"
 
 import {
@@ -49,7 +41,12 @@ import {
 } from "@/components/ui/table"
 import { dateFormatter } from "@/lib/functions/runs"
 import type { InvalidResourcesParams } from "@/lib/interface"
-import { Restart } from "@solar-icons/react-perf/category/style/LineDuotone"
+import {
+  LinkRound,
+  PenNewSquare,
+  Restart,
+  TrashBinMinimalistic,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -172,9 +169,9 @@ function InvalidResourcesPage() {
               {total.toLocaleString()} total
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid items-center gap-2 sm:grid-cols-5">
             <Select value={resourceType} onValueChange={setResourceType}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Resource type" />
               </SelectTrigger>
               <SelectContent>
@@ -188,7 +185,7 @@ function InvalidResourcesPage() {
             </Select>
 
             <Select value={rule} onValueChange={setRule}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Rule" />
               </SelectTrigger>
               <SelectContent>
@@ -202,7 +199,7 @@ function InvalidResourcesPage() {
             </Select>
 
             <Select value={severity} onValueChange={setSeverity}>
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Severity" />
               </SelectTrigger>
               <SelectContent>
@@ -213,7 +210,7 @@ function InvalidResourcesPage() {
               </SelectContent>
             </Select>
 
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex w-full items-center gap-2 text-sm">
               <Switch checked={onlyCurrent} onCheckedChange={setOnlyCurrent} />
               Only this run
             </label>
@@ -506,10 +503,10 @@ function ResourceActions({
             size="sm"
             variant="outline"
             disabled={busy}
-            className="gap-1"
+            className="gap-1 border-orange-500/20 text-orange-500!"
             onClick={() => setPending("fix")}
           >
-            <Wrench className="h-3.5 w-3.5" />
+            <PenNewSquare className="size-4" />
             Fix
           </Button>
         )}
@@ -520,12 +517,12 @@ function ResourceActions({
           className="gap-1 text-red-600 hover:text-red-600 dark:text-red-400"
           onClick={() => setPending("delete")}
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <TrashBinMinimalistic className="size-4" />
           Delete
         </Button>
         <Button asChild size="sm" variant="outline" className="gap-1">
           <a href={fhirUrl} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-3.5 w-3.5" />
+            <LinkRound className="size-4" />
             Open on FHIR server
           </a>
         </Button>
