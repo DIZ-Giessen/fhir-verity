@@ -81,3 +81,49 @@ Die ausführliche Dokumentation liegt im Ordner `documentation/`:
 - [deployment.md](documentation/deployment.md) — Vollständige Deployment-Anleitung
 - [weiterentwicklung.md](documentation/weiterentwicklung.md) — Änderungen, neue Pakete, neue Migrationen
 - [troubleshooting.md](documentation/troubleshooting.md) — Bekannte Fehler und ihre Ursachen
+
+## Screenshots
+
+---
+
+### Login and Welcome Page
+
+[Login Page](documentation/images/login.png)
+
+[Welcome Page](documentation/images/home.png)
+
+### Server Pages
+
+[Server Page](documentation/images/server.png)
+[Create a new Server](documentation/images/server1.png)
+[Add a Server Configuration](documentation/images/server2.png)
+[Server Config](/documentation/images/server-config.png)
+[Server Rules](/documentation/images/rules.png)
+
+### Runs Page
+
+[Runs Page](/documentation/images/runs.png)
+[Start a new Validation](/documentation/images/runs2.png)
+
+### Detail Run Page
+
+[Detail Run Page](/documentation/images/runId.png)
+[Detail Run Page](/documentation/images/runId2.png)
+[Detail Run Page](/documentation/images/runId3.png)
+
+### Invalid Ressource Page
+
+[Invalid Ressource Page](/documentation/images/invR.png)
+[Detail Run Page](/documentation/images/invR4.png)
+
+### Cleanup Page
+
+[Cleanup Page](/documentation/images/cleanup.png)
+
+### Audit Page
+
+[Audit Page](/documentation/images/audit.png)
+
+### Users Managment Page
+
+[Audit Page](/documentation/images/users.png)

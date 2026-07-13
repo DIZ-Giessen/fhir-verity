@@ -17,13 +17,13 @@ function LoginPage() {
       <Card className="w-full max-w-sm rounded-4xl px-6 py-10 pt-14 shadow-2xs">
         <CardContent>
           <div className="flex flex-col items-center space-y-8">
-            <img src="logo-white.svg" className="size-32" />
+            <img src="logo-white.svg" className="size-28" />
             <div className="space-y-2 text-center">
               <h1 className="text-3xl font-semibold text-balance text-foreground">
                 FHIR Verity
               </h1>
               <p className="text-sm text-pretty text-muted-foreground">
-                Sign in with your DIZ account to continue.
+                Sign in with your Institute Account to continue.
               </p>
             </div>
 
@@ -42,6 +42,22 @@ function LoginPage() {
             >
               Sign in with Keycloak
             </Button>
+            <p className="w-11/12 text-center text-xs text-pretty text-muted-foreground">
+              Build by{" "}
+              <a
+                className="underline hover:text-foreground"
+                href="https://www.diz.uni-giessen.de"
+              >
+                DIZ Gießen
+              </a>{" "}
+              See the source code on{" "}
+              <a
+                className="underline hover:text-foreground"
+                href="https://github.com/diz-uni-giessen/fhir-verity"
+              >
+                GitHub
+              </a>
+            </p>
           </div>
         </CardContent>
       </Card>

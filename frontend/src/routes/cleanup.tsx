@@ -214,10 +214,10 @@ function CleanupPage() {
           <div className="space-y-1.5">
             <Label>Server</Label>
             <Select value={serverId} onValueChange={setServerId}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select a server" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-80 overflow-auto">
                 {(serversQ.data ?? []).map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name}
@@ -230,7 +230,7 @@ function CleanupPage() {
           <div className="space-y-1.5">
             <Label>Resource type</Label>
             <Select value={resourceType} onValueChange={setResourceType}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue
                   placeholder={
                     mode === "fix" ? "Select a type" : "All resource types"
@@ -259,7 +259,7 @@ function CleanupPage() {
               onValueChange={setRule}
               disabled={resourceType === ALL}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue
                   placeholder={
                     resourceType === ALL
@@ -287,7 +287,7 @@ function CleanupPage() {
             <div className="space-y-1.5">
               <Label>Severity</Label>
               <Select value={severity} onValueChange={setSeverity}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All severities" />
                 </SelectTrigger>
                 <SelectContent>
@@ -300,7 +300,7 @@ function CleanupPage() {
             </div>
           )}
 
-          <div className="space-y-1.5 sm:col-span-2">
+          <div className="w-full space-y-1.5 sm:col-span-2">
             <Label>Reason (audit log)</Label>
             <Input
               value={reason}
