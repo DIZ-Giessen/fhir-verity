@@ -46,8 +46,10 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Corkscrew,
+  Lightbulb,
   NotificationLinesRemove,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 export const Route = createFileRoute("/cleanup")({ component: CleanupPage })
 
@@ -175,7 +177,7 @@ function CleanupPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Cleanup</h1>
         <p className="text-sm text-muted-foreground">
           Bulk-delete or bulk-fix invalid resources on a FHIR server. Every run
-          previews matches first (dry-run) before anything is executed.
+          previews matches first before anything is executed.
         </p>
       </div>
 
@@ -191,15 +193,15 @@ function CleanupPage() {
                 value="delete"
                 className="gap-1 data-[state=active]:text-orange-500 data-[state=active]:dark:text-orange-500"
               >
-                <NotificationLinesRemove className="h-3.5 w-3.5" />
-                Delete
+                <NotificationLinesRemove className="size-4" />
+                Delete Invalid Resources
               </TabsTrigger>
               <TabsTrigger
                 value="fix"
                 className="gap-1 data-[state=active]:text-orange-500 data-[state=active]:dark:text-orange-500"
               >
-                <Corkscrew className="h-3.5 w-3.5" />
-                Fix
+                <Corkscrew className="size-4" />
+                Fix Invalid Resources
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -429,6 +431,37 @@ function CleanupPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Alert className="border-0 shadow-none">
+        <Lightbulb />
+        <AlertTitle>Important Information</AlertTitle>
+        <AlertDescription>
+          Please review this information before deleting or fixing the
+          resources.
+          <ul className="list-disc pl-5">
+            <li>
+              The fix works only on HAPI FHIR servers, as it is based on the
+              PATCH method, which is not supported by some Blaze servers.
+            </li>
+            <li>
+              After validation, the request is immediately added to the audit
+              logs, regardless of success or failure.
+            </li>
+            <li>
+              A resource cannot be deleted if it is referenced by another
+              resource (referential integrity).
+            </li>
+            <li>The fix only works for Patient and Observation resources.</li>
+          </ul>
+          <Button
+            variant="link"
+            size="sm"
+            className="text-info h-auto p-0 underline"
+          >
+            Read more here
+          </Button>
+        </AlertDescription>
+      </Alert>
     </div>
   )
 }
