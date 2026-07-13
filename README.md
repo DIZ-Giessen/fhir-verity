@@ -81,3 +81,7 @@ Die ausführliche Dokumentation liegt im Ordner `documentation/`:
 - [deployment.md](documentation/deployment.md) — Vollständige Deployment-Anleitung
 - [weiterentwicklung.md](documentation/weiterentwicklung.md) — Änderungen, neue Pakete, neue Migrationen
 - [troubleshooting.md](documentation/troubleshooting.md) — Bekannte Fehler und ihre Ursachen
+
+# Screenshots
+
+--
