@@ -110,12 +110,11 @@ function AuditPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
         <p className="text-sm text-muted-foreground">
-          Every delete and patch executed against a FHIR server, with the
-          before-snapshot kept for traceability.
+          Every delete and patch executed against a FHIR server.
         </p>
       </div>
 
@@ -127,9 +126,9 @@ function AuditPage() {
               {total.toLocaleString()} total
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid w-full flex-wrap items-center gap-2 sm:grid-cols-4">
             <Select value={serverId} onValueChange={setServerId}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Server" />
               </SelectTrigger>
               <SelectContent>
@@ -143,7 +142,7 @@ function AuditPage() {
             </Select>
 
             <Select value={resourceType} onValueChange={setResourceType}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Resource type" />
               </SelectTrigger>
               <SelectContent>
@@ -157,7 +156,7 @@ function AuditPage() {
             </Select>
 
             <Select value={action} onValueChange={setAction}>
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Action" />
               </SelectTrigger>
               <SelectContent>
@@ -168,7 +167,7 @@ function AuditPage() {
             </Select>
 
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -180,7 +179,7 @@ function AuditPage() {
 
             {hasFilters && (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={() => {
                   setServerId(ALL)
