@@ -2,7 +2,9 @@
 
 import uuid
 from sqlalchemy import (
+    BigInteger,
     Column,
+    Index,
     String,
     JSON,
     Float,
@@ -68,4 +70,26 @@ class InvalidResource(Base, TimestampMixin):
             "resource_id",
             name="uq_server_resource_type_id",
         ),
+    )
+
+
+class InvalidResourceIssue(Base):
+    """
+    Normalized issue rows for filterable rule/severity queries.
+    One row per issue of an invalid resource; replaced on every re-validation.
+    """
+
+    __tablename__ = "invalid_resource_issues"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    invalid_resource_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("invalid_resources.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    rule = Column(String(200), nullable=False)
+    severity = Column(String(50), nullable=False)
+
+    __table_args__ = (
+        Index("ix_invalid_resource_issues_res_rule", "invalid_resource_id", "rule"),
     )

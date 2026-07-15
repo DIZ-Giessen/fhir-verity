@@ -55,6 +55,10 @@ class ValidationRun(Base, TimestampMixin):
     checkpoint: Mapped[dict] = mapped_column(
         JSON, default=dict, nullable=False, server_default="{}"
     )
+
+    rule_stats: Mapped[dict] = mapped_column(
+        JSON, default=dict, nullable=False, server_default="{}"
+    )
     triggered_by_id = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),

@@ -12,12 +12,12 @@ from uuid import UUID
 
 import re
 import httpx
-from sqlalchemy import select
+from sqlalchemy import delete, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 
-from app.models.invalid_resource import InvalidResource
+from app.models.invalid_resource import InvalidResource, InvalidResourceIssue
 from app.models.validation_run import ValidationRun
 from app.services.config_service import get_config_for_run, rule_enabled
 from app.services.validation_filters import build_filter_params
@@ -48,6 +48,7 @@ class BaseValidator:
         self.auth_config = auth_config or {}
         self.server_id = server_id
         self.filter_params: dict = {}
+        self._page_rule_counts: dict[tuple[str, str], int] = {}
 
     def _merge_params(self, base: dict) -> dict:
         """Merge the configured filter params into a search param dict.
@@ -258,12 +259,12 @@ class BaseValidator:
         db: AsyncSession,
     ):
         """
-        UPSERT an invalid resource.
+        UPSERT an invalid resource and replace its normalized issue rows.
 
         On first detection: insert with first_seen and last_seen both pointing
-        to the current run.
-        On subsequent detections: update only the "current state" fields
-        (issues, metrics, last_seen_*), preserving the original first_seen_*.
+        to the current run. On subsequent detections: update only the
+        "current state" fields, preserving first_seen_*. The issue rows in
+        invalid_resource_issues always reflect the latest validation snapshot.
         """
         if self.server_id is None:
             logger.error(
@@ -288,8 +289,6 @@ class BaseValidator:
                 last_seen_run_id=run_id,
                 last_seen_at=now,
             )
-
-            # ON CONFLICT: only refresh current-state fields. first_seen_* stays.
             stmt = stmt.on_conflict_do_update(
                 constraint="uq_server_resource_type_id",
                 set_={
@@ -298,10 +297,36 @@ class BaseValidator:
                     "last_seen_run_id": stmt.excluded.last_seen_run_id,
                     "last_seen_at": stmt.excluded.last_seen_at,
                 },
-            )
+            ).returning(InvalidResource.id)
 
-            await db.execute(stmt)
+            inv_id = (await db.execute(stmt)).scalar_one()
+
+            # Replace issue rows with the latest snapshot (same transaction).
+            await db.execute(
+                delete(InvalidResourceIssue).where(
+                    InvalidResourceIssue.invalid_resource_id == inv_id
+                )
+            )
+            if issues:
+                await db.execute(
+                    insert(InvalidResourceIssue),
+                    [
+                        {
+                            "invalid_resource_id": inv_id,
+                            "rule": i.get("rule", "unknown"),
+                            "severity": i.get("severity", "unknown"),
+                        }
+                        for i in issues
+                    ],
+                )
+
             await db.commit()
+
+            # Only count towards rule_stats after a successful commit.
+            for i in issues:
+                key = (i.get("rule", "unknown"), i.get("severity", "unknown"))
+                self._page_rule_counts[key] = self._page_rule_counts.get(key, 0) + 1
+
         except Exception as e:
             await db.rollback()
             logger.error("Save error for %s/%s: %s", resource_type, resource_id, e)
@@ -339,6 +364,18 @@ class BaseValidator:
             },
         }
         run.per_resource_stats = new_stats
+
+        # Flush the per-page rule counter into the precomputed rule_stats.
+        page_rules = self._page_rule_counts
+        self._page_rule_counts = {}
+        if page_rules:
+            current = run.rule_stats or {}
+            rt_bucket = dict(current.get(resource_type, {}))
+            for (rule, severity), c in page_rules.items():
+                key = f"{rule}|{severity}"
+                rt_bucket[key] = rt_bucket.get(key, 0) + c
+            # full reassignment so SQLAlchemy detects the JSON change
+            run.rule_stats = {**current, resource_type: rt_bucket}
 
         await db.commit()
 
@@ -511,7 +548,7 @@ class PatientValidator(BaseValidator):
                 issues = []
                 metrics = self._build_metrics(config)
 
-                # privacy: name_forbidden
+                # privacy:
                 if rule_enabled(config, "text_forbidden"):
                     if resource.get("text"):
                         issues.append(
