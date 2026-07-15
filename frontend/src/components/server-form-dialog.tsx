@@ -99,7 +99,7 @@ export function ServerFormDialog({
           }, 1000)
         }),
         {
-          loading: "Deploying to production...",
+          loading: "loading...",
           success: (createdServer: any) =>
             `The Server ${createdServer?.name ?? "Server"} was successfully created, please configure now the Server auth.`,
           error: "Create Server failed. Please try again.",
