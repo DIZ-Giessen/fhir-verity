@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { ApiError } from "@/lib/api-client"
 import { Field, FieldDescription, FieldError, FieldLabel } from "./ui/field"
+import { toast } from "sonner"
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required").max(255),
@@ -79,6 +80,31 @@ export function ServerFormDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: serverKeys.all })
       onOpenChange(false)
+      // Wait 1 second after successful mutation, then show message using correct server info
+      toast.promise(
+        new Promise((resolve) => {
+          setTimeout(() => {
+            // get the actual server info from mutation result, fallback to existing if needed
+            if (
+              mutation.data &&
+              typeof mutation.data === "object" &&
+              "name" in mutation.data
+            ) {
+              resolve(mutation.data)
+            } else if (server) {
+              resolve(server)
+            } else {
+              resolve({ name: "Server" })
+            }
+          }, 1000)
+        }),
+        {
+          loading: "Deploying to production...",
+          success: (createdServer: any) =>
+            `The Server ${createdServer?.name ?? "Server"} was successfully created, please configure now the Server auth.`,
+          error: "Create Server failed. Please try again.",
+        }
+      )
     },
   })
 

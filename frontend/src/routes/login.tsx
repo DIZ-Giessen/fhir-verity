@@ -42,22 +42,6 @@ function LoginPage() {
             >
               Sign in with Keycloak
             </Button>
-            <p className="w-11/12 text-center text-xs text-pretty text-muted-foreground">
-              Build by{" "}
-              <a
-                className="underline hover:text-foreground"
-                href="https://www.diz.uni-giessen.de"
-              >
-                DIZ Gießen
-              </a>{" "}
-              See the source code on{" "}
-              <a
-                className="underline hover:text-foreground"
-                href="https://github.com/diz-uni-giessen/fhir-verity"
-              >
-                GitHub
-              </a>
-            </p>
           </div>
         </CardContent>
       </Card>
