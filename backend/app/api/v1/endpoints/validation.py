@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import and_, desc, exists, func, select
 import httpx
 
 
@@ -32,7 +32,7 @@ from app.schemas.validation import (
 
 from app.services.validation_rules import VALIDATORS
 from app.services.fhir_report_service import generate_and_post_reports
-from app.models.invalid_resource import InvalidResource
+from app.models.invalid_resource import InvalidResource, InvalidResourceIssue
 from app.services.fhir_auth import build_httpx_auth
 
 from app.core.security import get_current_user, load_server_scoped
@@ -489,62 +489,43 @@ async def list_invalid_resources(
     user: User = Depends(get_current_user),
 ):
     """
-    Paginated invalid resources for a given run, with optional filters.
-    Filters by rule and severity scan metrics['issues_detail'] in-memory
-    AFTER fetching, since JSON-level filtering isn't portable across DBs.
-    For very large result sets this should be migrated to JSONB + GIN index.
+    Paginated invalid resources for a given run. Rule/severity filters use the normalized invalid_resource_issues table via EXISTS, so pagination and counts run entirely in SQL.
     """
     run = await _load_run_scoped(run_id, user, db)
 
+    # When rule/severity filters are present we need to inspect issues_detail.
     base_filters = [InvalidResource.server_id == run.server_id]
     if only_current_run:
         base_filters.append(InvalidResource.last_seen_run_id == run_id)
     if resource_type:
         base_filters.append(InvalidResource.resource_type == resource_type)
 
+    if rule or severity:
+        issue_match = [InvalidResourceIssue.invalid_resource_id == InvalidResource.id]
+        if rule:
+            issue_match.append(InvalidResourceIssue.rule == rule)
+        if severity:
+            issue_match.append(InvalidResourceIssue.severity == severity)
+        base_filters.append(exists(select(InvalidResourceIssue.id).where(*issue_match)))
+
     where_clause = and_(*base_filters)
 
-    # When rule/severity filters are present we need to inspect issues_detail.
-    # Strategy: fetch a larger window, filter in Python, then paginate.
-    needs_post_filter = bool(rule or severity)
+    count_stmt = select(func.count(InvalidResource.id)).where(where_clause)
+    total = (await db.execute(count_stmt)).scalar_one()
 
-    if needs_post_filter:
-        stmt = (
-            select(InvalidResource)
-            .where(where_clause)
-            .order_by(desc(InvalidResource.last_seen_at))
-        )
-        result = await db.execute(stmt)
-        rows = result.scalars().all()
+    stmt = (
+        select(InvalidResource)
+        .where(where_clause)
+        .order_by(desc(InvalidResource.created_at))
+        .offset(skip)
+        .limit(limit)
+    )
 
-        filtered = []
-        for row in rows:
-            issues = (row.metrics or {}).get("issues_detail", [])
-            match = True
-            if rule:
-                match = match and any(i.get("rule") == rule for i in issues)
-            if severity:
-                match = match and any(i.get("severity") == severity for i in issues)
-            if match:
-                filtered.append(row)
-
-        total = len(filtered)
-        page = filtered[skip : skip + limit]
-    else:
-        count_stmt = select(func.count(InvalidResource.id)).where(where_clause)
-        total = (await db.execute(count_stmt)).scalar_one()
-
-        stmt = (
-            select(InvalidResource)
-            .where(where_clause)
-            .order_by(desc(InvalidResource.created_at))
-            .offset(skip)
-            .limit(limit)
-        )
-        result = await db.execute(stmt)
-        page = result.scalars().all()
+    result = await db.execute(stmt)
+    page = result.scalars().all()
 
     items = []
+
     for row in page:
         issues_detail = [
             IssueDetail(**i) for i in (row.metrics or {}).get("issues_detail", [])
@@ -585,40 +566,25 @@ async def get_run_summary(
     user: User = Depends(get_current_user),
 ):
     """
-    Aggregated summary: total counts and rule-violation breakdown
-    per resource type. Used for heatmaps and dashboard tiles.
+    Aggregated summary from precomputed run.rule_stats — O(1) regardless of
+    how many invalid resources the run produced. The numbers are a snapshot
+    of this run, written incrementally during validation.
     """
     run = await _load_run_scoped(run_id, user, db)
 
-    inv_stmt = select(InvalidResource).where(
-        InvalidResource.server_id == run.server_id,
-        InvalidResource.last_seen_run_id == run.id,
-    )
-    invalid_rows = (await db.execute(inv_stmt)).scalars().all()
-
-    # Aggregate rule violations per resource_type
-    # Structure: {resource_type: {(rule, severity): count}}
-    aggregated: dict[str, dict[tuple[str, str], int]] = {}
-    totals_by_type: dict[str, int] = {}
-
-    for row in invalid_rows:
-        rt = row.resource_type
-        totals_by_type[rt] = totals_by_type.get(rt, 0) + 1
-        rt_bucket = aggregated.setdefault(rt, {})
-        for issue in (row.metrics or {}).get("issues_detail", []):
-            key = (issue.get("rule", "unknown"), issue.get("severity", "unknown"))
-            rt_bucket[key] = rt_bucket.get(key, 0) + 1
-
+    per_stats = run.per_resource_stats or {}
     by_resource_type = []
-    for rt, rule_counts in aggregated.items():
-        by_rule = [
-            RuleViolationCount(rule=r, severity=s, count=c)
-            for (r, s), c in sorted(rule_counts.items(), key=lambda x: -x[1])
-        ]
+    for rt, bucket in (run.rule_stats or {}).items():
+        by_rule = []
+        for key, count in sorted(bucket.items(), key=lambda x: -x[1]):
+            rule, _, severity = key.partition("|")
+            by_rule.append(
+                RuleViolationCount(rule=rule, severity=severity, count=count)
+            )
         by_resource_type.append(
             ResourceTypeSummary(
                 resource_type=rt,
-                total_invalid=totals_by_type.get(rt, 0),
+                total_invalid=per_stats.get(rt, {}).get("invalid", 0),
                 by_rule=by_rule,
             )
         )
