@@ -474,6 +474,11 @@ def build_verification_result(
     issued = (
         run.finished_at.strftime("%Y-%m-%dT%H:%M:%S+00:00") if run.finished_at else now
     )
+    issued_date = (
+        run.finished_at.strftime("%Y-%m-%d")
+        if run.finished_at
+        else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    )
 
     status = "req-revalid" if has_errors else "validated"
     failure_action_code = "warn" if not has_errors else "fatal"
@@ -582,7 +587,7 @@ def build_verification_result(
                     }
                 ]
             },
-            "date": issued,
+            "date": issued_date,
             "sourceIdentityCertificate": f"run_id:{run.id}",
         },
         # Extensions for dashboard use
@@ -740,8 +745,6 @@ async def generate_and_post_reports(
                 continue
 
             # Aggregate violations
-            violations = await aggregate_violations(run_id, resource_type, db)
-
             violations = await aggregate_violations(run_id, resource_type, db)
 
             # Per-resource statistics directly from the run object — no extra queries needed.
