@@ -20,6 +20,7 @@ import { Grid } from "@/components/charts/grid"
 import { ChartTooltip } from "@/components/charts/tooltip"
 
 import {
+  cancelValidation,
   type PerResourceStats,
   resumeValidation,
   runQueryOptions,
@@ -56,10 +57,13 @@ import {
 import type { TestReportSummary } from "@/lib/interface"
 import {
   ArrowRightUp,
+  Chart,
   Chart2,
+  CourseUp,
   DangerTriangle,
   Export,
   PieChart2,
+  RestartCircle,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -122,6 +126,17 @@ function RunDetailPage() {
       toast.error("Fortsetzen fehlgeschlagen", { description: String(e) }),
   })
 
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelValidation(runId),
+    onSuccess: () => {
+      toast.success("Stopp angefordert…")
+      queryClient.invalidateQueries({
+        queryKey: runQueryOptions(runId).queryKey,
+      })
+    },
+    onError: (e) =>
+      toast.error("Stoppen fehlgeschlagen", { description: String(e) }),
+  })
   const run = runQ.data
   const serverQ = useQuery({
     ...serverQueryOptions(run?.server_id ?? ""),
@@ -185,9 +200,9 @@ function RunDetailPage() {
             {resumeMutation.isPending ? (
               <Loader2 className="mr-1 h-4 w-4 animate-spin" />
             ) : (
-              <RefreshCw className="mr-1 h-4 w-4" />
+              <RestartCircle className="mr-1 size-5" />
             )}
-            Resume run
+            Restart this run
           </Button>
         ) : (
           <Button asChild size="sm">
@@ -233,16 +248,26 @@ function RunDetailPage() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  asChild
-                  variant="outline"
-                  className="text-blue-500 hover:text-blue-500/80"
-                >
-                  <Link to="/runs/$runId/live" params={{ runId: run.id }}>
-                    Live view
-                    <ArrowRightUp className="ml-1 size-4" />
-                  </Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => cancelMutation.mutate()}
+                    disabled={cancelMutation.isPending || run.cancel_requested}
+                  >
+                    {run.cancel_requested ? "Wird gestoppt…" : "Stoppen"}
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="text-blue-500 hover:text-blue-500/80"
+                  >
+                    <Link to="/runs/$runId/live" params={{ runId: run.id }}>
+                      Live view
+                      <ArrowRightUp className="ml-1 size-4" />
+                    </Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -358,20 +383,16 @@ function RunDetailPage() {
               Invalid rate per resource type
             </h2>
             <div className="flex items-center gap-2">
-              <Button
-                onClick={() => setShowBar(!showBar)}
-                size="sm"
-                variant="outline"
-              >
+              <Button onClick={() => setShowBar(!showBar)} variant="ghost">
                 {showBar ? "Show as Radial Chart" : "Show as Bar Chart"}
                 {showBar ? (
                   <PieChart2 className="ml-1 size-5" />
                 ) : (
-                  <Chart2 className="ml-1 size-4" />
+                  <CourseUp className="ml-1 size-5" />
                 )}
               </Button>
-              <Button onClick={() => exportAsPNG()} size="sm" variant="outline">
-                Export the chart
+              <Button onClick={() => exportAsPNG()} size="sm" variant="ghost">
+                Export the charts as PNG
                 <Export className="ml-1 size-5" />
               </Button>
             </div>

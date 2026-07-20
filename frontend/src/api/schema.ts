@@ -306,6 +306,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/validation/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Validation
+         * @description Request cooperative cancellation of a running run. Sets a flag only; the
+         *     background task stops at the next page boundary and writes the terminal
+         *     CANCELLED status itself.
+         */
+        post: operations["cancel_validation_api_v1_validation_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/validation/runs/{run_id}/invalid-resources": {
         parameters: {
             query?: never;
@@ -315,10 +337,7 @@ export interface paths {
         };
         /**
          * List Invalid Resources
-         * @description Paginated invalid resources for a given run, with optional filters.
-         *     Filters by rule and severity scan metrics['issues_detail'] in-memory
-         *     AFTER fetching, since JSON-level filtering isn't portable across DBs.
-         *     For very large result sets this should be migrated to JSONB + GIN index.
+         * @description Paginated invalid resources for a given run. Rule/severity filters use the normalized invalid_resource_issues table via EXISTS, so pagination and counts run entirely in SQL.
          */
         get: operations["list_invalid_resources_api_v1_validation_runs__run_id__invalid_resources_get"];
         put?: never;
@@ -338,8 +357,9 @@ export interface paths {
         };
         /**
          * Get Run Summary
-         * @description Aggregated summary: total counts and rule-violation breakdown
-         *     per resource type. Used for heatmaps and dashboard tiles.
+         * @description Aggregated summary from precomputed run.rule_stats — O(1) regardless of
+         *     how many invalid resources the run produced. The numbers are a snapshot
+         *     of this run, written incrementally during validation.
          */
         get: operations["get_run_summary_api_v1_validation_runs__run_id__summary_get"];
         put?: never;
@@ -1417,6 +1437,11 @@ export interface components {
             per_resource_stats: components["schemas"]["PerResourceStats"][];
             /** Elapsed Seconds */
             elapsed_seconds?: number | null;
+            /**
+             * Cancel Requested
+             * @default false
+             */
+            cancel_requested: boolean;
         };
         /**
          * ValidationRunListItem
@@ -1490,6 +1515,11 @@ export interface components {
             finished_at?: string | null;
             /** Error Message */
             error_message?: string | null;
+            /**
+             * Cancel Requested
+             * @default false
+             */
+            cancel_requested: boolean;
         };
         /**
          * ValidationStartRequest
@@ -2030,6 +2060,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ValidationRunDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_validation_api_v1_validation_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationRunRead"];
                 };
             };
             /** @description Validation Error */

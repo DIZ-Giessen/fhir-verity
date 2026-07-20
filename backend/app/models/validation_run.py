@@ -4,6 +4,7 @@ import uuid
 import enum
 from datetime import datetime
 from sqlalchemy import (
+    Boolean,
     Column,
     String,
     JSON,
@@ -55,6 +56,7 @@ class ValidationRun(Base, TimestampMixin):
     checkpoint: Mapped[dict] = mapped_column(
         JSON, default=dict, nullable=False, server_default="{}"
     )
+    cancel_requested = Column(Boolean, nullable=False, server_default="false")
 
     rule_stats: Mapped[dict] = mapped_column(
         JSON, default=dict, nullable=False, server_default="{}"

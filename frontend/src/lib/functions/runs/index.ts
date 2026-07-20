@@ -30,6 +30,8 @@ export const RUN_STATUS_STYLES: Record<string, string> = {
     "border-0 bg-emerald-500/5 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
   running:
     "border-0 bg-blue-500/5 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400",
+  cancelled:
+    "border-0 bg-neutral-500/5 text-neutral-700 dark:bg-neutral-500/10 dark:text-neutral-400",
   failed:
     "border-0 bg-rose-500/5 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
 }
