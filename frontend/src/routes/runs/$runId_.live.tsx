@@ -214,6 +214,7 @@ function LivePage() {
                 : "unknown"
             }`
           )
+          setRunState("progress")
           break
         case "resource_start":
           setMetrics((m) => ({
@@ -222,6 +223,7 @@ function LivePage() {
             progressPercent: 0,
           }))
           pushLog("resource_start", `Started ${str(data.resource_type) ?? "?"}`)
+          setRunState("progress")
           break
         case "completed":
           terminalRef.current = true
@@ -314,6 +316,8 @@ function LivePage() {
     end: (metrics.elapsedSeconds ?? 0) * 1000,
   })
 
+  console.log(runState)
+
   return (
     <div className="space-y-6">
       <Link
@@ -383,11 +387,13 @@ function LivePage() {
             <div
               className={cn(
                 "h-full rounded-full transition-all duration-500",
-                runState === "running"
+                runState === "progress"
                   ? "bg-orange-500"
-                  : runState === "failed"
+                  : ["failed"].includes(runState)
                     ? "bg-red-500"
-                    : "bg-emerald-500"
+                    : runState === "completed"
+                      ? "bg-emerald-500"
+                      : "bg-gray-500"
               )}
               style={{ width: `${pct}%` }}
             />

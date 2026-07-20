@@ -2,14 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { toPng } from "html-to-image"
 import { useRef } from "react"
-import {
-  AlertTriangle,
-  ArrowRight,
-  ChevronLeft,
-  Loader,
-  Loader2,
-  RefreshCw,
-} from "lucide-react"
+import { AlertTriangle, ArrowRight, ChevronLeft } from "lucide-react"
 import { useMemo, useState } from "react"
 import { PolarAngleAxis, RadialBar, RadialBarChart } from "recharts"
 
@@ -57,8 +50,6 @@ import {
 import type { TestReportSummary } from "@/lib/interface"
 import {
   ArrowRightUp,
-  Chart,
-  Chart2,
   CourseUp,
   DangerTriangle,
   Export,
@@ -68,6 +59,8 @@ import {
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { ValueYAxis } from "@/components/charts/value-y-axis"
+import { TextDots } from "@/components/text-dots"
+import { Dots } from "@/components/dots"
 
 export const Route = createFileRoute("/runs/$runId")({
   component: RunDetailPage,
@@ -198,11 +191,13 @@ function RunDetailPage() {
             disabled={resumeMutation.isPending}
           >
             {resumeMutation.isPending ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              <Dots className="w-7" />
             ) : (
-              <RestartCircle className="mr-1 size-5" />
+              <>
+                <RestartCircle className="mr-1 size-5" />
+                Restart this run
+              </>
             )}
-            Restart this run
           </Button>
         ) : (
           <Button asChild size="sm">
@@ -220,7 +215,7 @@ function RunDetailPage() {
       {runQ.isPending ? (
         <DetailSkeleton />
       ) : runQ.isError || !run ? (
-        <Card className="border-red-500/30">
+        <Card className="border-red-500/30 shadow-2xs">
           <CardContent className="flex items-start gap-3 py-6">
             <DangerTriangle className="size-8 text-rose-500" strokeWidth={3} />
             <div>
@@ -239,7 +234,7 @@ function RunDetailPage() {
               <CardContent className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div className="animate-pulse">
-                    <Loader className="size-4.5 animate-spin text-blue-500/70 dark:text-blue-400" />
+                    <Dots className="w-10 text-blue-500" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">
@@ -255,7 +250,11 @@ function RunDetailPage() {
                     onClick={() => cancelMutation.mutate()}
                     disabled={cancelMutation.isPending || run.cancel_requested}
                   >
-                    {run.cancel_requested ? "Wird gestoppt…" : "Stoppen"}
+                    {run.cancel_requested ? (
+                      <TextDots>Wird gestoppt</TextDots>
+                    ) : (
+                      "Stoppen"
+                    )}
                   </Button>
                   <Button
                     asChild
@@ -322,13 +321,13 @@ function RunDetailPage() {
                 </MetaItem>
                 <MetaItem
                   label="Duration"
-                  className={cn(
-                    run.status === "running" && "animate-pulse text-blue-500"
-                  )}
+                  className={cn(run.status === "running" && "text-blue-500")}
                 >
-                  {run.status === "running"
-                    ? "running…"
-                    : formatDuration(run.started_at, run.finished_at)}
+                  {run.status === "running" ? (
+                    <TextDots>Running</TextDots>
+                  ) : (
+                    formatDuration(run.started_at, run.finished_at)
+                  )}
                 </MetaItem>
                 <MetaItem label="Processed">
                   <span className="tabular-nums">
@@ -568,7 +567,7 @@ function RateGauge({ stat }: { stat: PerResourceStats }) {
     <Card className="p-4 shadow-xs">
       <CardContent className="flex items-center gap-4 p-0">
         <div className="relative flex items-center justify-center">
-          <ChartContainer config={gaugeConfig} className="h-[95px] w-[95px]">
+          <ChartContainer config={gaugeConfig} className="h-23.75 w-23.75">
             <RadialBarChart
               data={data}
               innerRadius={30}
@@ -624,7 +623,7 @@ function DetailSkeleton() {
           </div>
         </CardContent>
       </Card>
-      <Skeleton className="h-[340px] w-full rounded-xl" />
+      <Skeleton className="h-85 w-full rounded-xl" />
     </div>
   )
 }
