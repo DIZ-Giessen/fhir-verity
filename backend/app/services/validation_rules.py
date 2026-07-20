@@ -20,10 +20,21 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.models.invalid_resource import InvalidResource, InvalidResourceIssue
 from app.models.validation_run import ValidationRun
 from app.services.config_service import get_config_for_run, rule_enabled
-from app.services.validation_filters import build_filter_params
 from app.api.v1.endpoints.websocket import broadcast_progress
 
 logger = logging.getLogger(__name__)
+
+
+async def run_cancel_requested(run_id: UUID, db: AsyncSession) -> bool:
+    """True if cooperative cancellation was requested for this run.
+    Fresh scalar SELECT so it sees the commit from the cancel endpoint's
+    separate session (READ COMMITTED)."""
+    val = (
+        await db.execute(
+            select(ValidationRun.cancel_requested).where(ValidationRun.id == run_id)
+        )
+    ).scalar_one_or_none()
+    return bool(val)
 
 
 class BaseValidator:
@@ -49,6 +60,7 @@ class BaseValidator:
         self.server_id = server_id
         self.filter_params: dict = {}
         self._page_rule_counts: dict[tuple[str, str], int] = {}
+        self.cancelled = False
 
     def _merge_params(self, base: dict) -> dict:
         """Merge the configured filter params into a search param dict.
@@ -228,6 +240,9 @@ class BaseValidator:
 
         try:
             while url:
+                if await run_cancel_requested(run_id, db):
+                    self.cancelled = True
+                    break
                 bundle = await self.fetch_bundle(url, params if first else None)
                 first = False
                 entries = bundle.get("entry", [])

@@ -42,6 +42,8 @@ import {
   Refresh,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
+import { Dots } from "@/components/dots"
+import { TextDots } from "@/components/text-dots"
 
 export const Route = createFileRoute("/servers/$id/")({
   component: ServerDetailPage,
@@ -331,8 +333,8 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
       stat: counts.error,
       Icon: DangerTriangle,
       tone: "text-red-500",
-      description:
-        "Errors are critical issues that must be resolved before the validation can be completed successfully.",
+      description: "Critical issues that block successful validation.",
+
       label: "Errors",
     },
     {
@@ -341,8 +343,8 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
       stat: counts.warning,
       Icon: DangerTriangle,
       tone: "text-orange-500",
-      description:
-        "Warnings are non-critical issues but should be resolved to improve the quality of the validation results.",
+      description: "Should be resolved to improve validation quality.",
+
       label: "Warnings",
     },
     {
@@ -351,8 +353,8 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
       stat: counts.info,
       Icon: DangerCircle,
       tone: "text-blue-500",
-      description:
-        "Infos are non-critical issues that are not considered errors or warnings.",
+      description: "Non-critical information.",
+
       label: "Infos",
     },
   ]
@@ -438,7 +440,7 @@ function ConnectionTestCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <Button onClick={onTest} disabled={loading}>
-          {loading ? "Testing…" : "Test connection"}
+          {loading ? <TextDots>Loading</TextDots> : "Test connection"}
         </Button>
 
         {data && data.ok && (
@@ -520,15 +522,15 @@ function ResourceCountsCard({
           disabled={loading}
           aria-label="Refresh counts"
         >
-          <Refresh className={cn("size-5", loading && "animate-spin")} />
+          {loading ? <Dots className="w-5" /> : <Refresh className="size-5" />}
         </Button>
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-6 w-full" />
-            ))}
+          <div className="flex w-full items-center justify-center space-y-2">
+            <TextDots className="text-muted-foreground [--delay:280ms] [--duration:2s]">
+              Fetching data
+            </TextDots>
           </div>
         ) : (
           <Table>
@@ -570,9 +572,11 @@ const RUN_STATUS_STYLES: Record<string, string> = {
   completed:
     "border-0 bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
   running:
-    "border-0 bg-sky-500/15 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400",
+    "border-0 bg-blue-500/15 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400",
   failed:
     "border-0 bg-red-500/15 text-red-700 dark:bg-red-500/10 dark:text-red-400",
+  cancelled:
+    "border-0 bg-neutral-500/15 text-neutral-700 dark:bg-neutral-500/10 dark:text-neutral-400",
 }
 
 function RecentRunsCard({
@@ -618,7 +622,11 @@ function RecentRunsCard({
                       variant="outline"
                       className={RUN_STATUS_STYLES[r.status] ?? ""}
                     >
-                      {r.status}
+                      {r.status === "running" ? (
+                        <TextDots>Running</TextDots>
+                      ) : (
+                        r.status
+                      )}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">

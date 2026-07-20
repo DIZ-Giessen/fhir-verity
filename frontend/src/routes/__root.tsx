@@ -38,7 +38,7 @@ function RootDocument({ children }: { children: ReactNode }) {
           <AuthBoundary>
             {children}
 
-            <Toaster position="top-center" />
+            <Toaster position="bottom-right" />
           </AuthBoundary>
         </ThemeProvider>
         <Scripts />

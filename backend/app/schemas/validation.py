@@ -27,6 +27,7 @@ class ValidationRunRead(BaseModel):
     started_at: datetime
     finished_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    cancel_requested: bool = False
 
     class Config:
         """Enable population from ORM attributes"""
@@ -71,6 +72,7 @@ class ValidationRunDetail(ValidationRunListItem):
     error_message: str | None
     per_resource_stats: list[PerResourceStats] = []
     elapsed_seconds: int | None = None
+    cancel_requested: bool = False
 
 
 class PaginatedRuns(BaseModel):

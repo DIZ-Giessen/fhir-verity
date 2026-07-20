@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { AlertTriangle, CheckCircle2, ChevronLeft } from "lucide-react"
+import { ChevronLeft } from "lucide-react"
 import React, {
   useEffect,
   useMemo,
@@ -21,6 +21,10 @@ import LiveLineChart from "@/components/charts/live-line-chart"
 import LiveLine from "@/components/charts/live-line"
 import { ChartTooltip } from "@/components/charts/tooltip"
 import { intervalToDuration } from "date-fns"
+import {
+  CheckCircle,
+  DangerCircle,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
 
 export const Route = createFileRoute("/runs/$runId_/live")({
   component: LivePage,
@@ -93,6 +97,7 @@ const LOG_TYPE_STYLES: Record<string, string> = {
   resource_start: "text-amber-500",
   system: "text-muted-foreground",
   raw: "text-muted-foreground",
+  cancelled: "text-red-700",
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +214,7 @@ function LivePage() {
                 : "unknown"
             }`
           )
+          setRunState("progress")
           break
         case "resource_start":
           setMetrics((m) => ({
@@ -217,6 +223,7 @@ function LivePage() {
             progressPercent: 0,
           }))
           pushLog("resource_start", `Started ${str(data.resource_type) ?? "?"}`)
+          setRunState("progress")
           break
         case "completed":
           terminalRef.current = true
@@ -241,6 +248,19 @@ function LivePage() {
           terminalRef.current = true
           setRunState("failed")
           pushLog("failed", `Error: ${str(data.error) ?? "unknown"}`)
+          break
+        case "cancelled":
+          terminalRef.current = true
+          setRunState("cancelled")
+          setMetrics((m) => ({
+            ...m,
+            totalProcessed: num(data.total_processed) ?? m.totalProcessed,
+            totalInvalid: num(data.total_invalid) ?? m.totalInvalid,
+          }))
+          pushLog("cancelled", "Run cancelled by user")
+          queryClient.invalidateQueries({
+            queryKey: ["validation", "runs", runId],
+          })
           break
         case "pong":
           break
@@ -296,6 +316,8 @@ function LivePage() {
     end: (metrics.elapsedSeconds ?? 0) * 1000,
   })
 
+  console.log(runState)
+
   return (
     <div className="space-y-6">
       <Link
@@ -323,9 +345,9 @@ function LivePage() {
       </div>
 
       {runState === "completed" && (
-        <Card className="border-emerald-500/30 bg-emerald-500/5 shadow-xs dark:bg-emerald-50/5">
+        <Card className="border-emerald-500/30 shadow-xs">
           <CardContent className="flex items-center gap-3 py-4">
-            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+            <CheckCircle className="size-7 text-emerald-500" />
             <p className="text-sm font-medium">
               This run has finished — showing final results.
             </p>
@@ -337,11 +359,15 @@ function LivePage() {
           </CardContent>
         </Card>
       )}
-      {runState === "failed" && (
-        <Card className="border-red-500/30 bg-red-500/5">
+      {(runState === "failed" || runState === "cancelled") && (
+        <Card className="border-red-500/30">
           <CardContent className="flex items-center gap-3 py-4">
-            <AlertTriangle className="h-5 w-5 text-red-500" />
-            <p className="text-sm font-medium">This run failed.</p>
+            <DangerCircle className="size-7 text-red-500" />
+            <p className="text-sm font-medium">
+              {runState === "cancelled"
+                ? "This run was cancelled."
+                : "This run failed."}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -361,11 +387,13 @@ function LivePage() {
             <div
               className={cn(
                 "h-full rounded-full transition-all duration-500",
-                runState === "running"
+                runState === "progress"
                   ? "bg-orange-500"
-                  : runState === "failed"
+                  : ["failed"].includes(runState)
                     ? "bg-red-500"
-                    : "bg-emerald-500"
+                    : runState === "completed"
+                      ? "bg-emerald-500"
+                      : "bg-gray-500"
               )}
               style={{ width: `${pct}%` }}
             />

@@ -468,3 +468,10 @@ export async function updateServerFilters(
   )
   return data
 }
+
+export async function cancelValidation(runId: string) {
+  const { data } = await api.POST("/api/v1/validation/runs/{run_id}/cancel", {
+    params: { path: { run_id: runId } },
+  })
+  return data
+}

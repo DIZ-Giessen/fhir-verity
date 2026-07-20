@@ -30,7 +30,7 @@ from app.schemas.validation import (
     ValidationRunRead,
 )
 
-from app.services.validation_rules import VALIDATORS
+from app.services.validation_rules import VALIDATORS, run_cancel_requested
 from app.services.fhir_report_service import generate_and_post_reports
 from app.models.invalid_resource import InvalidResource, InvalidResourceIssue
 from app.services.fhir_auth import build_httpx_auth
@@ -171,6 +171,7 @@ async def resume_validation(
     run.status = ValidationStatus.RUNNING
     run.error_message = None
     run.finished_at = None
+    run.cancel_requested = False
     await db.commit()
     await db.refresh(run)
 
@@ -269,12 +270,17 @@ async def run_validation_task(
             # Build Time Out
             timeout = httpx.Timeout(connect=10.0, read=300.0, write=10.0, pool=10.0)
             auth = build_httpx_auth(auth_config)
+
+            was_cancelled = False
             async with httpx.AsyncClient(timeout=timeout, auth=auth) as client:
                 for res_type in to_validate:
+                    if await run_cancel_requested(run_id, db):
+                        was_cancelled = True
+                        break
+
                     validator_class = VALIDATORS.get(res_type)
                     if not validator_class:
                         continue
-
                     if res_type in completed:
                         continue
 
@@ -296,12 +302,38 @@ async def run_validation_task(
                         server_id, res_type, db
                     )
                     await validator.validate_and_save(run_id, db)
+
+                    if validator.cancelled:
+                        was_cancelled = True
+                        break
+
                     await _mark_type_completed(run_id, res_type, db)
 
             # Run als abgeschlossen markieren
+
             stmt = select(ValidationRun).where(ValidationRun.id == run_id)
             result = await db.execute(stmt)
             run = result.scalar_one_or_none()
+
+            if was_cancelled:
+                if run:
+                    run.status = ValidationStatus.CANCELLED
+                    run.finished_at = datetime.now()
+                    await db.commit()
+                    await db.refresh(run)
+                await broadcast_progress(
+                    str(run_id),
+                    {
+                        "type": "cancelled",
+                        "run_id": str(run_id),
+                        "status": "cancelled",
+                        "total_processed": run.total_processed if run else 0,
+                        "total_invalid": run.total_invalid if run else 0,
+                        "message": "Validation run cancelled by user",
+                    },
+                )
+                await _notify_run_finished(run_id, server_name, db)
+                return
 
             if run:
                 run.status = ValidationStatus.COMPLETED
@@ -465,7 +497,29 @@ async def get_validation_run(
         test_report=run.test_report or {},
         per_resource_stats=per_resource,
         elapsed_seconds=elapsed,
+        cancel_requested=run.cancel_requested,
     )
+
+
+# STOP ein RUN
+@router.post("/validation/runs/{run_id}/cancel", response_model=ValidationRunRead)
+async def cancel_validation(
+    run_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Request cooperative cancellation of a running run. Sets a flag only; the
+    background task stops at the next page boundary and writes the terminal
+    CANCELLED status itself."""
+    run = await _load_run_scoped(run_id, user, db)  # 404 for foreign servers
+    if run.status != ValidationStatus.RUNNING:
+        raise HTTPException(
+            status_code=409, detail="Only running runs can be cancelled"
+        )
+    run.cancel_requested = True
+    await db.commit()
+    await db.refresh(run)
+    return run
 
 
 # ---------------------------------------------------------------------------
