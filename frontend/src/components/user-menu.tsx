@@ -77,12 +77,12 @@ export function UserMenu() {
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
         <PopoverTrigger asChild>
           <Button variant="ghost" className="h-auto gap-2 px-2 py-1.5">
-            <Avatar className="h-7 w-7">
+            <Avatar className="h-8 w-8">
               <AvatarFallback className="text-xs">
                 {initials(user.username)}
               </AvatarFallback>
             </Avatar>
-            <span className="text-sm font-medium">
+            <span className="sr-only text-sm font-medium">
               {user.username ?? displayName}
             </span>
             <ChevronDown className="h-4 w-4 text-muted-foreground" />

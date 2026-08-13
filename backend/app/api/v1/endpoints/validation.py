@@ -349,6 +349,12 @@ async def run_validation_task(
                         was_cancelled = True
                         break
 
+                    # Safe to sweep stale invalid_resources only when this
+                    # crawl visited every resource of the type — an active
+                    # filter narrows that, so skip the sweep in that case.
+                    if not validator.filter_params:
+                        await validator.sweep_stale_invalid(run_id, res_type, db)
+
                     await _mark_type_completed(run_id, res_type, db)
 
             # Run als abgeschlossen markieren

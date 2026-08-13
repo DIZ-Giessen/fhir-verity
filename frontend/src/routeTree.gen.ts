@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as DbCleanupRouteImport } from './routes/db-cleanup'
 import { Route as CleanupRouteImport } from './routes/cleanup'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as ServersRouteRouteImport } from './routes/servers/route'
@@ -29,6 +30,11 @@ import { Route as ServersIdConfigResourceTypeRouteImport } from './routes/server
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DbCleanupRoute = DbCleanupRouteImport.update({
+  id: '/db-cleanup',
+  path: '/db-cleanup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CleanupRoute = CleanupRouteImport.update({
@@ -115,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/servers': typeof ServersRouteRouteWithChildren
   '/audit': typeof AuditRoute
   '/cleanup': typeof CleanupRoute
+  '/db-cleanup': typeof DbCleanupRoute
   '/login': typeof LoginRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/servers/$id': typeof ServersIdRouteWithChildren
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audit': typeof AuditRoute
   '/cleanup': typeof CleanupRoute
+  '/db-cleanup': typeof DbCleanupRoute
   '/login': typeof LoginRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/runs': typeof RunsIndexRoute
@@ -149,6 +157,7 @@ export interface FileRoutesById {
   '/servers': typeof ServersRouteRouteWithChildren
   '/audit': typeof AuditRoute
   '/cleanup': typeof CleanupRoute
+  '/db-cleanup': typeof DbCleanupRoute
   '/login': typeof LoginRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/servers/$id': typeof ServersIdRouteWithChildren
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/servers'
     | '/audit'
     | '/cleanup'
+    | '/db-cleanup'
     | '/login'
     | '/runs/$runId'
     | '/servers/$id'
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/'
     | '/audit'
     | '/cleanup'
+    | '/db-cleanup'
     | '/login'
     | '/runs/$runId'
     | '/runs'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/servers'
     | '/audit'
     | '/cleanup'
+    | '/db-cleanup'
     | '/login'
     | '/runs/$runId'
     | '/servers/$id'
@@ -221,6 +233,7 @@ export interface RootRouteChildren {
   ServersRouteRoute: typeof ServersRouteRouteWithChildren
   AuditRoute: typeof AuditRoute
   CleanupRoute: typeof CleanupRoute
+  DbCleanupRoute: typeof DbCleanupRoute
   LoginRoute: typeof LoginRoute
   UsersIndexRoute: typeof UsersIndexRoute
 }
@@ -232,6 +245,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/db-cleanup': {
+      id: '/db-cleanup'
+      path: '/db-cleanup'
+      fullPath: '/db-cleanup'
+      preLoaderRoute: typeof DbCleanupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cleanup': {
@@ -396,6 +416,7 @@ const rootRouteChildren: RootRouteChildren = {
   ServersRouteRoute: ServersRouteRouteWithChildren,
   AuditRoute: AuditRoute,
   CleanupRoute: CleanupRoute,
+  DbCleanupRoute: DbCleanupRoute,
   LoginRoute: LoginRoute,
   UsersIndexRoute: UsersIndexRoute,
 }

@@ -66,6 +66,7 @@ import {
 import type { MonthlyBucket, TestReportSummary } from "@/lib/interface"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
 import { Dots } from "@/components/dots"
+import { TextDots } from "@/components/text-dots"
 
 export const Route = createFileRoute("/runs/")({ component: RunsPage })
 
@@ -301,6 +302,7 @@ function RunsTable({
               <SelectItem value="completed">Completed</SelectItem>
               <SelectItem value="running">Running</SelectItem>
               <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -351,13 +353,10 @@ function RunsTable({
                         className={RUN_STATUS_STYLES[r.status] ?? ""}
                       >
                         {r.status === "running" ? (
-                          <Dots className="w-5" />
-                        ) : r.status === "failed" ? (
-                          <DangerTriangle className="scale-125" />
+                          <TextDots>Running</TextDots>
                         ) : (
-                          <CheckCircle className="scale-125" />
+                          r.status
                         )}
-                        {r.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">

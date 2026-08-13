@@ -346,6 +346,37 @@ class BaseValidator:
             await db.rollback()
             logger.error("Save error for %s/%s: %s", resource_type, resource_id, e)
 
+    async def sweep_stale_invalid(self, run_id: UUID, resource_type: str, db: AsyncSession) -> int:
+        """
+        Remove invalid_resources rows for this (server, resource_type) that
+        were not reconfirmed by the crawl that just finished under run_id.
+
+        Only call this after a resource type's crawl completed in full — no
+        cancellation, no error, and (checked by the caller) no active
+        validation_configs filter narrowing which resources get visited.
+        A full crawl touches every resource of that type on the server, so
+        anything still pointing at an older run_id is no longer invalid
+        (fixed or deleted upstream, inside or outside Verity) and can be
+        dropped. invalid_resource_issues rows cascade-delete with it.
+        """
+        result = await db.execute(
+            delete(InvalidResource).where(
+                InvalidResource.server_id == self.server_id,
+                InvalidResource.resource_type == resource_type,
+                InvalidResource.last_seen_run_id != run_id,
+            )
+        )
+        await db.commit()
+        removed = result.rowcount or 0
+        if removed:
+            logger.info(
+                "Swept %s stale invalid_resources for %s on server %s",
+                removed,
+                resource_type,
+                self.server_id,
+            )
+        return removed
+
     async def _update_run_counters(
         self,
         run_id: UUID,

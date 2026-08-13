@@ -32,6 +32,8 @@ from app.schemas.resource_action import (
     BulkActionResult,
     BulkDeleteRequest,
     BulkFixRequest,
+    DbPurgeRequest,
+    DbPurgeResult,
     DeleteRequest,
     FixableTemplate,
     PaginatedAuditLog,
@@ -498,6 +500,119 @@ async def bulk_fix_resources(
         dry_run=False,
         elapsed_seconds=round(elapsed, 2),
         errors=errors[:50],
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /resources/db-purge — DB-only cleanup, never touches the FHIR server
+# ---------------------------------------------------------------------------
+@router.post("/resources/db-purge", response_model=DbPurgeResult)
+async def purge_invalid_resources(
+    payload: DbPurgeRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(UserRole.admin.value)),
+):
+    """
+    Delete invalid_resources rows from Verity's own database only.
+
+    Never calls the FHIR server — the underlying resources are left exactly
+    as they are. Meant for admins to clear out rows that piled up before
+    validation runs started sweeping stale entries automatically, or that
+    are simply no longer worth tracking (e.g. everything not reconfirmed
+    invalid in months).
+
+    With dry_run=true: returns the match count without deleting anything.
+    """
+    start = monotonic()
+
+    filters = []
+    if payload.server_id:
+        await load_server_scoped(payload.server_id, user, db)  # 404 if unknown
+        filters.append(InvalidResource.server_id == payload.server_id)
+    if payload.resource_type:
+        filters.append(InvalidResource.resource_type == payload.resource_type)
+    if payload.last_seen_before:
+        filters.append(InvalidResource.last_seen_at < payload.last_seen_before)
+    if payload.last_seen_after:
+        filters.append(InvalidResource.last_seen_at >= payload.last_seen_after)
+
+    where_clause = and_(*filters) if filters else None
+
+    stmt = select(InvalidResource)
+    if where_clause is not None:
+        stmt = stmt.where(where_clause)
+    rows = (await db.execute(stmt)).scalars().all()
+
+    if payload.rule or payload.severity:
+        filtered = []
+        for row in rows:
+            issues = (row.metrics or {}).get("issues_detail", [])
+            ok = True
+            if payload.rule:
+                ok = ok and any(i.get("rule") == payload.rule for i in issues)
+            if payload.severity:
+                ok = ok and any(i.get("severity") == payload.severity for i in issues)
+            if ok:
+                filtered.append(row)
+        rows = filtered
+
+    matched = len(rows)
+
+    if payload.dry_run or matched == 0:
+        return DbPurgeResult(
+            matched=matched,
+            deleted=0,
+            dry_run=payload.dry_run,
+            elapsed_seconds=round(monotonic() - start, 2),
+        )
+
+    now = datetime.now(timezone.utc)
+    audit_entries = [
+        AuditLog(
+            server_id=row.server_id,
+            server_base_url=row.server_base_url,
+            resource_type=row.resource_type,
+            resource_id=row.resource_id,
+            invalid_resource_id=row.id,
+            action=AuditAction.PURGE,
+            fhir_request_payload=None,
+            fhir_response_status=None,
+            resource_before={
+                "issues": row.issues,
+                "metrics": {
+                    k: v
+                    for k, v in (row.metrics or {}).items()
+                    if k != "issues_detail"
+                },
+                "first_seen_at": (
+                    row.first_seen_at.isoformat() if row.first_seen_at else None
+                ),
+                "last_seen_at": (
+                    row.last_seen_at.isoformat() if row.last_seen_at else None
+                ),
+            },
+            status=AuditStatus.SUCCESS,
+            error_message=None,
+            reason=payload.reason,
+            actor_id=user.id,
+            executed_at=now,
+        )
+        for row in rows
+    ]
+    db.add_all(audit_entries)
+
+    await db.execute(
+        delete(InvalidResource).where(
+            InvalidResource.id.in_([row.id for row in rows])
+        )
+    )
+    await db.commit()
+
+    return DbPurgeResult(
+        matched=matched,
+        deleted=matched,
+        dry_run=False,
+        elapsed_seconds=round(monotonic() - start, 2),
     )
 
 

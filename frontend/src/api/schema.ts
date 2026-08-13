@@ -560,6 +560,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/resources/db-purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Purge Invalid Resources
+         * @description Delete invalid_resources rows from Verity's own database only.
+         *
+         *     Never calls the FHIR server — the underlying resources are left exactly
+         *     as they are. Meant for admins to clear out rows that piled up before
+         *     validation runs started sweeping stale entries automatically, or that
+         *     are simply no longer worth tracking (e.g. everything not reconfirmed
+         *     invalid in months).
+         *
+         *     With dry_run=true: returns the match count without deleting anything.
+         */
+        post: operations["purge_invalid_resources_api_v1_resources_db_purge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit-log": {
         parameters: {
             query?: never;
@@ -906,6 +934,55 @@ export interface components {
             rules: {
                 [key: string]: components["schemas"]["RuleDefinition"];
             };
+        };
+        /**
+         * DbPurgeRequest
+         * @description Filter criteria for purging invalid_resources rows from Verity's own
+         *     database only — never touches the source FHIR server.
+         */
+        DbPurgeRequest: {
+            /**
+             * Server Id
+             * Format: uuid
+             */
+            server_id?: string | null;
+            /** Resource Type */
+            resource_type?: string | null;
+            /** Rule */
+            rule?: string | null;
+            /** Severity */
+            severity?: string | null;
+            /**
+             * Last Seen Before
+             * Format: date-time
+             */
+            last_seen_before?: string | null;
+            /**
+             * Last Seen After
+             * Format: date-time
+             */
+            last_seen_after?: string | null;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * DbPurgeResult
+         * @description Outcome of a DB-only purge.
+         */
+        DbPurgeResult: {
+            /** Matched */
+            matched: number;
+            /** Deleted */
+            deleted: number;
+            /** Dry Run */
+            dry_run: boolean;
+            /** Elapsed Seconds */
+            elapsed_seconds: number;
         };
         /**
          * DeleteRequest
@@ -2541,6 +2618,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BulkActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    purge_invalid_resources_api_v1_resources_db_purge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DbPurgeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DbPurgeResult"];
                 };
             };
             /** @description Validation Error */

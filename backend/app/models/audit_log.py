@@ -24,6 +24,7 @@ from app.models.base import Base, TimestampMixin
 class AuditAction(str, enum.Enum):
     DELETE = "DELETE"
     PATCH = "PATCH"
+    PURGE = "PURGE"  # DB-only removal from invalid_resources; no FHIR call made
 
 
 class AuditStatus(str, enum.Enum):

@@ -7,6 +7,7 @@ import {
   PieChart2,
   PlayCircle,
   NotificationLinesRemove,
+  Database,
   ClipboardList,
   UsersGroupRounded,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
@@ -15,7 +16,14 @@ import { hasRole, meQueryOptions, type Role } from "@/api/queries"
 import { cn } from "@/lib/utils"
 
 type NavItem = {
-  to: "/" | "/servers" | "/runs" | "/cleanup" | "/audit" | "/users"
+  to:
+    | "/"
+    | "/servers"
+    | "/runs"
+    | "/cleanup"
+    | "/db-cleanup"
+    | "/audit"
+    | "/users"
   label: string
   icon: LucideIcon
   minRole?: Role
@@ -30,6 +38,12 @@ const navItems: NavItem[] = [
     label: "Cleanup",
     icon: NotificationLinesRemove,
     minRole: "editor",
+  },
+  {
+    to: "/db-cleanup",
+    label: "DB Cleanup",
+    icon: Database,
+    minRole: "admin",
   },
   { to: "/audit", label: "Audit", icon: ClipboardList, minRole: "admin" },
   { to: "/users", label: "Users", icon: UsersGroupRounded, minRole: "admin" },
