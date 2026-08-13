@@ -65,6 +65,7 @@ import {
 } from "@/lib/functions/runs"
 import type { MonthlyBucket, TestReportSummary } from "@/lib/interface"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
+import { Dots } from "@/components/dots"
 
 export const Route = createFileRoute("/runs/")({ component: RunsPage })
 
@@ -324,6 +325,7 @@ function RunsTable({
               <TableRow>
                 <TableHead>Status</TableHead>
                 <TableHead>Started</TableHead>
+                <TableHead>Started by</TableHead>
                 <TableHead>Server</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead className="text-right">Processed</TableHead>
@@ -349,7 +351,7 @@ function RunsTable({
                         className={RUN_STATUS_STYLES[r.status] ?? ""}
                       >
                         {r.status === "running" ? (
-                          <Star2 className="scale-115 animate-spin" />
+                          <Dots className="w-5" />
                         ) : r.status === "failed" ? (
                           <DangerTriangle className="scale-125" />
                         ) : (
@@ -360,6 +362,11 @@ function RunsTable({
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {dateFormatter.format(new Date(r.started_at))}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {r.triggered_by?.full_name ??
+                        r.triggered_by?.username ??
+                        "—"}
                     </TableCell>
                     <TableCell className="text-sm">
                       {server ? (

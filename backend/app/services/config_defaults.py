@@ -34,8 +34,8 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
     "Patient": {
         # --- Privacy & Pseudonymization ---
         "text_forbidden": {
-            "enabled": True,
-            "severity": "error",
+            "enabled": False,
+            "severity": "info",
             "category": "privacy",
             "description": ("Checks whether the field 'text' is present."),
         },

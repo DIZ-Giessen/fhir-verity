@@ -314,6 +314,11 @@ function RunDetailPage() {
                 <MetaItem label="Started">
                   {dateFormatter.format(new Date(run.started_at))}
                 </MetaItem>
+                <MetaItem label="Started by">
+                  {run.triggered_by?.full_name ??
+                    run.triggered_by?.username ??
+                    "—"}
+                </MetaItem>
                 <MetaItem label="Finished">
                   {run.finished_at
                     ? dateFormatter.format(new Date(run.finished_at))

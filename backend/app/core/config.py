@@ -21,15 +21,18 @@ class Settings(BaseSettings):
     BACKEND_HOST: str = "0.0.0.0"
     BACKEND_PORT: int = 8000
 
+    # --- Encryption at rest ---
+    # Fernet key for FhirServer.auth_config (stored credentials to external
+    # FHIR servers). Generate with:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    FIELD_ENCRYPTION_KEY: str
+
     # --- Auth (BFF) ---
     AUTH_ENABLED: bool = True
     SESSION_SECRET_KEY: str
     BACKEND_BASE_URL: str = "http://localhost:8000"
     FRONTEND_BASE_URL: str = "http://localhost:3000"
-    KEYCLOAK_DISCOVERY_URL: str = (
-        "https://mirauth.med.uni-giessen.de/auth/realms/Test/"
-        ".well-known/openid-configuration"
-    )
+    KEYCLOAK_DISCOVERY_URL: str
     KEYCLOAK_CLIENT_ID: str = "fhir-verity"
     KEYCLOAK_CLIENT_SECRET: str
     INITIAL_ADMIN_USERS: str = ""

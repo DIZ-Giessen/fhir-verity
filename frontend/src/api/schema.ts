@@ -1326,6 +1326,21 @@ export interface components {
             error?: string | null;
         };
         /**
+         * TriggeredByRead
+         * @description Minimal user info for 'who started this run' display.
+         */
+        TriggeredByRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Username */
+            username?: string | null;
+            /** Full Name */
+            full_name?: string | null;
+        };
+        /**
          * UserPreferencesUpdate
          * @description Schema for updating a user's preferences.
          *
@@ -1428,6 +1443,7 @@ export interface components {
             test_report?: {
                 [key: string]: unknown;
             } | null;
+            triggered_by?: components["schemas"]["TriggeredByRead"] | null;
             /** Error Message */
             error_message: string | null;
             /**
@@ -1477,6 +1493,7 @@ export interface components {
             test_report?: {
                 [key: string]: unknown;
             } | null;
+            triggered_by?: components["schemas"]["TriggeredByRead"] | null;
         };
         /**
          * ValidationRunRead

@@ -2,9 +2,13 @@
 
 import logging
 from contextlib import asynccontextmanager
-
-from fastapi import Depends, FastAPI
+import time
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -13,6 +17,7 @@ from app.core.database import AsyncSessionLocal
 from app.core.security import ensure_dev_user, require_role
 from app.models.user import User  # noqa: F401 - register table with Base
 from app.models.validation_config import ValidationConfig
+from app.models.validation_run import ValidationRun, ValidationStatus
 from app.services.config_defaults import MII_KDS_DEFAULTS
 from app.api.v1.endpoints import (
     auth,
@@ -54,10 +59,38 @@ async def seed_default_configs() -> None:
             raise
 
 
+async def reconcile_orphaned_runs() -> None:
+    """Mark RUNNING runs left over from a prior process as FAILED.
+
+    Validation runs execute as in-process BackgroundTasks: if the backend
+    is restarted/killed mid-run, the row is never updated and stays
+    RUNNING forever, permanently blocking new runs against that server
+    (see the one-running-run-per-server lock in validation.py). Since this
+    runs before anything in the fresh process could set RUNNING, every
+    such row found here is by definition orphaned. Their checkpoint is
+    preserved, so users can resume from where the crawl left off.
+    """
+    async with AsyncSessionLocal() as db:
+        stmt = select(ValidationRun).where(ValidationRun.status == ValidationStatus.RUNNING)
+        orphaned = (await db.execute(stmt)).scalars().all()
+        if not orphaned:
+            return
+        for run in orphaned:
+            run.status = ValidationStatus.FAILED
+            run.error_message = "Interrupted by a backend restart; use resume to continue."
+        await db.commit()
+        logger.warning(
+            "Marked %d orphaned RUNNING run(s) as FAILED on startup: %s",
+            len(orphaned),
+            [str(r.id) for r in orphaned],
+        )
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """Default seed App"""
     logger.info("Starting FHIR Verity API")
+    await reconcile_orphaned_runs()
     await seed_default_configs()
     async with AsyncSessionLocal() as db:
         await ensure_dev_user(db)
@@ -72,6 +105,15 @@ app = FastAPI(
     lifespan=lifespan,
     license_info={"name": "MIT License"},
 )
+
+# Keyed by client IP (real IP via uvicorn --proxy-headers behind Caddy, see
+# dockerfile). Generous enough for normal UI usage (a page load fires ~10
+# parallel GETs, the run detail page polls every 5s) while still bounding
+# runaway loops/scripted abuse.
+limiter = Limiter(key_func=get_remote_address, default_limits=["300/minute"])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 
 # SessionMiddleware FIRST so CORS wraps it (CORS handles preflight, session
@@ -89,8 +131,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -132,3 +174,14 @@ app.include_router(
     dependencies=[Depends(require_role("viewer"))],
 )
 app.include_router(users.router, prefix="/api/v1", tags=["users"])
+
+
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration = time.perf_counter() - start
+    logger.info("%s %s: %.3fs", request.method, request.url.path, duration)
+    return response

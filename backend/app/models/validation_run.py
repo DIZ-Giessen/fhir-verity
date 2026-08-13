@@ -14,7 +14,7 @@ from sqlalchemy import (
     DateTime,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin
 
 
@@ -67,3 +67,4 @@ class ValidationRun(Base, TimestampMixin):
         nullable=True,
         index=True,
     )
+    triggered_by = relationship("User", lazy="joined", viewonly=True)

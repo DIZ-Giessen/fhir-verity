@@ -6,5 +6,5 @@
 		reverse_proxy frontend:3000
 	}
 
-	tls /etc/letsencrypt/live/dizstudi2.med.uni-giessen.de/fullchain.pem /etc/letsencrypt/live/dizstudi2.med.uni-giessen.de/privkey.pem
+	tls /etc/letsencrypt/live/{$DOMAIN}/fullchain.pem /etc/letsencrypt/live/{$DOMAIN}/privkey.pem
 }

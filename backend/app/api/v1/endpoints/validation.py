@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, desc, exists, func, select
+from sqlalchemy.exc import IntegrityError
 import httpx
 
 
@@ -24,6 +25,7 @@ from app.schemas.validation import (
     ResourceTypeSummary,
     RuleViolationCount,
     RunSummary,
+    TriggeredByRead,
     ValidationRunDetail,
     ValidationRunListItem,
     ValidationStartRequest,
@@ -95,6 +97,30 @@ async def _load_run_scoped(run_id: UUID, user: User, db: AsyncSession) -> Valida
     return run
 
 
+async def _assert_no_running_run(server_id: UUID, db: AsyncSession) -> None:
+    """Reject a start/resume if this server already has a RUNNING run.
+
+    Two runs against the same server at once double the load on the target
+    FHIR server and can race on the same invalid_resources rows. This check
+    is belt; the partial unique index on (server_id) WHERE status='running'
+    (see migration) is the suspenders that also catch a true concurrent
+    double-click.
+    """
+    existing = (
+        await db.execute(
+            select(ValidationRun.id).where(
+                ValidationRun.server_id == server_id,
+                ValidationRun.status == ValidationStatus.RUNNING,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="A validation run is already in progress for this server",
+        )
+
+
 @router.post("/validation/start", response_model=ValidationRunRead)
 async def start_validation(
     request: ValidationStartRequest,
@@ -110,6 +136,7 @@ async def start_validation(
         raise HTTPException(
             status_code=404, detail="FHIR Server not found or is not active"
         )
+    await _assert_no_running_run(request.server_id, db)
 
     # create validation run
     new_run = ValidationRun(
@@ -121,7 +148,14 @@ async def start_validation(
     )
 
     db.add(new_run)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="A validation run is already in progress for this server",
+        )
     await db.refresh(new_run)
 
     # start background task
@@ -167,12 +201,20 @@ async def resume_validation(
         raise HTTPException(
             status_code=404, detail="FHIR Server not found or is not active"
         )
+    await _assert_no_running_run(run.server_id, db)
 
     run.status = ValidationStatus.RUNNING
     run.error_message = None
     run.finished_at = None
     run.cancel_requested = False
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="A validation run is already in progress for this server",
+        )
     await db.refresh(run)
 
     background_tasks.add_task(
@@ -498,6 +540,11 @@ async def get_validation_run(
         per_resource_stats=per_resource,
         elapsed_seconds=elapsed,
         cancel_requested=run.cancel_requested,
+        triggered_by=(
+            TriggeredByRead.model_validate(run.triggered_by)
+            if run.triggered_by
+            else None
+        ),
     )
 
 

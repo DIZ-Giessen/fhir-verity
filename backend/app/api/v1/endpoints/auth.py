@@ -11,6 +11,7 @@ Flow:
 import logging
 from urllib.parse import quote
 
+import httpx
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
@@ -26,13 +27,19 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# Applies to every call the client makes (metadata discovery, code exchange,
+# userinfo): without it a network blip to Keycloak hangs until the OS-level
+# TCP timeout gives up (~15 min), holding the login request open the whole
+# time. See documentation/troubleshooting.md.
+KEYCLOAK_TIMEOUT = httpx.Timeout(connect=10.0, read=15.0, write=10.0, pool=10.0)
+
 oauth = OAuth()
 oauth.register(
     name="keycloak",
     client_id=settings.KEYCLOAK_CLIENT_ID,
     client_secret=settings.KEYCLOAK_CLIENT_SECRET,
     server_metadata_url=settings.KEYCLOAK_DISCOVERY_URL,
-    client_kwargs={"scope": "openid profile email"},
+    client_kwargs={"scope": "openid profile email", "timeout": KEYCLOAK_TIMEOUT},
 )
 
 
@@ -44,7 +51,11 @@ def _frontend_url(path: str = "/") -> str:
 async def login(request: Request):
     """Starts the authentication process by redirecting to Keycloak."""
     redirect_uri = f"{settings.BACKEND_BASE_URL.rstrip('/')}/api/v1/auth/callback"
-    return await oauth.keycloak.authorize_redirect(request, redirect_uri)
+    try:
+        return await oauth.keycloak.authorize_redirect(request, redirect_uri)
+    except httpx.HTTPError as exc:
+        logger.error("Keycloak unreachable during login redirect: %s", exc)
+        return RedirectResponse(_frontend_url("/login?error=idp_unreachable"))
 
 
 @router.get("/auth/callback")
@@ -54,12 +65,14 @@ async def callback(request: Request, db: AsyncSession = Depends(get_db)):
     fetches user info from the IdP, provisions the user in the local DB, and sets a session.
     """
     try:
-
         token = await oauth.keycloak.authorize_access_token(request)
     except OAuthError as exc:
         message = exc.description or exc.error or "oauth_error"
         logger.warning("OIDC code exchange failed: %s", message)
         return RedirectResponse(_frontend_url(f"/login?error={quote(str(message))}"))
+    except httpx.HTTPError as exc:
+        logger.error("Keycloak unreachable during code exchange: %s", exc)
+        return RedirectResponse(_frontend_url("/login?error=idp_unreachable"))
 
     userinfo = token.get("userinfo")
     if not userinfo:

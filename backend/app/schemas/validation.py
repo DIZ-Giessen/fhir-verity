@@ -40,6 +40,15 @@ class ValidationRunRead(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class TriggeredByRead(BaseModel):
+    """Minimal user info for 'who started this run' display."""
+
+    id: UUID
+    username: str | None = None
+    full_name: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ValidationRunListItem(BaseModel):
     """Kompakte Darstellung für Listen-Views."""
 
@@ -52,6 +61,7 @@ class ValidationRunListItem(BaseModel):
     total_invalid: int
     resource_types: list[str]
     test_report: dict | None = None
+    triggered_by: TriggeredByRead | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
