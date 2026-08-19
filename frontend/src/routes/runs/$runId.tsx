@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { toPng } from "html-to-image"
 import { useRef } from "react"
-import { AlertTriangle, ArrowRight, ChevronLeft } from "lucide-react"
+import { AlertTriangle, ArrowRight, ChevronLeft, WifiOff } from "lucide-react"
 import { useMemo, useState } from "react"
 import { PolarAngleAxis, RadialBar, RadialBarChart } from "recharts"
 
@@ -32,11 +32,11 @@ import {
 } from "@/components/ui/card"
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart"
 import { Skeleton } from "@/components/ui/skeleton"
+import { SortableTableHead, nextSort } from "@/components/sortable-table-head"
 import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
@@ -48,6 +48,8 @@ import {
   RUN_STATUS_STYLES,
 } from "@/lib/functions/runs"
 import type { TestReportSummary } from "@/lib/interface"
+import { isServerUnresponsiveError } from "@/lib/run-errors"
+import { SEVERITY_ORDER, SEVERITY_STYLES } from "@/lib/severity"
 import {
   ArrowRightUp,
   CourseUp,
@@ -69,14 +71,6 @@ export const Route = createFileRoute("/runs/$runId")({
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const SEVERITY_STYLES: Record<string, string> = {
-  error:
-    "border-0 bg-red-500/15 text-red-700 dark:bg-red-500/10 dark:text-red-400",
-  warning:
-    "border-0 bg-amber-500/15 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
-  info: "border-0 bg-sky-500/15 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400",
-}
 
 // Invalid-rate -> gauge colour band (matches the palette used in runs.tsx)
 function gaugeColor(rate: number): string {
@@ -136,6 +130,11 @@ function RunDetailPage() {
     enabled: Boolean(run?.server_id),
   })
 
+  const [ruleSort, setRuleSort] = useState<{
+    key: string
+    dir: "asc" | "desc"
+  }>({ key: "count", dir: "desc" })
+
   const ruleRows = useMemo(() => {
     const rows: {
       resourceType: string
@@ -153,8 +152,24 @@ function RunDetailPage() {
         })
       }
     }
-    return rows.sort((a, b) => b.count - a.count)
-  }, [summaryQ.data])
+    const dir = ruleSort.dir === "asc" ? 1 : -1
+    return rows.sort((a, b) => {
+      switch (ruleSort.key) {
+        case "resourceType":
+          return dir * a.resourceType.localeCompare(b.resourceType)
+        case "rule":
+          return dir * a.rule.localeCompare(b.rule)
+        case "severity":
+          return (
+            dir *
+            ((SEVERITY_ORDER[a.severity] ?? 9) -
+              (SEVERITY_ORDER[b.severity] ?? 9))
+          )
+        default:
+          return dir * (a.count - b.count)
+      }
+    })
+  }, [summaryQ.data, ruleSort])
 
   const exportAsPNG = async () => {
     if (!chartRef.current) return
@@ -310,19 +325,17 @@ function RunDetailPage() {
             </CardHeader>
 
             <CardContent>
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-7">
                 <MetaItem label="Started">
                   {dateFormatter.format(new Date(run.started_at))}
-                </MetaItem>
-                <MetaItem label="Started by">
-                  {run.triggered_by?.full_name ??
-                    run.triggered_by?.username ??
-                    "—"}
                 </MetaItem>
                 <MetaItem label="Finished">
                   {run.finished_at
                     ? dateFormatter.format(new Date(run.finished_at))
                     : "—"}
+                </MetaItem>
+                <MetaItem label="Started by">
+                  {run.triggered_by?.username ?? "—"}
                 </MetaItem>
                 <MetaItem
                   label="Duration"
@@ -339,12 +352,18 @@ function RunDetailPage() {
                     {run.total_processed.toLocaleString()}
                   </span>
                 </MetaItem>
-                <MetaItem label="Invalid">
+                <MetaItem label="Invalid" className="text-orange-500">
                   <span className="tabular-nums">
                     {run.total_invalid.toLocaleString()}
                   </span>
                 </MetaItem>
-                <MetaItem label="Invalid rate">
+                <MetaItem
+                  label="Invalid rate"
+                  className={cn(
+                    run.total_invalid > 0 && "text-red-500",
+                    run.total_invalid === 0 && "text-green-500"
+                  )}
+                >
                   <span className="tabular-nums">
                     {(
                       (summaryQ.data?.overall_invalid_rate ??
@@ -369,19 +388,40 @@ function RunDetailPage() {
             </CardContent>
           </Card>
 
-          {run.status === "failed" && run.error_message && (
-            <Card className="border-rose-500/30 bg-rose-500/5">
-              <CardContent className="flex items-start gap-3 py-4">
-                <AlertTriangle className="mt-0.5 h-5 w-5 text-rose-500" />
-                <div>
-                  <p className="text-sm font-medium">Run failed</p>
-                  <p className="font-mono text-xs text-muted-foreground">
-                    {run.error_message}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {run.status === "failed" &&
+            run.error_message &&
+            (isServerUnresponsiveError(run.error_message) ? (
+              <Card className="border-amber-500/30 bg-amber-500/5">
+                <CardContent className="flex items-start gap-3 py-4">
+                  <WifiOff className="mt-0.5 h-5 w-5 text-amber-500" />
+                  <div>
+                    <p className="text-sm font-medium">
+                      Server did not respond
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      The FHIR server stopped responding after several retries.
+                      This is a server-side issue (the query took too long or
+                      the connection was reset), not a problem with FHIR Verity.
+                    </p>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">
+                      {run.error_message}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-rose-500/30 bg-rose-500/5">
+                <CardContent className="flex items-start gap-3 py-4">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 text-rose-500" />
+                  <div>
+                    <p className="text-sm font-medium">Run failed</p>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {run.error_message}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           <div className="flex items-center justify-between">
             <h2 className="mb-3 text-base font-medium">
               Invalid rate per resource type
@@ -484,10 +524,44 @@ function RunDetailPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Resource type</TableHead>
-                      <TableHead>Rule</TableHead>
-                      <TableHead>Severity</TableHead>
-                      <TableHead className="text-right">Count</TableHead>
+                      <SortableTableHead
+                        label="Resource type"
+                        sortKey="resourceType"
+                        activeKey={ruleSort.key}
+                        dir={ruleSort.dir}
+                        onSort={(key) =>
+                          setRuleSort((prev) => nextSort(prev, key, "asc"))
+                        }
+                      />
+                      <SortableTableHead
+                        label="Rule"
+                        sortKey="rule"
+                        activeKey={ruleSort.key}
+                        dir={ruleSort.dir}
+                        onSort={(key) =>
+                          setRuleSort((prev) => nextSort(prev, key, "asc"))
+                        }
+                      />
+                      <SortableTableHead
+                        label="Severity"
+                        sortKey="severity"
+                        activeKey={ruleSort.key}
+                        dir={ruleSort.dir}
+                        onSort={(key) =>
+                          setRuleSort((prev) => nextSort(prev, key, "asc"))
+                        }
+                      />
+                      <SortableTableHead
+                        label="Count"
+                        sortKey="count"
+                        activeKey={ruleSort.key}
+                        dir={ruleSort.dir}
+                        onSort={(key) =>
+                          setRuleSort((prev) => nextSort(prev, key, "desc"))
+                        }
+                        className="text-right"
+                        align="right"
+                      />
                     </TableRow>
                   </TableHeader>
                   <TableBody>

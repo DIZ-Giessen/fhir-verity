@@ -2,7 +2,7 @@ import {
   ArrowRightUp,
   SquareBottomUp,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, Link } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -19,7 +19,7 @@ function HomePage() {
         </p>
         <div className="flex items-center gap-4 pt-4">
           <a
-            href="https://github.com/dic-giessen/fhir-verity"
+            href="https://mirgitlab.med.uni-giessen.de/povoc1/fhir-verity/-/tree/main/documentation?ref_type=heads"
             rel="noopener noreferrer"
             target="_blank"
             className="inline-flex items-center gap-1 text-sm text-muted-foreground underline hover:text-primary"
@@ -27,7 +27,7 @@ function HomePage() {
             Read the documentation <ArrowRightUp className="h-4 w-4" />
           </a>
           <a
-            href="https://github.com/dic-giessen/fhir-verity"
+            href="https://mirgitlab.med.uni-giessen.de/povoc1/fhir-verity"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm text-muted-foreground underline hover:text-primary"

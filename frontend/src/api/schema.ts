@@ -945,7 +945,7 @@ export interface components {
              * Server Id
              * Format: uuid
              */
-            server_id?: string | null;
+            server_id: string;
             /** Resource Type */
             resource_type?: string | null;
             /** Rule */

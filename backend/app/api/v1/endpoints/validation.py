@@ -5,9 +5,9 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import and_, desc, exists, func, select
+from sqlalchemy import and_, asc, case, desc, exists, func, select
 from sqlalchemy.exc import IntegrityError
 import httpx
 
@@ -588,15 +588,21 @@ async def list_invalid_resources(
     run_id: UUID,
     skip: int = 0,
     limit: int = 50,
-    resource_type: Optional[str] = None,
+    resource_types: Optional[list[str]] = Query(default=None),
     rule: Optional[str] = None,
     severity: Optional[str] = None,
     only_current_run: bool = False,
+    sort_by: Optional[str] = None,
+    sort_dir: str = "desc",
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     """
     Paginated invalid resources for a given run. Rule/severity filters use the normalized invalid_resource_issues table via EXISTS, so pagination and counts run entirely in SQL.
+
+    sort_by: resource_type | resource_id | severity | issues | detected (default).
+    severity sorts by each resource's most severe issue (error < warning < info);
+    issues sorts by issue count.
     """
     run = await _load_run_scoped(run_id, user, db)
 
@@ -604,8 +610,8 @@ async def list_invalid_resources(
     base_filters = [InvalidResource.server_id == run.server_id]
     if only_current_run:
         base_filters.append(InvalidResource.last_seen_run_id == run_id)
-    if resource_type:
-        base_filters.append(InvalidResource.resource_type == resource_type)
+    if resource_types:
+        base_filters.append(InvalidResource.resource_type.in_(resource_types))
 
     if rule or severity:
         issue_match = [InvalidResourceIssue.invalid_resource_id == InvalidResource.id]
@@ -620,10 +626,37 @@ async def list_invalid_resources(
     count_stmt = select(func.count(InvalidResource.id)).where(where_clause)
     total = (await db.execute(count_stmt)).scalar_one()
 
+    if sort_by == "resource_type":
+        order_col = InvalidResource.resource_type
+    elif sort_by == "resource_id":
+        order_col = InvalidResource.resource_id
+    elif sort_by == "issues":
+        order_col = func.json_array_length(InvalidResource.issues)
+    elif sort_by == "severity":
+        # Rank by each resource's most severe issue (error=0 < warning=1 < info=2).
+        order_col = (
+            select(
+                func.min(
+                    case(
+                        (InvalidResourceIssue.severity == "error", 0),
+                        (InvalidResourceIssue.severity == "warning", 1),
+                        else_=2,
+                    )
+                )
+            )
+            .where(InvalidResourceIssue.invalid_resource_id == InvalidResource.id)
+            .correlate(InvalidResource)
+            .scalar_subquery()
+        )
+    else:
+        order_col = InvalidResource.created_at
+
+    order_expr = asc(order_col) if sort_dir == "asc" else desc(order_col)
+
     stmt = (
         select(InvalidResource)
         .where(where_clause)
-        .order_by(desc(InvalidResource.created_at))
+        .order_by(order_expr)
         .offset(skip)
         .limit(limit)
     )

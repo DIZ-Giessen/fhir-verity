@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
-import { resourceTypesQueryOptions } from "@/api/queries"
+import { resourceTypesQueryOptions, serverQueryOptions } from "@/api/queries"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ApiError } from "@/lib/api-client"
 
@@ -13,6 +13,8 @@ export const Route = createFileRoute("/servers/$id/config/")({
 function ConfigOverviewPage() {
   const { id } = Route.useParams()
   const { data, isPending, error } = useQuery(resourceTypesQueryOptions())
+  const serverQ = useQuery(serverQueryOptions(id))
+  const serverName = serverQ.data?.name ?? id.slice(0, 8)
 
   return (
     <div className="space-y-6">
@@ -27,10 +29,8 @@ function ConfigOverviewPage() {
         </Link>
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">
-            Validation configuration for the server with ID{" "}
-            <span className="font-mono text-orange-500/70">
-              {id.slice(0, 8)}
-            </span>
+            Validation configuration for the server:{" "}
+            <span className="text-orange-500">{serverName}</span>
           </h1>
           <p className="text-sm text-muted-foreground">
             Select a resource type to review and adjust its validation rules.

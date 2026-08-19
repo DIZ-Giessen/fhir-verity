@@ -1,8 +1,9 @@
-import { useQuery } from "@tanstack/react-query"
+import { useQueries, useQuery } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import {
   ChevronLeft,
   ChevronRight,
+  Filter,
   KeyRound,
   Pencil,
   Play,
@@ -16,6 +17,7 @@ import {
   runSummaryQueryOptions,
   serverMetadataQueryOptions,
   serverQueryOptions,
+  serverResourceConfigQueryOptions,
   serverResourceCountsQueryOptions,
   serverRunsQueryOptions,
 } from "@/api/queries"
@@ -33,7 +35,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { ApiError } from "@/lib/api-client"
+import { filterEntries, hasActiveFilters } from "@/lib/filter-format"
 import { cn } from "@/lib/utils"
 import {
   DangerCircle,
@@ -93,6 +101,25 @@ function ServerDetailPage() {
   const metaQ = useQuery({
     ...serverMetadataQueryOptions(id),
     enabled: false,
+  })
+
+  // One config lookup per resource type shown in the counts table, so an
+  // active *filter* (lastUpdate/profile/tag — not validation rules) can be
+  // flagged next to the resource. Prevents mistaking a filtered count for
+  // the server's full count, or mixing it up with another resource type.
+  const resourceTypes = countsQ.data?.map((c) => c.resource_type) ?? []
+  const configQs = useQueries({
+    queries: resourceTypes.map((rt) => ({
+      ...serverResourceConfigQueryOptions(id, rt),
+      enabled: Boolean(countsQ.data),
+    })),
+  })
+  const filterMap = new Map<string, Record<string, unknown>>()
+  configQs.forEach((q, i) => {
+    const filters = q.data?.filters
+    if (hasActiveFilters(filters)) {
+      filterMap.set(resourceTypes[i], filters)
+    }
   })
 
   const latestCompleted = runsQ.data?.items.find(
@@ -190,6 +217,7 @@ function ServerDetailPage() {
           counts={countsQ.data ?? []}
           loading={countsQ.isPending}
           onRefresh={() => countsQ.refetch()}
+          filterMap={filterMap}
         />
       </div>
 
@@ -499,16 +527,45 @@ function Row({
   )
 }
 
+function FilterBadge({ filters }: { filters: Record<string, unknown> }) {
+  const entries = filterEntries(filters)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge
+          variant="outline"
+          className="gap-1 border-0 bg-amber-500/15 px-1.5 py-0 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
+        >
+          <Filter className="size-3" />
+          filtered
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="max-w-none">
+        <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
+          {entries.map((e) => (
+            <div key={e.label} className="contents">
+              <dt className="text-background/60">{e.label}</dt>
+              <dd className="font-medium">{e.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 interface ResourceCountsCardProps {
   counts: ResourceCount[]
   loading: boolean
   onRefresh: () => void
+  filterMap: Map<string, Record<string, unknown>>
 }
 
 function ResourceCountsCard({
   counts,
   loading,
   onRefresh,
+  filterMap,
 }: ResourceCountsCardProps) {
   return (
     <Card className="col-span-3 shadow-2xs">
@@ -541,25 +598,31 @@ function ResourceCountsCard({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {counts.map((c) => (
-                <TableRow key={c.resource_type}>
-                  <TableCell className="font-medium">
-                    {c.resource_type}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {c.ok ? (
-                      c.total.toLocaleString()
-                    ) : (
-                      <span
-                        title={c.error ?? "Unknown error"}
-                        className="text-destructive"
-                      >
-                        error
+              {counts.map((c) => {
+                const filters = filterMap.get(c.resource_type)
+                return (
+                  <TableRow key={c.resource_type}>
+                    <TableCell className="font-medium">
+                      <span className="inline-flex items-center gap-1.5">
+                        {c.resource_type}
+                        {filters && <FilterBadge filters={filters} />}
                       </span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {c.ok ? (
+                        c.total.toLocaleString()
+                      ) : (
+                        <span
+                          title={c.error ?? "Unknown error"}
+                          className="text-destructive"
+                        >
+                          error
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         )}

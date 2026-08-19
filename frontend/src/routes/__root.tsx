@@ -2,6 +2,7 @@ import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 
 import { AuthBoundary } from "@/components/auth-boundary"
+import { TooltipProvider } from "@/components/ui/tooltip"
 
 import appCss from "../styles.css?url"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -36,9 +37,10 @@ function RootDocument({ children }: { children: ReactNode }) {
       <body className="bg-background text-foreground antialiased">
         <ThemeProvider defaultTheme="dark" storageKey="theme">
           <AuthBoundary>
-            {children}
-
-            <Toaster position="bottom-right" />
+            <TooltipProvider>
+              {children}
+              <Toaster position="bottom-right" />
+            </TooltipProvider>
           </AuthBoundary>
         </ThemeProvider>
         <Scripts />

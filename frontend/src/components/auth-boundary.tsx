@@ -4,6 +4,8 @@ import { useEffect, useState, type ReactNode } from "react"
 
 import { SiteHeader } from "@/components/site-header"
 import { meQueryOptions } from "@/api/queries"
+import { Loading } from "./Loading"
+import { LoadingUserMessage, LodatingText } from "@/lib/interface/loading"
 
 const PUBLIC_PATHS = ["/login"]
 
@@ -12,7 +14,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
   useEffect(() => setMounted(true), [])
 
   if (!mounted) {
-    return <Centered>Loading...</Centered>
+    return <Loading texts={LodatingText} />
   }
 
   return <AuthGate>{children}</AuthGate>
@@ -25,7 +27,7 @@ function AuthGate({ children }: { children: ReactNode }) {
   const { data, isPending } = useQuery(meQueryOptions())
 
   if (isPending) {
-    return <Centered>Loading...</Centered>
+    return <Loading texts={LoadingUserMessage} />
   }
 
   const isAuthenticated = data != null
@@ -44,12 +46,4 @@ function AuthGate({ children }: { children: ReactNode }) {
 
   if (isPublic) return <>{children}</>
   return <Navigate to="/login" />
-}
-
-function Centered({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex min-h-svh items-center justify-center">
-      <p className="animate-pulse text-sm text-muted-foreground">{children}</p>
-    </div>
-  )
 }

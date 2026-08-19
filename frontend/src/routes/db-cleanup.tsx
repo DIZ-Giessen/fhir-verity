@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { AlertTriangle, CalendarIcon, CheckCircle2, Play } from "lucide-react"
+import { AlertTriangle, CalendarIcon, Play } from "lucide-react"
 import { useState } from "react"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
@@ -24,7 +24,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -35,7 +34,11 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import {
   Select,
@@ -44,9 +47,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Lightbulb } from "@solar-icons/react-perf/category/style/LineDuotone"
+import {
+  CheckCircle,
+  Lightbulb,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
+import { TextDots } from "@/components/text-dots"
+import {
+  AnimatedLoadingText,
+  LoadingCheckMessage,
+  PurgeText,
+  useLoadingText,
+} from "@/lib/interface/loading"
 
-export const Route = createFileRoute("/db-cleanup")({ component: DbCleanupPage })
+export const Route = createFileRoute("/db-cleanup")({
+  component: DbCleanupPage,
+})
 
 const ALL = "all"
 
@@ -68,7 +83,11 @@ function DateField({
           data-empty={!value}
           className="h-9 w-full justify-between text-left text-sm font-normal data-[empty=true]:text-muted-foreground"
         >
-          {value ? format(value, "PPP", { locale: de }) : <span>{placeholder}</span>}
+          {value ? (
+            format(value, "PPP", { locale: de })
+          ) : (
+            <span>{placeholder}</span>
+          )}
           <CalendarIcon className="h-3.5 w-3.5 opacity-60" />
         </Button>
       </PopoverTrigger>
@@ -89,7 +108,7 @@ function DateField({
 }
 
 function DbCleanupPage() {
-  const [serverId, setServerId] = useState(ALL)
+  const [serverId, setServerId] = useState("")
   const [resourceType, setResourceType] = useState(ALL)
   const [rule, setRule] = useState("")
   const [severity, setSeverity] = useState(ALL)
@@ -105,7 +124,6 @@ function DbCleanupPage() {
   const typesQ = useQuery(resourceTypesQueryOptions())
 
   const isUnscoped =
-    serverId === ALL &&
     resourceType === ALL &&
     !rule.trim() &&
     severity === ALL &&
@@ -114,7 +132,7 @@ function DbCleanupPage() {
 
   function buildBody(dry: boolean): DbPurgeRequest {
     return {
-      server_id: serverId === ALL ? null : serverId,
+      server_id: serverId,
       resource_type: resourceType === ALL ? null : resourceType,
       rule: rule.trim() || null,
       severity: severity === ALL ? null : severity,
@@ -155,9 +173,10 @@ function DbCleanupPage() {
   })
 
   const serverName =
-    serverId === ALL
-      ? "all servers"
-      : (serversQ.data?.find((s) => s.id === serverId)?.name ?? serverId)
+    serversQ.data?.find((s) => s.id === serverId)?.name ?? serverId
+
+  const loadingText = useLoadingText(LoadingCheckMessage)
+  const purgeText = useLoadingText(PurgeText)
 
   return (
     <div className="space-y-6">
@@ -166,12 +185,23 @@ function DbCleanupPage() {
           Database Cleanup
         </h1>
         <p className="text-sm text-muted-foreground">
-          Remove entries from Verity&apos;s <code>invalid_resources</code>{" "}
-          table only. The FHIR server is never contacted — nothing is
-          deleted or changed there.
+          Remove entries from Verity&apos;s <code>invalid_resources</code> table
+          only. The FHIR server is never contacted.
         </p>
       </div>
-
+      {result && (
+        <>
+          <Alert className="border-emerald-500/20 bg-emerald-500/5 text-emerald-700 dark:border-emerald-900/20 dark:bg-emerald-900/10 dark:text-emerald-400">
+            <CheckCircle />
+            <AlertTitle className="font-semibold">
+              Database purge successful
+            </AlertTitle>
+            <AlertDescription className="text-sm">
+              {result.deleted} entries purged from the database.
+            </AlertDescription>
+          </Alert>
+        </>
+      )}
       <Card className="shadow-none">
         <CardHeader>
           <CardTitle className="text-base">
@@ -184,10 +214,9 @@ function DbCleanupPage() {
             <Label>Server</Label>
             <Select value={serverId} onValueChange={setServerId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="All servers" />
+                <SelectValue placeholder="Select a server" />
               </SelectTrigger>
               <SelectContent className="max-h-80 overflow-auto">
-                <SelectItem value={ALL}>All servers</SelectItem>
                 {(serversQ.data ?? []).map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name}
@@ -267,46 +296,31 @@ function DbCleanupPage() {
         </CardContent>
 
         <CardFooter className="flex-col items-stretch gap-2">
-          {isUnscoped && (
+          {isUnscoped && serverId && (
             <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-500">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              No filters set — this will match every invalid_resources entry
-              on every server.
+              No type/rule/severity/date filters set — this will match every
+              invalid_resources entry on this server.
             </p>
           )}
           <div className="flex justify-end">
             <Button
-              disabled={previewM.isPending}
+              disabled={!serverId || previewM.isPending}
               onClick={() => previewM.mutate()}
               className="gap-1"
             >
-              <Play className="h-4 w-4" />
-              {previewM.isPending ? "Checking..." : "Preview matches"}
+              {!previewM.isPending && <Play className="h-4 w-4" />}
+              {previewM.isPending ? (
+                <TextDots>
+                  <AnimatedLoadingText text={loadingText} className="mr-1" />
+                </TextDots>
+              ) : (
+                "Preview matches"
+              )}
             </Button>
           </div>
         </CardFooter>
       </Card>
-
-      {result && (
-        <Card className="shadow-2xs">
-          <CardHeader>
-            <CardTitle className="text-base">Result</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">Matched: {result.matched}</Badge>
-              <Badge
-                variant="outline"
-                className="border-0 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-              >
-                <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                Deleted: {result.deleted}
-              </Badge>
-              <Badge variant="outline">{result.elapsed_seconds}s</Badge>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <AlertDialog
         open={confirmOpen}
@@ -339,9 +353,8 @@ function DbCleanupPage() {
                     : ""}
                 </p>
                 <p className="text-red-600 dark:text-red-400">
-                  This removes them from Verity&apos;s database only and
-                  cannot be undone. The resources on the FHIR server are not
-                  touched.
+                  This removes them from Verity&apos;s database only and cannot
+                  be undone. The resources on the FHIR server are not touched.
                 </p>
               </div>
             </AlertDialogDescription>
@@ -358,34 +371,34 @@ function DbCleanupPage() {
                 executeM.mutate()
               }}
             >
-              {executeM.isPending ? "Purging..." : "Purge from database"}
+              {executeM.isPending ? (
+                <TextDots>
+                  <AnimatedLoadingText text={purgeText} className="mr-1" />
+                </TextDots>
+              ) : (
+                "Purge from database"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <Alert className="border-0 shadow-none">
-        <Lightbulb />
+        <Lightbulb className="size-6 text-blue-500!" />
         <AlertTitle>Important Information</AlertTitle>
         <AlertDescription>
           <ul className="list-disc pl-5">
             <li>
-              This only deletes rows from Verity&apos;s own database. It
-              never sends a request to the FHIR server — resources are
-              neither modified nor deleted there. Use the{" "}
-              <span className="font-medium text-foreground">Cleanup</span>{" "}
-              page instead if you want to act on the FHIR server itself.
+              This only deletes rows from Verity&apos;s own database. It never
+              sends a request to the FHIR server — resources are neither
+              modified nor deleted there. Use the{" "}
+              <span className="font-medium text-foreground">Cleanup</span> page
+              instead if you want to act on the FHIR server itself.
             </li>
             <li>
-              Every completed validation run already removes entries that
-              are no longer confirmed invalid — this page is for one-off
-              cleanup of older backlog, or narrowing what Verity keeps
-              tracking.
-            </li>
-            <li>
-              Every purge is written to the{" "}
-              <span className="font-medium text-foreground">Audit</span> log,
-              one entry per removed resource, regardless of filters used.
+              Every completed validation run already removes entries that are no
+              longer confirmed invalid — this page is for one-off cleanup of
+              older backlog, or narrowing what Verity keeps tracking.
             </li>
           </ul>
         </AlertDescription>

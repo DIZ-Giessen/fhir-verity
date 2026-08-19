@@ -41,10 +41,12 @@ export interface MonthlyBucket {
 export interface InvalidResourcesParams {
   skip?: number
   limit?: number
-  resource_type?: string | null
+  resource_types?: Array<string> | null
   rule?: string | null
   severity?: string | null
   only_current_run?: boolean
+  sort_by?: string | null
+  sort_dir?: "asc" | "desc" | null
 }
 
 // ?  LIVE PROGRESS

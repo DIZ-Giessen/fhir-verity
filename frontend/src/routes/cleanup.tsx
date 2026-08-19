@@ -45,11 +45,18 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  Corkscrew,
+  Broom,
   Lightbulb,
   NotificationLinesRemove,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  AnimatedLoadingText,
+  DeleteMessage,
+  LoadingCheckMessage,
+  useLoadingText,
+} from "@/lib/interface/loading"
+import { TextDots } from "@/components/text-dots"
 
 export const Route = createFileRoute("/cleanup")({ component: CleanupPage })
 
@@ -171,13 +178,15 @@ function CleanupPage() {
   const serverName =
     serversQ.data?.find((s) => s.id === serverId)?.name ?? serverId
 
+  const loadingText = useLoadingText(LoadingCheckMessage)
+  const deleteText = useLoadingText(DeleteMessage)
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Cleanup</h1>
         <p className="text-sm text-muted-foreground">
-          Bulk-delete or bulk-fix invalid resources on a FHIR server. Every run
-          previews matches first before anything is executed.
+          Bulk-delete or bulk-fix invalid resources on a FHIR server.
         </p>
       </div>
 
@@ -200,7 +209,7 @@ function CleanupPage() {
                 value="fix"
                 className="gap-1 data-[state=active]:text-orange-500 data-[state=active]:dark:text-orange-500"
               >
-                <Corkscrew className="size-4" />
+                <Broom className="size-4.5" />
                 Fix Invalid Resources
               </TabsTrigger>
             </TabsList>
@@ -318,8 +327,14 @@ function CleanupPage() {
             onClick={() => previewM.mutate()}
             className="gap-1"
           >
-            <Play className="h-4 w-4" />
-            {previewM.isPending ? "Checking..." : "Preview matches"}
+            {!previewM.isPending && <Play className="h-4 w-4" />}
+            {previewM.isPending ? (
+              <TextDots>
+                <AnimatedLoadingText text={loadingText} className="mr-1" />
+              </TextDots>
+            ) : (
+              "Preview matches"
+            )}
           </Button>
         </CardFooter>
       </Card>
@@ -422,18 +437,22 @@ function CleanupPage() {
                 executeM.mutate()
               }}
             >
-              {executeM.isPending
-                ? "Executing..."
-                : mode === "delete"
-                  ? "Delete all"
-                  : "Fix all"}
+              {executeM.isPending ? (
+                <TextDots>
+                  <AnimatedLoadingText text={deleteText} className="mr-1" />
+                </TextDots>
+              ) : mode === "delete" ? (
+                "Delete all"
+              ) : (
+                "Fix all"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <Alert className="border-0 shadow-none">
-        <Lightbulb />
+        <Lightbulb className="size-4.5 text-blue-500!" />
         <AlertTitle>Important Information</AlertTitle>
         <AlertDescription>
           Please review this information before deleting or fixing the
@@ -441,7 +460,8 @@ function CleanupPage() {
           <ul className="list-disc pl-5">
             <li>
               The fix works only on HAPI FHIR servers, as it is based on the
-              PATCH method, which is not supported by some Blaze servers.
+              <b> PATCH</b> method, which is not supported by some Blaze
+              servers.
             </li>
             <li>
               After validation, the request is immediately added to the audit
@@ -449,17 +469,21 @@ function CleanupPage() {
             </li>
             <li>
               A resource cannot be deleted if it is referenced by another
-              resource (referential integrity).
+              resource (<b>referential integrity</b>).
             </li>
-            <li>The fix only works for Patient and Observation resources.</li>
+            <li>
+              The fix only works for <b>Patient</b> and <b>Observation</b>{" "}
+              resources.
+            </li>
           </ul>
-          <Button
-            variant="link"
-            size="sm"
+          <a
+            href="https://mirgitlab.med.uni-giessen.de/povoc1/fhir-verity/-/tree/main/documentation?ref_type=heads"
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-info h-auto p-0 underline"
           >
             Read more here
-          </Button>
+          </a>
         </AlertDescription>
       </Alert>
     </div>

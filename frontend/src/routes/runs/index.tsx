@@ -39,13 +39,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  CheckCircle,
-  DangerTriangle,
   Documents,
   InfoCircle,
   NotificationLinesRemove,
   SquareTopDown,
-  Star2,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
@@ -65,7 +62,6 @@ import {
 } from "@/lib/functions/runs"
 import type { MonthlyBucket, TestReportSummary } from "@/lib/interface"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
-import { Dots } from "@/components/dots"
 import { TextDots } from "@/components/text-dots"
 
 export const Route = createFileRoute("/runs/")({ component: RunsPage })
@@ -113,7 +109,7 @@ function RunsPage() {
   const runsQ = useQuery(runsQueryOptions(500))
   const serversQ = useQuery(serversQueryOptions())
 
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [_setMenuOpen, setMenuOpen] = useState(false)
   const [startOpen, setStartOpen] = useState(false)
   const serverMap = useMemo(() => {
     const map = new Map<
@@ -200,7 +196,7 @@ function BarCard({
       </CardHeader> */}
       <div className="pb-0">
         {loading ? (
-          <Skeleton className="h-[260px] w-full" />
+          <Skeleton className="h-65 w-full" />
         ) : (
           <div className="w-full">
             <AreaChart

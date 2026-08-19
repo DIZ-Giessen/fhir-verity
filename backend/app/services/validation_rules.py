@@ -25,6 +25,14 @@ from app.api.v1.endpoints.websocket import broadcast_progress
 logger = logging.getLogger(__name__)
 
 
+class FhirServerUnresponsiveError(Exception):
+    """The FHIR server did not answer a request after exhausting all retries.
+
+    Distinguished from other failures so the frontend can tell the user this
+    is a server-side responsiveness issue, not an application bug.
+    """
+
+
 async def run_cancel_requested(run_id: UUID, db: AsyncSession) -> bool:
     """True if cooperative cancellation was requested for this run.
     Fresh scalar SELECT so it sees the commit from the cancel endpoint's
@@ -145,12 +153,36 @@ class BaseValidator:
                 httpx.RemoteProtocolError,
             ) as e:
                 last_exc = e
+                # The auth flow (e.g. OAuth2 token refresh) can issue its own
+                # request to a different host before the actual FHIR request
+                # is sent; exc.request reflects whichever one really failed,
+                # which is not always `url`.
+                failed_url = getattr(e, "request", None)
+                failed_url = failed_url.url if failed_url is not None else url
                 if attempt == self.MAX_RETRIES:
-                    raise
+                    logger.error(
+                        "Network error at %s (target %s): %s: %s, giving up after %s/%s",
+                        url,
+                        failed_url,
+                        type(e).__name__,
+                        e,
+                        attempt,
+                        self.MAX_RETRIES,
+                    )
+                    # httpx network exceptions often carry no message
+                    # (str(e) == ""), which used to leave run.error_message
+                    # blank. Raise something a human (and the frontend) can
+                    # actually read.
+                    raise FhirServerUnresponsiveError(
+                        f"FHIR server did not respond after {self.MAX_RETRIES} "
+                        f"attempts ({type(e).__name__} at {failed_url})"
+                    ) from e
                 wait = min(2**attempt, 60) + random.uniform(0, 1)
                 logger.warning(
-                    "Network error at %s: %s, retry %s/%s in %.1fs",
+                    "Network error at %s (target %s): %s: %s, retry %s/%s in %.1fs",
                     url,
+                    failed_url,
+                    type(e).__name__,
                     e,
                     attempt,
                     self.MAX_RETRIES,

@@ -113,7 +113,7 @@ class DbPurgeRequest(BaseModel):
     """Filter criteria for purging invalid_resources rows from Verity's own
     database only — never touches the source FHIR server."""
 
-    server_id: Optional[UUID] = None
+    server_id: UUID
     resource_type: Optional[str] = None
     rule: Optional[str] = None
     severity: Optional[str] = None

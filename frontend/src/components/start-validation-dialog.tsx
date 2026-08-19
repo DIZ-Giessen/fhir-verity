@@ -1,11 +1,23 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { Check, ChevronsUpDown, ExternalLink, Loader2 } from "lucide-react"
+import {
+  Check,
+  ChevronsUpDown,
+  ExternalLink,
+  Filter,
+  Loader2,
+} from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import {
   resourceTypesQueryOptions,
+  serverResourceConfigQueryOptions,
   serversQueryOptions,
   startValidation,
 } from "@/api/queries"
@@ -33,6 +45,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
+import { filterEntries, hasActiveFilters } from "@/lib/filter-format"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { DangerTriangle } from "@solar-icons/react-perf/category/style/LineDuotone"
 
@@ -92,6 +105,22 @@ export function StartValidationDialog({
   const effectiveName =
     serverName ?? serversQ.data?.find((s) => s.id === pickedServer)?.name
 
+  // Look up the active per-resource-type filter (lastUpdate/profile/tag) for
+  // the target server, so a checked resource that only sees a slice of the
+  // data can be called out before the run starts.
+  const configQs = useQueries({
+    queries: allTypes.map((rt) => ({
+      ...serverResourceConfigQueryOptions(effectiveServerId ?? "", rt),
+      enabled: Boolean(effectiveServerId) && allTypes.length > 0,
+    })),
+  })
+  const filteredSelectedTypes = allTypes
+    .map((rt, i) => ({ resourceType: rt, filters: configQs[i]?.data?.filters }))
+    .filter(
+      (x): x is { resourceType: string; filters: Record<string, unknown> } =>
+        selected.has(x.resourceType) && hasActiveFilters(x.filters)
+    )
+
   const mutation = useMutation({
     mutationFn: (vars: { server_id: string; resource_types: string[] }) =>
       startValidation(vars),
@@ -102,7 +131,7 @@ export function StartValidationDialog({
       const runId = run.id
       const name = effectiveName
       toast.custom((t) => (
-        <div className="flex w-[400px] flex-col gap-2 rounded-md border border-border bg-popover p-4 text-popover-foreground shadow-lg">
+        <div className="flex w-100 flex-col gap-2 rounded-md border border-border bg-popover p-4 text-popover-foreground shadow-lg">
           <div className="flex items-center gap-2">
             <span className="flex size-2 animate-pulse rounded-full bg-emerald-500" />
             <p className="animate-pulse text-sm font-medium">
@@ -195,68 +224,104 @@ export function StartValidationDialog({
             )}
           </DialogDescription>
         </DialogHeader>
-
-        {!serverId && (
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">Server</p>
-            <ServerPicker
-              servers={serversQ.data ?? []}
-              value={pickedServer}
-              onChange={setPickedServer}
-            />
-          </div>
-        )}
-
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">
-            Resource types
-          </p>
-          {typesQ.isPending ? (
-            <div className="grid grid-cols-2 gap-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-9 w-full" />
-              ))}
+        <div className="-mx-4 no-scrollbar grid max-h-[50vh] gap-4 overflow-y-auto px-4">
+          {!serverId && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">
+                Server
+              </p>
+              <ServerPicker
+                servers={serversQ.data ?? []}
+                value={pickedServer}
+                onChange={setPickedServer}
+              />
             </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-1">
-                {allTypes.map((rt) => (
-                  <label
-                    key={rt}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg p-2 text-sm hover:bg-muted/50"
-                  >
-                    <Checkbox
-                      checked={selected.has(rt)}
-                      onCheckedChange={() => toggle(rt)}
-                    />
-                    <span>{rt}</span>
-                  </label>
+          )}
+
+          {(Array.from(selected).includes("Condition") ||
+            Array.from(selected).includes("Observation")) && (
+            <Alert className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-50">
+              <DangerTriangle className="size-5" />
+              <AlertTitle>Attention</AlertTitle>
+
+              <AlertDescription>
+                Validation runs for{" "}
+                <span className="font-medium text-foreground">Condition</span>{" "}
+                and{" "}
+                <span className="font-medium text-foreground">Observation</span>{" "}
+                can take{" "}
+                <span className="font-medium text-foreground">
+                  significantly longer
+                </span>
+                . We recommend starting validation for these types{" "}
+                <span className="font-medium text-foreground">
+                  one at a time
+                </span>
+                .
+              </AlertDescription>
+            </Alert>
+          )}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">
+              Resource types
+            </p>
+            {typesQ.isPending ? (
+              <div className="grid grid-cols-2 gap-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-9 w-full" />
                 ))}
               </div>
-            </>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-1">
+                  {allTypes.map((rt) => (
+                    <label
+                      key={rt}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg p-2 text-sm hover:bg-muted/50"
+                    >
+                      <Checkbox
+                        checked={selected.has(rt)}
+                        onCheckedChange={() => toggle(rt)}
+                      />
+                      <span>{rt}</span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {filteredSelectedTypes.length > 0 && (
+            <Alert className="border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-50">
+              <Filter className="size-5" />
+              <AlertTitle>Filter active</AlertTitle>
+              <AlertDescription>
+                <p>
+                  This run will only cover the resources matching the filter
+                  configured for this server. It will not cover the full
+                  dataset:
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {filteredSelectedTypes.map(({ resourceType, filters }) => (
+                    <li
+                      key={resourceType}
+                      className="list-inside list-disc text-xs"
+                    >
+                      <span className="text-sm font-medium text-foreground">
+                        {resourceType}
+                      </span>
+                      :{" "}
+                      {filterEntries(filters)
+                        .map((e) => `${e.label.toLowerCase()} ${e.value}`)
+                        .join(", ")}
+                    </li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
           )}
         </div>
-        {(Array.from(selected).includes("Condition") ||
-          Array.from(selected).includes("Observation")) && (
-          <Alert className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-50">
-            <DangerTriangle className="size-5" />
-            <AlertTitle>Attention!</AlertTitle>
-
-            <AlertDescription>
-              Validation runs for{" "}
-              <span className="font-medium text-foreground">Condition</span> and{" "}
-              <span className="font-medium text-foreground">Observation</span>{" "}
-              can take{" "}
-              <span className="font-medium text-foreground">
-                significantly longer
-              </span>
-              . We recommend starting validation for these types{" "}
-              <span className="font-medium text-foreground">one at a time</span>
-              .
-            </AlertDescription>
-          </Alert>
-        )}
-        <DialogFooter>
+        <DialogFooter className="">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}

@@ -1,18 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useNavigate } from "@tanstack/react-router"
+import { Link, useNavigate } from "@tanstack/react-router"
 import { ChevronDown, LogOut, Play } from "lucide-react"
 import { useState } from "react"
 
 import {
+  NotificationLinesRemove,
+  ClipboardList,
+  UsersGroupRounded,
+  Broom,
+  ServerPath,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
+
+import {
   authKeys,
+  hasRole,
   logout,
   meQueryOptions,
   updateMyPreferences,
   type AuthUser,
+  type Role,
 } from "@/api/queries"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
+
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import {
@@ -24,14 +34,34 @@ import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { initials } from "@/lib/functions"
 
-const ROLE_STYLES: Record<string, string> = {
-  admin:
-    "border-0 bg-rose-500/15 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
-  editor:
-    "border-0 bg-amber-500/15 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
-  viewer:
-    "border-0 bg-sky-500/15 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400",
+type ManagementItem = {
+  to: "/cleanup" | "/db-cleanup" | "/audit" | "/users"
+  label: string
+  icon: typeof NotificationLinesRemove
+  minRole: Role
 }
+
+const managementItems: ManagementItem[] = [
+  {
+    to: "/cleanup",
+    label: "Cleanup Page",
+    icon: Broom,
+    minRole: "editor",
+  },
+  {
+    to: "/db-cleanup",
+    label: "Database Cleanup",
+    icon: ServerPath,
+    minRole: "admin",
+  },
+  { to: "/audit", label: "Audit Page", icon: ClipboardList, minRole: "admin" },
+  {
+    to: "/users",
+    label: "Users Page",
+    icon: UsersGroupRounded,
+    minRole: "admin",
+  },
+]
 
 export function UserMenu() {
   const { data: user } = useQuery(meQueryOptions())
@@ -71,6 +101,9 @@ export function UserMenu() {
   if (!user) return null
 
   const displayName = user.full_name || user.username || user.email || "User"
+  const visibleManagementItems = managementItems.filter((item) =>
+    hasRole(user.role, item.minRole)
+  )
 
   return (
     <>
@@ -82,7 +115,7 @@ export function UserMenu() {
                 {initials(user.username)}
               </AvatarFallback>
             </Avatar>
-            <span className="sr-only text-sm font-medium">
+            <span className="text-sm font-medium">
               {user.username ?? displayName}
             </span>
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -102,11 +135,29 @@ export function UserMenu() {
                   </p>
                 )}
               </div>
-              <Badge variant="outline" className={ROLE_STYLES[user.role] ?? ""}>
-                {user.role}
-              </Badge>
             </div>
           </div>
+          {visibleManagementItems.length > 0 && (
+            <>
+              <Separator />
+              <div className="space-y-0.5 p-1">
+                {visibleManagementItems.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm text-foreground hover:bg-accent/60 hover:text-orange-500"
+                    >
+                      <Icon className="size-4" aria-hidden />
+                      <span>{item.label}</span>
+                    </Link>
+                  )
+                })}
+              </div>
+            </>
+          )}
           <Separator />
           <div className="flex items-center justify-between gap-3 p-4">
             <div className="space-y-0.5">

@@ -9,6 +9,7 @@ import {
   configKeys,
   deleteServerConfig,
   patchRule,
+  serverQueryOptions,
   serverResourceConfigQueryOptions,
   updateServerFilters,
 } from "@/api/queries"
@@ -77,6 +78,8 @@ function ResourceConfigPage() {
   const { data, isPending, error } = useQuery(
     serverResourceConfigQueryOptions(id, resourceType)
   )
+  const serverQ = useQuery(serverQueryOptions(id))
+  const serverName = serverQ.data?.name ?? id.slice(0, 8)
 
   const patchMutation = useMutation({
     mutationFn: ({
@@ -138,10 +141,8 @@ function ResourceConfigPage() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">
-              {resourceType} rules for server{" "}
-              <span className="font-mono text-orange-500/70">
-                {id.slice(0, 8)}
-              </span>
+              {resourceType} rules for{" "}
+              <span className="text-orange-500/70">{serverName}</span>
             </h1>
             {data?.is_server_specific ? (
               <Badge variant="secondary">Server override</Badge>
@@ -157,7 +158,9 @@ function ResourceConfigPage() {
               disabled={resetMutation.isPending}
             >
               <Restart className="mr-2 h-4 w-4" />
-              {resetMutation.isPending ? "Resetting..." : "Reset to defaults"}
+              {resetMutation.isPending
+                ? "Resetting..."
+                : "Reset to default Configuration"}
             </Button>
           )}
         </div>
@@ -420,8 +423,8 @@ function FilterCard({
           {saving ? "Saving..." : "Apply filters"}
         </Button>
         {active && (
-          <Button size="sm" variant="ghost" onClick={clear} disabled={saving}>
-            Clear
+          <Button size="sm" variant="outline" onClick={clear} disabled={saving}>
+            Clear filters
           </Button>
         )}
       </div>

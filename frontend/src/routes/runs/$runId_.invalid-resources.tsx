@@ -1,13 +1,27 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { ChevronDown, ChevronLeft, ChevronRight, XIcon } from "lucide-react"
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  XIcon,
+} from "lucide-react"
 import { Fragment, useEffect, useMemo, useState } from "react"
 
+import {
+  LinkRound,
+  PenNewSquare,
+  Restart,
+  TrashBinMinimalistic,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
+import { toast } from "sonner"
+import type { InvalidResourcesParams } from "@/lib/interface"
+import type { InvalidResourceRead } from "@/api/queries"
 import {
   autoFixResource,
   deleteResource,
   fixTemplatesQueryOptions,
-  type InvalidResourceRead,
   invalidResourcesQueryOptions,
   resourceTypesQueryOptions,
   runQueryOptions,
@@ -22,10 +36,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -39,15 +61,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { dateFormatter } from "@/lib/functions/runs"
-import type { InvalidResourcesParams } from "@/lib/interface"
 import {
-  LinkRound,
-  PenNewSquare,
-  Restart,
-  TrashBinMinimalistic,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
-import { toast } from "sonner"
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { SortableTableHead, nextSort } from "@/components/sortable-table-head"
+import { dateFormatter } from "@/lib/functions/runs"
+import { SEVERITY_ORDER, SEVERITY_STYLES } from "@/lib/severity"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,41 +88,35 @@ export const Route = createFileRoute("/runs/$runId_/invalid-resources")({
 const PAGE_SIZE = 25
 const ALL = "all"
 
-const SEVERITY_STYLES: Record<string, string> = {
-  error:
-    "border-0 bg-red-500/15 text-red-700 dark:bg-red-500/10 dark:text-red-400",
-  warning:
-    "border-0 bg-amber-500/15 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
-  info: "border-0 bg-sky-500/15 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400",
-}
-const SEVERITY_ORDER: Record<string, number> = {
-  error: 0,
-  warning: 1,
-  info: 2,
-}
-
 function InvalidResourcesPage() {
   const { runId } = Route.useParams()
 
   const [page, setPage] = useState(0)
-  const [resourceType, setResourceType] = useState(ALL)
+  const [resourceTypes, setResourceTypes] = useState<Set<string>>(new Set())
   const [rule, setRule] = useState(ALL)
   const [severity, setSeverity] = useState(ALL)
   const [onlyCurrent, setOnlyCurrent] = useState(true)
+  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({
+    key: "detected",
+    dir: "desc",
+  })
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  // any filter change -> back to first page
+  // any filter/sort change -> back to first page
   useEffect(() => {
     setPage(0)
-  }, [resourceType, rule, severity, onlyCurrent])
+  }, [resourceTypes, rule, severity, onlyCurrent, sort])
 
   const params: InvalidResourcesParams = {
     skip: page * PAGE_SIZE,
     limit: PAGE_SIZE,
-    resource_type: resourceType === ALL ? undefined : resourceType,
+    resource_types:
+      resourceTypes.size > 0 ? Array.from(resourceTypes) : undefined,
     rule: rule === ALL ? undefined : rule,
     severity: severity === ALL ? undefined : severity,
     only_current_run: onlyCurrent,
+    sort_by: sort.key,
+    sort_dir: sort.dir,
   }
 
   const listQ = useQuery(invalidResourcesQueryOptions(runId, params))
@@ -120,17 +135,43 @@ function InvalidResourcesPage() {
     [fixTemplatesQ.data]
   )
 
-  const ruleOptions = useMemo(() => {
-    const set = new Set<string>()
-    for (const rt of summaryQ.data?.by_resource_type ?? [])
-      for (const r of rt.by_rule) set.add(r.rule)
-    return Array.from(set).sort()
+  // Rules classified by the resource type they occur on — a flat, pooled
+  // rule list mixes up same-named rules from unrelated resource types (e.g.
+  // "status_required" exists on Encounter, Observation, DiagnosticReport...).
+  const rulesByResourceType = useMemo(() => {
+    const map = new Map<string, Array<string>>()
+    for (const rt of summaryQ.data?.by_resource_type ?? []) {
+      const rules = Array.from(new Set(rt.by_rule.map((r) => r.rule))).sort()
+      if (rules.length > 0) map.set(rt.resource_type, rules)
+    }
+    return map
   }, [summaryQ.data])
+
+  // The resource types the Rule dropdown should draw from: the selection if
+  // one is made, otherwise every resource type with recorded rules.
+  const ruleScopeTypes = useMemo(() => {
+    const types =
+      resourceTypes.size > 0
+        ? Array.from(resourceTypes).filter((rt) => rulesByResourceType.has(rt))
+        : Array.from(rulesByResourceType.keys())
+    return types.sort()
+  }, [resourceTypes, rulesByResourceType])
+
+  // If the resource type selection changes and the picked rule no longer
+  // applies to the new scope, fall back to "All rules" instead of silently
+  // keeping a filter that can never match.
+  useEffect(() => {
+    if (rule === ALL) return
+    const stillValid = ruleScopeTypes.some((rt) =>
+      rulesByResourceType.get(rt)?.includes(rule)
+    )
+    if (!stillValid) setRule(ALL)
+  }, [rule, ruleScopeTypes, rulesByResourceType])
 
   const items = listQ.data?.items ?? []
   const total = listQ.data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const hasFilters = resourceType !== ALL || rule !== ALL || severity !== ALL
+  const hasFilters = resourceTypes.size > 0 || rule !== ALL || severity !== ALL
 
   function toggleExpand(id: string) {
     setExpanded((prev) => {
@@ -170,19 +211,11 @@ function InvalidResourcesPage() {
             </p>
           </div>
           <div className="grid items-center gap-2 sm:grid-cols-5">
-            <Select value={resourceType} onValueChange={setResourceType}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Resource type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All resource types</SelectItem>
-                {(typesQ.data ?? []).map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ResourceTypeMultiSelect
+              options={typesQ.data ?? []}
+              selected={resourceTypes}
+              onChange={setResourceTypes}
+            />
 
             <Select value={rule} onValueChange={setRule}>
               <SelectTrigger className="w-full">
@@ -190,11 +223,28 @@ function InvalidResourcesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>All rules</SelectItem>
-                {ruleOptions.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {r}
-                  </SelectItem>
-                ))}
+                {ruleScopeTypes.length === 1 ? (
+                  (rulesByResourceType.get(ruleScopeTypes[0]) ?? []).map(
+                    (r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    )
+                  )
+                ) : (
+                  <>
+                    {ruleScopeTypes.map((rt) => (
+                      <SelectGroup key={rt}>
+                        <SelectLabel>{rt}</SelectLabel>
+                        {(rulesByResourceType.get(rt) ?? []).map((r) => (
+                          <SelectItem key={`${rt}:${r}`} value={r}>
+                            {r}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
 
@@ -210,17 +260,29 @@ function InvalidResourcesPage() {
               </SelectContent>
             </Select>
 
-            <label className="flex w-full items-center gap-2 text-sm">
-              <Switch checked={onlyCurrent} onCheckedChange={setOnlyCurrent} />
-              Only this run
-            </label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <label className="flex w-full items-center gap-2 text-sm">
+                  <Switch
+                    checked={onlyCurrent}
+                    onCheckedChange={setOnlyCurrent}
+                  />
+                  Only this run
+                </label>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-64">
+                {onlyCurrent
+                  ? "Showing only resources still invalid as of this run. Turn off to see every resource ever flagged invalid for this server, even if a later run stopped reconfirming it."
+                  : "Showing every resource ever flagged invalid for this server, regardless of run. Turn on to see only what this specific run confirmed as still invalid."}
+              </TooltipContent>
+            </Tooltip>
 
             {hasFilters && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setResourceType(ALL)
+                  setResourceTypes(new Set())
                   setRule(ALL)
                   setSeverity(ALL)
                 }}
@@ -253,11 +315,53 @@ function InvalidResourcesPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8" />
-                    <TableHead>Resource type</TableHead>
-                    <TableHead>Resource ID</TableHead>
-                    <TableHead>Severity</TableHead>
-                    <TableHead className="text-right">Issues</TableHead>
-                    <TableHead>Detected</TableHead>
+                    <SortableTableHead
+                      label="Resource type"
+                      sortKey="resource_type"
+                      activeKey={sort.key}
+                      dir={sort.dir}
+                      onSort={(key) =>
+                        setSort((prev) => nextSort(prev, key, "asc"))
+                      }
+                    />
+                    <SortableTableHead
+                      label="Resource ID"
+                      sortKey="resource_id"
+                      activeKey={sort.key}
+                      dir={sort.dir}
+                      onSort={(key) =>
+                        setSort((prev) => nextSort(prev, key, "asc"))
+                      }
+                    />
+                    <SortableTableHead
+                      label="Severity"
+                      sortKey="severity"
+                      activeKey={sort.key}
+                      dir={sort.dir}
+                      onSort={(key) =>
+                        setSort((prev) => nextSort(prev, key, "asc"))
+                      }
+                    />
+                    <SortableTableHead
+                      label="Issues"
+                      sortKey="issues"
+                      activeKey={sort.key}
+                      dir={sort.dir}
+                      onSort={(key) =>
+                        setSort((prev) => nextSort(prev, key, "desc"))
+                      }
+                      className="text-right"
+                      align="right"
+                    />
+                    <SortableTableHead
+                      label="Detected"
+                      sortKey="detected"
+                      activeKey={sort.key}
+                      dir={sort.dir}
+                      onSort={(key) =>
+                        setSort((prev) => nextSort(prev, key, "desc"))
+                      }
+                    />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -400,6 +504,79 @@ function InvalidResourcesPage() {
         )}
       </Card>
     </div>
+  )
+}
+
+function ResourceTypeMultiSelect({
+  options,
+  selected,
+  onChange,
+}: {
+  options: Array<string>
+  selected: Set<string>
+  onChange: (next: Set<string>) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const label =
+    selected.size === 0
+      ? "All resource types"
+      : selected.size === 1
+        ? Array.from(selected)[0]
+        : `${selected.size} resource types`
+
+  function toggle(rt: string) {
+    const next = new Set(selected)
+    if (next.has(rt)) next.delete(rt)
+    else next.add(rt)
+    onChange(next)
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+        >
+          <span className="truncate">{label}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-(--radix-popover-trigger-width) p-2"
+      >
+        <div className="no-scrollbar max-h-68 space-y-0.5 overflow-y-auto">
+          {options.map((rt) => (
+            <label
+              key={rt}
+              className="flex cursor-pointer items-center gap-2 rounded-md p-1.5 text-sm hover:bg-muted/50"
+            >
+              <Checkbox
+                checked={selected.has(rt)}
+                onCheckedChange={() => toggle(rt)}
+              />
+              <span>{rt}</span>
+            </label>
+          ))}
+        </div>
+        {selected.size > 0 && (
+          <>
+            <Separator className="my-1.5" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              onClick={() => onChange(new Set())}
+            >
+              Clear selection
+            </Button>
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
   )
 }
 
