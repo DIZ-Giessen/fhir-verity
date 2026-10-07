@@ -52,22 +52,22 @@ cp .env.example .env # danach mit den Werten aufüllen
 
 Die wichtigsten Werte:
 
-| Variable                                        | Bedeutung                                                                         |
-| ----------------------------------------------- | --------------------------------------------------------------------------------- |
-| DOMAIN                                          | die Domain, unter der Verity erreichbar ist                                       |
-| DATABASE_URL                                    | vollständige Verbindungs-URL; externer Host (Weg A) oder `db` (Weg B)             |
-| POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB | nur bei Weg B: Zugangsdaten der mitgelieferten Datenbank                          |
-| ENVIRONMENT                                     | `production` setzt das Secure-Cookie                                              |
-| CORS_ORIGINS                                    | erlaubte Origin; im Single-Origin-Betrieb die eigene Domain                       |
-| AUTH_ENABLED                                    | `true` in Produktion (empfohlen)                                                  |
-| SESSION_SECRET_KEY                              | zufälliger Schlüssel, siehe unten                                                 |
-| BACKEND_BASE_URL / FRONTEND_BASE_URL            | beide die eigene Domain (Single-Origin)                                           |
-| KEYCLOAK_DISCOVERY_URL                          | die OIDC-Discovery-URL des Realms                                                 |
-| KEYCLOAK_CLIENT_ID / KEYCLOAK_CLIENT_SECRET     | Zugangsdaten des Keycloak-Clients                                                 |
-| INITIAL_ADMIN_USERS                             | Kennungen, die beim ersten Login admin werden                                     |
-| FHIR_REPORT_PUBLISHER                           | Name des Standorts, der in den FHIR-Reports als Herausgeber erscheint             |
-| FHIR_REPORT_NAMING_SYSTEM                       | kanonische Basis-URL der Report-Identifier; einmal festlegen, dann nicht ändern   |
-| EMAIL\_\*                                       | SMTP-Zugang für Benachrichtigungen                                                |
+| Variable                                        | Bedeutung                                                                       |
+| ----------------------------------------------- | ------------------------------------------------------------------------------- |
+| DOMAIN                                          | die Domain, unter der Verity erreichbar ist                                     |
+| DATABASE_URL                                    | vollständige Verbindungs-URL; externer Host (Weg A) oder `db` (Weg B)           |
+| POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB | nur bei Weg B: Zugangsdaten der mitgelieferten Datenbank                        |
+| ENVIRONMENT                                     | `production` setzt das Secure-Cookie                                            |
+| CORS_ORIGINS                                    | erlaubte Origin; im Single-Origin-Betrieb die eigene Domain                     |
+| AUTH_ENABLED                                    | `true` in Produktion (empfohlen)                                                |
+| SESSION_SECRET_KEY                              | zufälliger Schlüssel, siehe unten                                               |
+| BACKEND_BASE_URL / FRONTEND_BASE_URL            | beide die eigene Domain (Single-Origin)                                         |
+| KEYCLOAK_DISCOVERY_URL                          | die OIDC-Discovery-URL des Realms                                               |
+| KEYCLOAK_CLIENT_ID / KEYCLOAK_CLIENT_SECRET     | Zugangsdaten des Keycloak-Clients                                               |
+| INITIAL_ADMIN_USERS                             | Kennungen, die beim ersten Login admin werden                                   |
+| FHIR_REPORT_PUBLISHER                           | Name des Standorts, der in den FHIR-Reports als Herausgeber erscheint           |
+| FHIR_REPORT_NAMING_SYSTEM                       | kanonische Basis-URL der Report-Identifier; einmal festlegen, dann nicht ändern |
+| EMAIL                                           | SMTP-Zugang für Benachrichtigungen                                              |
 
 Den Session-Schlüssel mit einem echten Zufallswert setzen:
 
@@ -84,8 +84,8 @@ Zwei Dinge, die zusammenpassen müssen, sonst startet nichts sauber:
 
 Verity braucht eine PostgreSQL-Datenbank für seine eigenen Daten (Server, Läufe, invalide Ressourcen, Audit-Log). Welcher Weg passt, hängt davon ab, ob am Standort bereits eine PostgreSQL betrieben wird:
 
-| Situation                                                        | Weg                                |
-| ---------------------------------------------------------------- | ---------------------------------- |
+| Situation                                                          | Weg                                  |
+| ------------------------------------------------------------------ | ------------------------------------ |
 | Es gibt eine PostgreSQL, die von der IT betreut und gesichert wird | **A — externe Datenbank** (Standard) |
 | Es gibt keine, Verity soll möglichst ohne Vorarbeit laufen         | **B — mitgelieferte Datenbank**      |
 
@@ -93,7 +93,7 @@ Die `docker-compose.yml` ist für Weg A vorbereitet; der Datenbank-Container fü
 
 ## Weg A: externe Datenbank (Standard)
 
-So wird Verity in Gießen betrieben. An der `docker-compose.yml` muss nichts geändert werden.
+An der `docker-compose.yml` muss nichts geändert werden.
 
 In der `.env` zeigt die `DATABASE_URL` auf den externen Host:
 
@@ -176,12 +176,12 @@ Erwartet wird `HTTP/2 200`. Im Browser dann `https://<DOMAIN>` aufrufen — zwin
 
 Die mitgelieferte `Caddyfile` erwartet ein vorhandenes Zertifikat unter `/etc/letsencrypt/live/<DOMAIN>/` (`fullchain.pem` und `privkey.pem`). Das Verzeichnis wird read-only in den Caddy-Container eingebunden, `DOMAIN` muss deshalb exakt dem Ordnernamen entsprechen. Je nach Standort passt eine dieser Varianten besser — dafür die `tls`-Zeile in der `Caddyfile` anpassen:
 
-| Variante                                                 | `tls`-Zeile in der Caddyfile                        |
-| -------------------------------------------------------- | --------------------------------------------------- |
-| Zertifikat liegt unter `/etc/letsencrypt` (Standard)     | unverändert lassen                                  |
-| Zertifikat der Einrichtung an anderem Ort                | `tls /pfad/cert.pem /pfad/key.pem` und Pfad in `docker-compose.yml` einbinden |
-| Server öffentlich erreichbar, Caddy soll selbst Let's Encrypt holen | Zeile entfernen, Port 80 zusätzlich freigeben |
-| Interner Testserver ohne Zertifikat                      | `tls internal` (selbstsigniert, Browserwarnung)     |
+| Variante                                                            | `tls`-Zeile in der Caddyfile                                                  |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Zertifikat liegt unter `/etc/letsencrypt` (Standard)                | unverändert lassen                                                            |
+| Zertifikat der Einrichtung an anderem Ort                           | `tls /pfad/cert.pem /pfad/key.pem` und Pfad in `docker-compose.yml` einbinden |
+| Server öffentlich erreichbar, Caddy soll selbst Let's Encrypt holen | Zeile entfernen, Port 80 zusätzlich freigeben                                 |
+| Interner Testserver ohne Zertifikat                                 | `tls internal` (selbstsigniert, Browserwarnung)                               |
 
 ## Betrieb
 
@@ -189,7 +189,7 @@ Die mitgelieferte `Caddyfile` erwartet ein vorhandenes Zertifikat unter `/etc/le
 docker compose ps                 # Status
 docker compose logs -f backend    # Live-Logs eines Dienstes
 docker compose restart backend    # Neustart ohne Rebuild
-docker compose down               # alles stoppen, Daten bleiben erhalten
+docker compose down               # alles stoppen
 docker compose up -d --build      # neu bauen und starten
 ```
 
