@@ -83,6 +83,7 @@ Die ausführliche Dokumentation liegt im Ordner `documentation/`:
 - [fhir-verity.md](documentation/fhir-verity.md) — Was das Tool ist, Kontext, Abgrenzung
 - [architektur.md](documentation/architektur.md) — Die vier Container, Single-Origin, Datenfluss
 - [features.md](documentation/features.md) — Validierungsdimensionen, Crawl, Reports, Bereinigung
+- [validierungsregeln.md](documentation/validierungsregeln.md) — Alle Ressourcentypen und Regeln im Detail, neue Regel hinzufügen
 - [datenbank.md](documentation/datenbank.md) — Die beiden DB-Wege, Migrationen, PostgreSQL-Rechte
 - [schema.md](documentation/schema.md) — Tabellen, Spalten, Beziehungen
 - [rollenverwaltung.md](documentation/rollenverwaltung.md) — RBAC, Server-Ownership, Audit

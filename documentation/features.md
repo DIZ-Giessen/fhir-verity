@@ -3,7 +3,7 @@
 ## Regelbasierte Validierung
 
 Der Kern von Verity ist eine konfigurierbare Regel-Engine. Für jeden Ressourcentyp lässt sich hinterlegen, welche Regeln geprüft werden. Die Regeln
-verteilen sich auf vier **Qualitätsdimensionen**.
+verteilen sich auf vier **Qualitätsdimensionen**. Jede einzelne Regel mit genauer Prüflogik steht in [validierungsregeln.md](validierungsregeln.md).
 
 ### 1. Datenschutz und Pseudonymisierung
 
@@ -16,17 +16,19 @@ Prüft, ob Pflichtfelder und für die Nachnutzung notwendige Angaben gefüllt si
 
 ### 3. Plausibilität
 
-Prüft, ob Werte inhaltlich sinnvoll sind — zum Beispiel, ob ein Laborwert im biologisch möglichen Bereich liegt oder ob eine Periode zeitlich stimmig ist
-(Ende nicht vor Beginn und Ähnliches).
+Prüft, ob Werte inhaltlich sinnvoll sind — zum Beispiel, ob ein Zeitraum zeitlich stimmig ist (Ende nicht vor Beginn), ein Datum nicht in der Zukunft
+liegt oder ein Geburtsdatum in einem plausiblen Bereich.
 
 ### 4. Referentielle Integrität
 
-Prüft, ob Referenzen zwischen Ressourcen auflösbar sind, also ob eine verwiesene Ressource tatsächlich existiert.
+Prüft, ob Referenzen zwischen Ressourcen die erwartete Form haben, etwa `subject.reference` als `Patient/<id>`. Ob die verwiesene Ressource auf dem
+Server existiert, wird derzeit nicht geprüft.
 
 ## Unterstützte Ressourcentypen
 
-Die Regel-Engine deckt die für den MII-Kerndatensatz relevanten Typen ab, unter anderem Patient, Encounter, Observation, Condition, Procedure, Medication,
-MedicationAdministration, MedicationStatement, MedicationRequest und DiagnosticReport. Welche Regeln je Typ aktiv sind, ist über die
+Die Regel-Engine deckt die für den MII-Kerndatensatz relevanten Typen ab: Patient, Encounter, Observation, Condition, Procedure, Medication,
+MedicationAdministration, MedicationRequest und DiagnosticReport. Für MedicationStatement sind Regeln konfiguriert, ein Validator fehlt aber noch
+(siehe [validierungsregeln.md](validierungsregeln.md#bekannte-lücken-und-einschränkungen)). Welche Regeln je Typ aktiv sind, ist über die
 Validierungskonfiguration steuerbar; beim ersten Start werden sinnvolle MII-KDS-Defaults als Grundkonfiguration angelegt.
 
 ```bash
