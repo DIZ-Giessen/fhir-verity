@@ -2,14 +2,14 @@
 #
 # Datenbank: zwei Wege, einer davon muss gewählt werden.
 #
-#   Weg A - externe PostgreSQL (aktiv, so läuft Verity in Gießen)
+#   Weg A - externe PostgreSQL
 #     Eine bestehende PostgreSQL wird genutzt. In der .env zeigt DATABASE_URL
 #     auf den externen Host, z. B.
 #       DATABASE_URL=postgresql+asyncpg://verity:<passwort>@db-host.example.org:5432/verity
 #     Der Verity-Benutzer braucht CREATE-Rechte auf dem Schema (siehe
 #     documentation/datenbank.md). Die Datei bleibt dafür wie sie ist.
 #
-#   Weg B - mitgelieferte PostgreSQL im Container (für Standorte ohne eigene DB)
+#   Weg B - mitgelieferte PostgreSQL im Container
 #     Verity bringt seine eigene Datenbank mit, es muss nichts vorbereitet
 #     werden. Dafür unten die drei mit "Weg B" markierten Blöcke einkommentieren
 #     (db-Service, depends_on im backend, pgdata-Volume) und in der .env setzen:
