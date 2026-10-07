@@ -10,7 +10,7 @@ Bestehende FHIR-Validatoren prüfen einzelne Ressourcen oder Bundles gegen Profi
 
 ## Architektur in einem Satz
 
-Vier Container hinter einem Reverse Proxy: ein FastAPI-Backend, ein [https://tanstack.com/start/latest/docs/framework/react/overview](TanStack-Start-Frontend) , eine PostgreSQL-Datenbank und [https://caddyserver.com/docs/getting-started](Caddy) als einziger nach außen offener Dienst. Caddy terminiert TLS und leitet `/api/*` an das Backend wenn gewünscht `/kc` an Keycloack, alles andere an das Frontend — dadurch gibt es nur eine Origin, kein CORS und keine standortspezifisch eingebackene Backend-URL. Details in [documentation/architektur.md](documentation/architektur.md).
+Vier Container hinter einem Reverse Proxy: ein FastAPI-Backend, ein [TanStack-Start-Frontend](https://tanstack.com/start/latest/docs/framework/react/overview) , eine PostgreSQL-Datenbank und [Caddy](https://caddyserver.com/docs/getting-started) als einziger nach außen offener Dienst. Caddy terminiert TLS und leitet `/api/*` an das Backend wenn gewünscht `/kc` an Keycloack, alles andere an das Frontend — dadurch gibt es nur eine Origin, kein CORS und keine standortspezifisch eingebackene Backend-URL. Details in [documentation/architektur.md](documentation/architektur.md).
 
 ## Schnellstart
 
