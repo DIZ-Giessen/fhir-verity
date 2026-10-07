@@ -5,9 +5,16 @@ import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import {
-  type BulkActionResult,
-  type BulkDeleteRequest,
-  type BulkFixRequest,
+  Broom,
+  Lightbulb,
+  NotificationLinesRemove,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
+import type {
+  BulkActionResult,
+  BulkDeleteRequest,
+  BulkFixRequest,
+} from "@/api/queries"
+import {
   bulkDelete,
   bulkFix,
   fixTemplatesQueryOptions,
@@ -44,11 +51,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Broom,
-  Lightbulb,
-  NotificationLinesRemove,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AnimatedLoadingText,
@@ -57,6 +59,8 @@ import {
   useLoadingText,
 } from "@/lib/interface/loading"
 import { TextDots } from "@/components/text-dots"
+import { apiErrorMessage } from "@/lib/api-client"
+import { env } from "@/lib/env"
 
 export const Route = createFileRoute("/cleanup")({ component: CleanupPage })
 
@@ -155,7 +159,7 @@ function CleanupPage() {
       setConfirmOpen(true)
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : "Preview failed"),
+      toast.error("Preview failed", { description: apiErrorMessage(e) }),
   })
 
   const executeM = useMutation({
@@ -167,11 +171,20 @@ function CleanupPage() {
       setConfirmOpen(false)
       if (!res) return
       setResult(res)
-      toast.success(`${res.succeeded} succeeded, ${res.failed} failed`)
+      const summary = `${res.succeeded.toLocaleString()} succeeded, ${res.failed.toLocaleString()} failed`
+      if (res.failed > 0) {
+        toast.warning(summary, {
+          description: "Logged as one entry in the audit log.",
+        })
+      } else {
+        toast.success(summary, {
+          description: "Logged as one entry in the audit log.",
+        })
+      }
     },
     onError: (e: unknown) => {
       setConfirmOpen(false)
-      toast.error(e instanceof Error ? e.message : "Execution failed")
+      toast.error("Execution failed", { description: apiErrorMessage(e) })
     },
   })
 
@@ -464,8 +477,10 @@ function CleanupPage() {
               servers.
             </li>
             <li>
-              After validation, the request is immediately added to the audit
-              logs, regardless of success or failure.
+              Each bulk operation is recorded as <b>one</b> summary entry in the
+              audit log, regardless of how many resources it touched. The entry
+              lists the filter, every changed resource and the failures grouped
+              by error.
             </li>
             <li>
               A resource cannot be deleted if it is referenced by another
@@ -477,7 +492,7 @@ function CleanupPage() {
             </li>
           </ul>
           <a
-            href="https://mirgitlab.med.uni-giessen.de/povoc1/fhir-verity/-/tree/main/documentation?ref_type=heads"
+            href={env.DOCS_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="text-info h-auto p-0 underline"

@@ -1,8 +1,8 @@
 import { keepPreviousData, queryOptions } from "@tanstack/react-query"
 
-import { api, ApiError } from "@/lib/api-client"
 import type { components } from "./schema"
 import type { InvalidResourcesParams } from "@/lib/interface"
+import { ApiError, api } from "@/lib/api-client"
 
 export type FhirServer = components["schemas"]["FhirServerRead"]
 export type FhirServerCreate = components["schemas"]["FhirServerCreate"]
@@ -189,7 +189,7 @@ export const meQueryOptions = () =>
     queryFn: async (): Promise<AuthUser | null> => {
       try {
         const { data } = await api.GET("/api/v1/auth/me")
-        return (data as AuthUser) ?? null
+        return data ?? null
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) return null
         throw err
@@ -301,10 +301,10 @@ export const invalidResourcesQueryOptions = (
     placeholderData: keepPreviousData,
   })
 
-//!  START VALIDATION RUNS
+// !  START VALIDATION RUNS
 export async function startValidation(body: {
   server_id: string
-  resource_types: string[]
+  resource_types: Array<string>
 }) {
   const { data } = await api.POST("/api/v1/validation/start", { body })
   return data
@@ -316,7 +316,7 @@ export async function resumeValidation(runId: string) {
   })
   return data
 }
-//!  END VALIDATION RUNS
+// !  END VALIDATION RUNS
 
 // ---------------------------------------------------------------------------
 // Resource actions
@@ -432,7 +432,9 @@ const ROLE_ORDER: Record<Role, number> = { viewer: 0, editor: 1, admin: 2 }
 /** True if `role` meets or exceeds `min`. Mirrors the backend ROLE_ORDER. */
 export function hasRole(role: string | null | undefined, min: Role): boolean {
   if (!role) return false
-  return (ROLE_ORDER[role as Role] ?? -1) >= ROLE_ORDER[min]
+  // role comes from the API as a plain string and may be unknown
+  const rank = (ROLE_ORDER as Partial<Record<string, number>>)[role] ?? -1
+  return rank >= ROLE_ORDER[min]
 }
 
 export const userKeys = {

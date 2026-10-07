@@ -1,6 +1,6 @@
 # Deployment
 
-Diese Anleitung beschreibt das Deployment mit Docker Compose. Sie deckt beide Datenbank-Wege ab (mitgelieferte oder externe Datenbank), die Keycloak-
+Diese Anleitung beschreibt das Deployment mit Docker Compose. Sie deckt beide Datenbank-Wege ab (externe oder mitgelieferte Datenbank), die Keycloak-
 Einrichtung, Zertifikate und die häufigsten Stolpersteine bei der ersten Inbetriebnahme.
 
 ## Voraussetzungen
@@ -13,7 +13,7 @@ Auf dem Zielserver:
 
 Außerhalb des Servers:
 
-- Ein Keycloak-Client für Verity mit korrekt eingetragener Redirect-URI (siehe Keycloak-Abschnitt). falls es nicht genutzt kann deaktiviert werden siehe `.env.exemple`
+- Ein Keycloak-Client für Verity mit korrekt eingetragener Redirect-URI (siehe Keycloak-Abschnitt). Ohne Keycloak lässt sich die Anmeldung für Tests mit `AUTH_ENABLED=false` abschalten (siehe `.env.example`), in Produktion nicht empfohlen.
 - Bei externer Datenbank: eine für Verity angelegte Datenbank mit passenden Schema-Rechten (siehe [datenbank.md](datenbank.md)).
 
 Prüfen, ob Docker einsatzbereit ist:
@@ -55,8 +55,8 @@ Die wichtigsten Werte:
 | Variable                                        | Bedeutung                                                                         |
 | ----------------------------------------------- | --------------------------------------------------------------------------------- |
 | DOMAIN                                          | die Domain, unter der Verity erreichbar ist                                       |
-| POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB | Zugangsdaten der mitgelieferten Datenbank (Weg A)                                 |
-| DATABASE_URL                                    | vollständige Verbindungs-URL; Host ist `db` (Weg A) oder der externe Host (Weg B) |
+| DATABASE_URL                                    | vollständige Verbindungs-URL; externer Host (Weg A) oder `db` (Weg B)             |
+| POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB | nur bei Weg B: Zugangsdaten der mitgelieferten Datenbank                          |
 | ENVIRONMENT                                     | `production` setzt das Secure-Cookie                                              |
 | CORS_ORIGINS                                    | erlaubte Origin; im Single-Origin-Betrieb die eigene Domain                       |
 | AUTH_ENABLED                                    | `true` in Produktion (empfohlen)                                                  |
@@ -65,6 +65,8 @@ Die wichtigsten Werte:
 | KEYCLOAK_DISCOVERY_URL                          | die OIDC-Discovery-URL des Realms                                                 |
 | KEYCLOAK_CLIENT_ID / KEYCLOAK_CLIENT_SECRET     | Zugangsdaten des Keycloak-Clients                                                 |
 | INITIAL_ADMIN_USERS                             | Kennungen, die beim ersten Login admin werden                                     |
+| FHIR_REPORT_PUBLISHER                           | Name des Standorts, der in den FHIR-Reports als Herausgeber erscheint             |
+| FHIR_REPORT_NAMING_SYSTEM                       | kanonische Basis-URL der Report-Identifier; einmal festlegen, dann nicht ändern   |
 | EMAIL\_\*                                       | SMTP-Zugang für Benachrichtigungen                                                |
 
 Den Session-Schlüssel mit einem echten Zufallswert setzen:
@@ -75,22 +77,47 @@ openssl rand -hex 32
 
 Zwei Dinge, die zusammenpassen müssen, sonst startet nichts sauber:
 
-- Bei Weg A müssen `POSTGRES_PASSWORD` und das Passwort in `DATABASE_URL` identisch sein, und der Host in `DATABASE_URL` ist `db`.
+- Bei Weg B müssen `POSTGRES_PASSWORD` und das Passwort in `DATABASE_URL` identisch sein, und der Host in `DATABASE_URL` ist `db`.
 - `BACKEND_BASE_URL`, `FRONTEND_BASE_URL` und `CORS_ORIGINS` zeigen alle auf die eigene Domain.
 
-## Weg A: mitgelieferte Datenbank (Standard)
+## Welche Datenbank?
 
-Der `db`-Service in `docker-compose.yml` bleibt aktiv. In der `.env` zeigt die `DATABASE_URL` auf `@db:5432`. Es muss nichts vorbereitet werden — der Container legt Datenbank und Benutzer beim ersten Start an, der Benutzer ist automatisch Eigentümer. Weiter mit dem Abschnitt „Bauen und Starten".
+Verity braucht eine PostgreSQL-Datenbank für seine eigenen Daten (Server, Läufe, invalide Ressourcen, Audit-Log). Welcher Weg passt, hängt davon ab, ob am Standort bereits eine PostgreSQL betrieben wird:
 
-## Weg B: externe Datenbank
+| Situation                                                        | Weg                                |
+| ---------------------------------------------------------------- | ---------------------------------- |
+| Es gibt eine PostgreSQL, die von der IT betreut und gesichert wird | **A — externe Datenbank** (Standard) |
+| Es gibt keine, Verity soll möglichst ohne Vorarbeit laufen         | **B — mitgelieferte Datenbank**      |
 
-Der `db`-Service wird nicht benötigt. In `docker-compose.yml`:
+Die `docker-compose.yml` ist für Weg A vorbereitet; der Datenbank-Container für Weg B steht auskommentiert darin und ist mit „Weg B“ markiert.
 
-- den `db`-Service auskommentiert lassen (oder entfernen),
-- beim `backend`-Service die `depends_on`-Bedingung auf `db` entfernen,
-- das `pgdata`-Volume wird nicht benötigt.
+## Weg A: externe Datenbank (Standard)
 
-In der `.env` zeigt die `DATABASE_URL` auf den externen Host. Zusätzlich muss der Verity-Benutzer Eigentümer des `public`-Schemas dieser Datenbank sein oder CREATE-Rechte haben — andernfalls scheitert die Migration mit `permission denied for schema public`. Die genauen SQL-Befehle stehen in [datenbank.md](datenbank.md). Dann weiter mit „Bauen und Starten".
+So wird Verity in Gießen betrieben. An der `docker-compose.yml` muss nichts geändert werden.
+
+In der `.env` zeigt die `DATABASE_URL` auf den externen Host:
+
+```bash
+DATABASE_URL=postgresql+asyncpg://verity:<passwort>@db-host.example.org:5432/verity
+```
+
+Der Verity-Benutzer muss Eigentümer des Schemas dieser Datenbank sein oder CREATE-Rechte haben — andernfalls scheitert die Migration mit `permission denied for schema public`. Die genauen SQL-Befehle stehen in [datenbank.md](datenbank.md). Backups und Updates der Datenbank laufen dann über die bestehende Infrastruktur. Weiter mit „Bauen und Starten".
+
+## Weg B: mitgelieferte Datenbank
+
+Verity bringt einen eigenen PostgreSQL-Container mit. Es muss nichts vorbereitet werden — der Container legt Datenbank und Benutzer beim ersten Start an, der Benutzer ist automatisch Eigentümer.
+
+1. In der `docker-compose.yml` die drei mit „Weg B“ markierten Blöcke einkommentieren: den `db`-Service, das `depends_on` beim `backend` und das Volume `pgdata`.
+2. In der `.env` die Zugangsdaten setzen und die `DATABASE_URL` auf den Host `db` zeigen lassen:
+
+```bash
+POSTGRES_USER=verity
+POSTGRES_PASSWORD=<zufälliges-passwort>
+POSTGRES_DB=verity
+DATABASE_URL=postgresql+asyncpg://verity:<zufälliges-passwort>@db:5432/verity
+```
+
+Die Daten liegen im Docker-Volume `pgdata` und überleben `docker compose down` und Neustarts. Die Datenbank ist nur im Compose-Netz erreichbar, nicht von außen. Für Backups selbst sorgen, etwa mit `docker compose exec db pg_dump -U verity verity > verity.sql`. Weiter mit „Bauen und Starten".
 
 ## Keycloak einrichten
 
@@ -137,27 +164,24 @@ startup complete". Mit `Strg+C` verlässt man das Log, ohne den Container zu sto
 
 ## Erreichbarkeit testen
 
-Auf dem Server selbst (das `-k` akzeptiert das selbstsignierte Zertifikat von `tls internal`):
+Auf dem Server selbst (`-k` akzeptiert auch ein selbstsigniertes Zertifikat):
 
 ```bash
 curl -k -I https://<DOMAIN>
 ```
 
-Erwartet wird `HTTP/2 200`. Im Browser dann `https://<DOMAIN>` aufrufen — zwingend mit `https://`, falls der Reverse Proxy nur auf 443 läuft. Bei
-`tls internal` zeigt der Browser eine Zertifikatswarnung, die für einen Testserver bestätigt wird. Anschließend den Login testen; ein sauberer Keycloak-Durchlauf endet im Dashboard.
+Erwartet wird `HTTP/2 200`. Im Browser dann `https://<DOMAIN>` aufrufen — zwingend mit `https://`, falls der Reverse Proxy nur auf 443 läuft. Anschließend den Login testen; ein sauberer Keycloak-Durchlauf endet im Dashboard.
 
-## Zertifikate für Produktion
+## Zertifikate
 
-`tls internal` ist für interne Test- und Betriebsumgebungen gedacht und erzeugt eine Browserwarnung. Für den regulären Produktionsbetrieb gibt es zwei saubere Optionen:
+Die mitgelieferte `Caddyfile` erwartet ein vorhandenes Zertifikat unter `/etc/letsencrypt/live/<DOMAIN>/` (`fullchain.pem` und `privkey.pem`). Das Verzeichnis wird read-only in den Caddy-Container eingebunden, `DOMAIN` muss deshalb exakt dem Ordnernamen entsprechen. Je nach Standort passt eine dieser Varianten besser — dafür die `tls`-Zeile in der `Caddyfile` anpassen:
 
-- Ist der Server öffentlich erreichbar, `tls internal` entfernen — Caddy holt
-  dann automatisch ein Let's-Encrypt-Zertifikat (dafür muss Port 80 erreichbar
-  sein).
-- Gibt es ein von der Einrichtung bereitgestelltes Zertifikat, `tls internal`
-  durch `tls /pfad/cert.pem /pfad/key.pem` ersetzen und die Dateien in den
-  Caddy-Container einbinden.
-
-Alternativ lässt sich die Caddy-Root-CA an die Client-Rechner verteilen, dann verschwindet die Warnung auch bei `tls internal`.
+| Variante                                                 | `tls`-Zeile in der Caddyfile                        |
+| -------------------------------------------------------- | --------------------------------------------------- |
+| Zertifikat liegt unter `/etc/letsencrypt` (Standard)     | unverändert lassen                                  |
+| Zertifikat der Einrichtung an anderem Ort                | `tls /pfad/cert.pem /pfad/key.pem` und Pfad in `docker-compose.yml` einbinden |
+| Server öffentlich erreichbar, Caddy soll selbst Let's Encrypt holen | Zeile entfernen, Port 80 zusätzlich freigeben |
+| Interner Testserver ohne Zertifikat                      | `tls internal` (selbstsigniert, Browserwarnung)     |
 
 ## Betrieb
 

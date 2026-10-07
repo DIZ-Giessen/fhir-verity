@@ -25,8 +25,10 @@ Es gibt zwei Betriebsarten. Für einen produktiven Standort ist Docker der Weg, 
 
 ### Mit Docker (empfohlen)
 
-Voraussetzung: Docker Engine und das Compose-Plugin. Standardmäßig bringt der Stack seine eigene PostgreSQL mit — es muss also keine Datenbank vorab
-angelegt werden.
+Voraussetzung: Docker Engine und das Compose-Plugin. Für die Datenbank gibt es zwei Wege:
+
+- **Externe PostgreSQL (Standard):** Es gibt am Standort bereits eine PostgreSQL. In der `.env` wird nur die `DATABASE_URL` auf diesen Host gesetzt.
+- **Mitgelieferte PostgreSQL:** Es gibt keine. Dann in der `docker-compose.yml` die mit „Weg B“ markierten Blöcke einkommentieren — Verity bringt seinen eigenen Datenbank-Container mit, es muss nichts vorab angelegt werden.
 
 ```bash
 git clone <repo-url> fhir-verity
@@ -38,11 +40,11 @@ docker compose logs -f backend
 
 ```
 
-Die vollständige Anleitung inklusive Keycloak-Einrichtung, Zertifikaten und dem Weg mit einer bereits vorhandenen Datenbank steht in [documentation/deployment.md](documentation/deployment.md).
+Die vollständige Anleitung inklusive Keycloak-Einrichtung, Zertifikaten und beiden Datenbank-Wegen steht in [documentation/deployment.md](documentation/deployment.md).
 
 ### Lokal ohne Docker
 
-Voraussetzung: Python 3.12+, Node 22+, pnpm(oder Ihre beliebige Packetmanagement), eine lokale PostgreSQL.
+Voraussetzung: Python 3.12+, Node 22+, pnpm (oder ein anderer Paketmanager), eine PostgreSQL.
 
 1. Backend:
 
@@ -60,7 +62,7 @@ uvicorn app.main:app --reload
 
 ```bash
 cd frontend
-pnpm install # Sie können also auch npm, bun oder yan nutzen.
+pnpm install # npm, bun oder yarn funktionieren ebenso
 cp .env.example .env
 pnpm dev
 ```
@@ -79,8 +81,6 @@ Die ausführliche Dokumentation liegt im Ordner `documentation/`:
 - [schema.md](documentation/schema.md) — Tabellen, Spalten, Beziehungen
 - [rollenverwaltung.md](documentation/rollenverwaltung.md) — RBAC, Server-Ownership, Audit
 - [deployment.md](documentation/deployment.md) — Vollständige Deployment-Anleitung
-- [weiterentwicklung.md](documentation/weiterentwicklung.md) — Änderungen, neue Pakete, neue Migrationen
-- [troubleshooting.md](documentation/troubleshooting.md) — Bekannte Fehler und ihre Ursachen
 
 ## Screenshots
 
@@ -111,9 +111,9 @@ Die ausführliche Dokumentation liegt im Ordner `documentation/`:
 ![Detail Run Page](/documentation/images/runId2.png)
 ![Detail Run Page](/documentation/images/runId3.png)
 
-### Invalid Ressource Page
+### Invalid Resource Page
 
-![Invalid Ressource Page](/documentation/images/invR.png)
+![Invalid Resource Page](/documentation/images/invR.png)
 ![Detail Run Page](/documentation/images/invR4.png)
 
 ### Cleanup Page
@@ -124,6 +124,6 @@ Die ausführliche Dokumentation liegt im Ordner `documentation/`:
 
 ![Audit Page](/documentation/images/audit.png)
 
-### Users Managment Page
+### User Management Page
 
-![Audit Page](/documentation/images/users.png)
+![User Management Page](/documentation/images/users.png)

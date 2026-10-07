@@ -1,11 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { toPng } from "html-to-image"
-import { useRef } from "react"
+import { useMemo, useRef, useState } from "react"
 import { AlertTriangle, ArrowRight, ChevronLeft, WifiOff } from "lucide-react"
-import { useMemo, useState } from "react"
 import { PolarAngleAxis, RadialBar, RadialBarChart } from "recharts"
 
+import {
+  ArrowRightUp,
+  CourseUp,
+  DangerTriangle,
+  Export,
+  PieChart2,
+  RestartCircle,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
+import { toast } from "sonner"
+import { FhirResourcesPopover } from "./index"
+import type { PerResourceStats } from "@/api/queries"
+import type { ChartConfig } from "@/components/ui/chart"
 import { BarChart } from "@/components/charts/bar-chart"
 import { Bar } from "@/components/charts/bar"
 import { BarXAxis } from "@/components/charts/bar-x-axis"
@@ -14,7 +25,6 @@ import { ChartTooltip } from "@/components/charts/tooltip"
 
 import {
   cancelValidation,
-  type PerResourceStats,
   resumeValidation,
   runQueryOptions,
   runSummaryQueryOptions,
@@ -30,7 +40,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { ChartContainer, type ChartConfig } from "@/components/ui/chart"
+import { ChartContainer } from "@/components/ui/chart"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SortableTableHead, nextSort } from "@/components/sortable-table-head"
 import {
@@ -41,25 +51,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-import { FhirResourcesPopover } from "./index"
 import {
+  RUN_STATUS_STYLES,
   dateFormatter,
   formatDuration,
-  RUN_STATUS_STYLES,
 } from "@/lib/functions/runs"
-import type { TestReportSummary } from "@/lib/interface"
 import { isServerUnresponsiveError } from "@/lib/run-errors"
 import { SEVERITY_ORDER, SEVERITY_STYLES } from "@/lib/severity"
-import {
-  ArrowRightUp,
-  CourseUp,
-  DangerTriangle,
-  Export,
-  PieChart2,
-  RestartCircle,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
 import { cn } from "@/lib/utils"
-import { toast } from "sonner"
+
+import { apiErrorMessage } from "@/lib/api-client"
 import { ValueYAxis } from "@/components/charts/value-y-axis"
 import { TextDots } from "@/components/text-dots"
 import { Dots } from "@/components/dots"
@@ -104,25 +105,29 @@ function RunDetailPage() {
   const resumeMutation = useMutation({
     mutationFn: () => resumeValidation(runId),
     onSuccess: () => {
-      toast.success("Run wird fortgesetzt…")
+      toast.success("Resuming run…")
       queryClient.invalidateQueries({
         queryKey: runQueryOptions(runId).queryKey,
       })
     },
     onError: (e) =>
-      toast.error("Fortsetzen fehlgeschlagen", { description: String(e) }),
+      toast.error("Could not resume run", {
+        description: apiErrorMessage(e),
+      }),
   })
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelValidation(runId),
     onSuccess: () => {
-      toast.success("Stopp angefordert…")
+      toast.success("Stop requested…")
       queryClient.invalidateQueries({
         queryKey: runQueryOptions(runId).queryKey,
       })
     },
     onError: (e) =>
-      toast.error("Stoppen fehlgeschlagen", { description: String(e) }),
+      toast.error("Could not stop run", {
+        description: apiErrorMessage(e),
+      }),
   })
   const run = runQ.data
   const serverQ = useQuery({
@@ -136,12 +141,12 @@ function RunDetailPage() {
   }>({ key: "count", dir: "desc" })
 
   const ruleRows = useMemo(() => {
-    const rows: {
+    const rows: Array<{
       resourceType: string
       rule: string
       severity: string
       count: number
-    }[] = []
+    }> = []
     for (const rt of summaryQ.data?.by_resource_type ?? []) {
       for (const r of rt.by_rule) {
         rows.push({
@@ -183,9 +188,9 @@ function RunDetailPage() {
       link.download = `run-${run?.id ?? "chart"}.png`
       link.href = dataUrl
       link.click()
-      toast.success("Chart als PNG exportiert")
+      toast.success("Chart exported as PNG")
     } catch (e) {
-      toast.error("Export fehlgeschlagen", { description: String(e) })
+      toast.error("Export failed", { description: String(e) })
     }
   }
 
@@ -253,8 +258,8 @@ function RunDetailPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">
-                      This run is still running. page will automatically refresh
-                      every few seconds.
+                      This run is still in progress. The page refreshes
+                      automatically every few seconds.
                     </p>
                   </div>
                 </div>
@@ -266,9 +271,9 @@ function RunDetailPage() {
                     disabled={cancelMutation.isPending || run.cancel_requested}
                   >
                     {run.cancel_requested ? (
-                      <TextDots>Wird gestoppt</TextDots>
+                      <TextDots>Stopping</TextDots>
                     ) : (
-                      "Stoppen"
+                      "Stop"
                     )}
                   </Button>
                   <Button
@@ -320,7 +325,7 @@ function RunDetailPage() {
               </div>
               <FhirResourcesPopover
                 baseUrl={serverQ.data?.base_url}
-                report={(run.test_report ?? null) as TestReportSummary | null}
+                report={run.test_report ?? null}
               />
             </CardHeader>
 

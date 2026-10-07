@@ -27,6 +27,7 @@ class FhirServerRead(BaseModel):
     base_url: str
     project_id: str | None = None
     is_active: bool
+    write_fhir_reports: bool = True
     has_auth_config: bool = False
     auth_type: Literal["none", "basic", "oauth2_client_credentials"] = "none"
     owner_id: Optional[UUID] = None
@@ -53,6 +54,13 @@ class FhirServerUpdate(BaseModel):
     project_id: str | None = Field(default=None, min_length=1, max_length=64)
     auth_config: dict[str, Any] | None = None
     is_active: bool | None = None
+    write_fhir_reports: bool | None = Field(
+        default=None,
+        description=(
+            "Post TestScript, TestReport and VerificationResult resources to "
+            "this FHIR server after each completed run."
+        ),
+    )
 
     model_config = ConfigDict(extra="forbid")
 

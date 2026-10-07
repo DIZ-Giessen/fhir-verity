@@ -62,11 +62,13 @@ Nach Abschluss erzeugt Verity Report-Ressourcen im FHIR-Format (`VerificationRes
 geprüften Server zurück. Die Qualitätsbewertung wird dadurch selbst Teil des FHIR-Bestands und ist von anderen Systemen weiterverwendbar, statt nur in
 Veritys eigener Datenbank zu liegen.
 
+Das Zurückschreiben lässt sich pro Server in der Validierungskonfiguration abschalten („Write FHIR reports to the server“), etwa für schreibgeschützte oder produktive Server, auf denen Verity keine Ressourcen anlegen darf. Die Reports werden dann trotzdem berechnet; Score und Ergebnis jedes Laufs bleiben in Verity sichtbar. Herausgeber und kanonische URL der Reports kommen aus `FHIR_REPORT_PUBLISHER` und `FHIR_REPORT_NAMING_SYSTEM` in der `.env`, damit jeder Standort unter eigenem Namen veröffentlicht.
+
 ## Bereinigungs-Workflow
 
 Für die invaliden Ressourcen gibt es einen Bereinigungs-Workflow mit Sammelaktionen (Löschen oder Korrigieren mehrerer Ressourcen). Vor der
-Ausführung gibt es einen Probelauf-Modus (dry run), der zeigt, was passieren würde, ohne etwas zu verändern. Jede tatsächlich ausgeführte Aktion wird mit
-dem exakten FHIR-Befehl, dem Zustand vor der Änderung und dem Ergebnis protokolliert (siehe Audit in [rollenverwaltung.md](rollenverwaltung.md)).
+Ausführung gibt es einen Probelauf-Modus (dry run), der zeigt, was passieren würde, ohne etwas zu verändern. Einzelaktionen werden mit
+dem exakten FHIR-Befehl, dem Zustand vor der Änderung und dem Ergebnis protokolliert. Eine Sammelaktion erzeugt genau einen Audit-Eintrag mit Filter, allen geänderten Ressourcen und den Fehlern, damit das Log auch bei zehntausenden Ressourcen übersichtlich bleibt (siehe Audit in [rollenverwaltung.md](rollenverwaltung.md)).
 Destruktive Aktionen laufen nie unbemerkt, sondern immer nachvollziehbar und protokolliert.
 
 ## Oberfläche

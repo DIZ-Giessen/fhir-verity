@@ -145,7 +145,13 @@ export interface paths {
         post?: never;
         /**
          * Delete FHIR server
-         * @description Delete FHIR Server
+         * @description Delete a FHIR server together with everything Verity stored for it:
+         *     validation runs, invalid resources (and their issues), server-specific
+         *     configs and audit log entries. All of it cascades in the database.
+         *     The FHIR server itself is not touched.
+         *
+         *     Refused with 409 while a run is in progress, since the background task
+         *     would keep writing rows for a server that no longer exists.
          */
         delete: operations["delete_fhir_server_api_v1_servers__server_id__delete"];
         options?: never;
@@ -275,7 +281,7 @@ export interface paths {
         };
         /**
          * List Validation Runs
-         * @description Pagined list of validation runs. Supports filterig by status, server amd time range. Sorted by started_at DESC
+         * @description Paginated list of validation runs. Supports filtering by status, server and time range. Sorted by started_at DESC
          */
         get: operations["list_validation_runs_api_v1_validation_runs_get"];
         put?: never;
@@ -338,6 +344,10 @@ export interface paths {
         /**
          * List Invalid Resources
          * @description Paginated invalid resources for a given run. Rule/severity filters use the normalized invalid_resource_issues table via EXISTS, so pagination and counts run entirely in SQL.
+         *
+         *     sort_by: resource_type | resource_id | severity | issues | detected (default).
+         *     severity sorts by each resource's most severe issue (error < warning < info);
+         *     issues sorts by issue count.
          */
         get: operations["list_invalid_resources_api_v1_validation_runs__run_id__invalid_resources_get"];
         put?: never;
@@ -525,9 +535,9 @@ export interface paths {
          *     were previously detected as invalid can be deleted via this endpoint.
          *
          *     With dry_run=true: returns match count without doing anything.
-         *     Otherwise: deletes each matched resource on the FHIR server in parallel
-         *     (max 20 concurrent), removes successful entries from invalid_resources,
-         *     and writes one audit log entry per attempt.
+         *     Otherwise: deletes each matched resource on the FHIR server
+         *     (BULK_CONCURRENCY in parallel, ETag-guarded), removes successful entries
+         *     from invalid_resources and writes a single BULK_DELETE audit entry.
          */
         post: operations["bulk_delete_resources_api_v1_resources_bulk_delete_post"];
         delete?: never;
@@ -550,8 +560,8 @@ export interface paths {
          * @description Bulk-PATCH invalid resources matching (server_id, resource_type, rule).
          *
          *     Requires a pre-defined patch template for the (resource_type, rule) combo.
-         *     Returns 400 if no template exists — in that case use bulk-delete instead,
-         *     or wait for the LLM assistant (Block 3) to generate context-aware fixes.
+         *     Returns 400 if no template exists — in that case use bulk-delete instead.
+         *     Writes a single BULK_PATCH audit entry for the whole operation.
          */
         post: operations["bulk_fix_resources_api_v1_resources_bulk_fix_post"];
         delete?: never;
@@ -571,13 +581,20 @@ export interface paths {
         put?: never;
         /**
          * Purge Invalid Resources
-         * @description Delete invalid_resources rows from Verity's own database only.
+         * @description Delete invalid_resources rows from Verity's own database only — set-based,
+         *     no per-row round trip through Python.
          *
          *     Never calls the FHIR server — the underlying resources are left exactly
          *     as they are. Meant for admins to clear out rows that piled up before
          *     validation runs started sweeping stale entries automatically, or that
          *     are simply no longer worth tracking (e.g. everything not reconfirmed
          *     invalid in months).
+         *
+         *     Writes a single audit_logs row summarizing the operation (filter used +
+         *     count), not one row per deleted resource: at 100k+ rows, one audit entry
+         *     per resource just relocates the bloat instead of removing it, and this
+         *     is a DB-only bookkeeping cleanup, not a FHIR-side mutation that needs a
+         *     forensic trail per resource the way DELETE/PATCH do.
          *
          *     With dry_run=true: returns the match count without deleting anything.
          */
@@ -952,15 +969,9 @@ export interface components {
             rule?: string | null;
             /** Severity */
             severity?: string | null;
-            /**
-             * Last Seen Before
-             * Format: date-time
-             */
+            /** Last Seen Before */
             last_seen_before?: string | null;
-            /**
-             * Last Seen After
-             * Format: date-time
-             */
+            /** Last Seen After */
             last_seen_after?: string | null;
             /**
              * Dry Run
@@ -1030,6 +1041,11 @@ export interface components {
             /** Is Active */
             is_active: boolean;
             /**
+             * Write Fhir Reports
+             * @default true
+             */
+            write_fhir_reports: boolean;
+            /**
              * Has Auth Config
              * @default false
              */
@@ -1070,6 +1086,11 @@ export interface components {
             } | null;
             /** Is Active */
             is_active?: boolean | null;
+            /**
+             * Write Fhir Reports
+             * @description Post TestScript, TestReport and VerificationResult resources to this FHIR server after each completed run.
+             */
+            write_fhir_reports?: boolean | null;
         };
         /**
          * FiltersUpdate
@@ -2203,10 +2224,12 @@ export interface operations {
             query?: {
                 skip?: number;
                 limit?: number;
-                resource_type?: string | null;
+                resource_types?: string[] | null;
                 rule?: string | null;
                 severity?: string | null;
                 only_current_run?: boolean;
+                sort_by?: string | null;
+                sort_dir?: string;
             };
             header?: never;
             path: {

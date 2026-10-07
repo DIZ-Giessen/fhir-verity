@@ -1,7 +1,7 @@
 """Endpoints to start and manage validation runs."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -143,19 +143,19 @@ async def start_validation(
         server_id=request.server_id,
         resource_types=request.resource_types,
         status=ValidationStatus.RUNNING,
-        started_at=datetime.now(),
+        started_at=datetime.now(timezone.utc),
         triggered_by_id=user.id,
     )
 
     db.add(new_run)
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=409,
             detail="A validation run is already in progress for this server",
-        )
+        ) from exc
     await db.refresh(new_run)
 
     # start background task
@@ -167,6 +167,7 @@ async def start_validation(
         server.auth_config or {},
         server.id,
         server.name,
+        server.write_fhir_reports,
     )
 
     return new_run
@@ -209,12 +210,12 @@ async def resume_validation(
     run.cancel_requested = False
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=409,
             detail="A validation run is already in progress for this server",
-        )
+        ) from exc
     await db.refresh(run)
 
     background_tasks.add_task(
@@ -225,6 +226,7 @@ async def resume_validation(
         server.auth_config or {},
         server.id,
         server.name,
+        server.write_fhir_reports,
     )
     return run
 
@@ -286,6 +288,7 @@ async def run_validation_task(
     auth_config: dict,
     server_id: UUID,
     server_name: str,
+    write_fhir_reports: bool = True,
 ):
     """Asynchronous Background task"""
 
@@ -366,7 +369,7 @@ async def run_validation_task(
             if was_cancelled:
                 if run:
                     run.status = ValidationStatus.CANCELLED
-                    run.finished_at = datetime.now()
+                    run.finished_at = datetime.now(timezone.utc)
                     await db.commit()
                     await db.refresh(run)
                 await broadcast_progress(
@@ -385,17 +388,19 @@ async def run_validation_task(
 
             if run:
                 run.status = ValidationStatus.COMPLETED
-                run.finished_at = datetime.now()
+                run.finished_at = datetime.now(timezone.utc)
                 await db.commit()
                 await db.refresh(run)
 
-                # FHIR Reports generieren und posten
+                # Reports are always built and kept in Verity; posting them to
+                # the FHIR server is a per-server opt-out.
                 await generate_and_post_reports(
                     run=run,
                     server_base_url=base_url,
                     server_id=str(server_id),
                     auth_config=auth_config,
                     db=db,
+                    post_to_server=write_fhir_reports,
                 )
 
             await broadcast_progress(
@@ -414,7 +419,7 @@ async def run_validation_task(
 
         except Exception as e:
 
-            logger.error("Validation task %s failde: %s", run_id, e)
+            logger.exception("Validation task %s failed: %s", run_id, e)
 
             try:
                 await db.rollback()
@@ -433,7 +438,7 @@ async def run_validation_task(
             await broadcast_progress(
                 str(run_id),
                 {
-                    "type": "failled",
+                    "type": "failed",
                     "run_id": str(run_id),
                     "status": "failed",
                     "error": str(e),
@@ -455,7 +460,7 @@ async def list_validation_runs(
     user: User = Depends(get_current_user),
 ):
     """
-    Pagined list of validation runs. Supports filterig by status, server amd time range. Sorted by started_at DESC
+    Paginated list of validation runs. Supports filtering by status, server and time range. Sorted by started_at DESC
     """
     filters = []
     if status:

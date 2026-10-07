@@ -1,8 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import {
-  type ColumnDef,
-  type SortingState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -21,8 +19,12 @@ import {
   Trash2,
 } from "lucide-react"
 import { useState } from "react"
+import { toast } from "sonner"
+import { ServerAuthDialog } from "./server-auth-dialog"
+import type { ColumnDef, SortingState } from "@tanstack/react-table"
 
-import { type FhirServer, deleteServer, serverKeys } from "@/api/queries"
+import type { FhirServer } from "@/api/queries"
+import { deleteServer, serverKeys } from "@/api/queries"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,8 +62,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
-import { ServerAuthDialog } from "./server-auth-dialog"
-import { toast } from "sonner"
+import { apiErrorMessage } from "@/lib/api-client"
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
@@ -72,7 +73,7 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
 })
 
 interface ServersTableProps {
-  data: FhirServer[]
+  data: Array<FhirServer>
   onEdit: (server: FhirServer) => void
 }
 
@@ -89,12 +90,21 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
     mutationFn: (id: string) => deleteServer(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: serverKeys.all })
+      queryClient.invalidateQueries({ queryKey: ["validation"] })
+      queryClient.invalidateQueries({ queryKey: ["audit-log"] })
       setDeleteTarget(null)
-      toast.success("Server deleted successfully")
+      toast.success("Server deleted", {
+        description: "All runs, findings and audit entries were removed.",
+      })
+    },
+    onError: (err) => {
+      toast.error("Could not delete server", {
+        description: apiErrorMessage(err),
+      })
     },
   })
 
-  const columns: ColumnDef<FhirServer>[] = [
+  const columns: Array<ColumnDef<FhirServer>> = [
     {
       id: "select",
       header: ({ table }) => (
@@ -391,8 +401,10 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
               <span className="font-medium text-foreground">
                 {deleteTarget?.name}
               </span>{" "}
-              will be removed. Validation runs and results for this server are
-              kept but no further runs can be started against it.
+              will be removed from Verity together with all of its validation
+              runs, invalid resources, configuration overrides and audit log
+              entries. The FHIR server itself and its data are not touched. This
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

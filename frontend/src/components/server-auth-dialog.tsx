@@ -4,9 +4,9 @@ import { useEffect } from "react"
 import { Controller, useForm } from "react-hook-form"
 import { z } from "zod"
 
+import { Field, FieldDescription, FieldError, FieldLabel } from "./ui/field"
+import type { FhirServer, ServerAuthUpdate } from "@/api/queries"
 import {
-  type FhirServer,
-  type ServerAuthUpdate,
   serverAuthQueryOptions,
   serverKeys,
   updateServerAuth,
@@ -29,7 +29,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ApiError } from "@/lib/api-client"
-import { Field, FieldDescription, FieldError, FieldLabel } from "./ui/field"
 
 const schema = z
   .object({
@@ -143,7 +142,7 @@ export function ServerAuthDialog({
       ? typeof mutation.error.body === "object" &&
         mutation.error.body !== null &&
         "detail" in mutation.error.body
-        ? String((mutation.error.body as { detail: unknown }).detail)
+        ? String(mutation.error.body.detail)
         : mutation.error.message
       : mutation.error?.message
 

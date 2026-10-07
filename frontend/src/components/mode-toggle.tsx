@@ -1,3 +1,7 @@
+import {
+  MoonStars,
+  Sun2,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -6,10 +10,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useTheme } from "@/components/theme-provider"
-import {
-  MoonStars,
-  Sun2,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
 
 export function ModeToggle() {
   const { setTheme } = useTheme()

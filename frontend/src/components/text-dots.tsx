@@ -1,8 +1,8 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
 
 type TextDotsProps = React.ComponentProps<"span"> & {
-  dots?: number;
-};
+  dots?: number
+}
 
 function TextDots({
   className,
@@ -11,7 +11,7 @@ function TextDots({
   style,
   ...props
 }: TextDotsProps) {
-  const dotCount = Number.isFinite(dots) ? Math.max(1, Math.floor(dots)) : 3;
+  const dotCount = Number.isFinite(dots) ? Math.max(1, Math.floor(dots)) : 3
 
   return (
     <>
@@ -50,7 +50,7 @@ function TextDots({
         </span>
       </span>
     </>
-  );
+  )
 }
 
-export { TextDots };
+export { TextDots }

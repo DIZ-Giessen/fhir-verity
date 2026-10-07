@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     """Settings default value"""
 
     PROJECT_NAME: str = "FHIR Verity"
-    PROJECT_DESCRIPTION: str = "Intelligentes FHIR-Datenqualitäts-tool"
+    PROJECT_DESCRIPTION: str = "Server-wide data quality validation for FHIR servers"
     PROJECT_VERSION: str = "1.0.0"
     DATABASE_URL: str
     ENVIRONMENT: str = "development"
@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     EMAIL_VERIFY_CERT: bool = True  # False nur für interne Server mit self-signed cert
 
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    # --- FHIR reports (TestScript / TestReport / VerificationResult) ---
+    # Name shown as publisher/tester/validator in every report.
+    FHIR_REPORT_PUBLISHER: str = "FHIR Verity"
+    # Canonical base for report identifiers and extension URLs. Keep it stable
+    # once reports exist, otherwise old and new reports use different systems.
+    # Empty = derived from BACKEND_BASE_URL.
+    FHIR_REPORT_NAMING_SYSTEM: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:

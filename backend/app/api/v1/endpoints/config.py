@@ -1,6 +1,6 @@
 """Endpoints to read and update validation rule configuration."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,7 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import server_access
 from app.models.fhir_server import FhirServer
+from app.models.user import UserRole
 from app.models.validation_config import ValidationConfig
 from app.schemas.config import (
     ConfigUpdate,
@@ -53,12 +55,9 @@ async def _load_effective_config(
     return base, False, {}
 
 
-async def _ensure_server_exists(server_id: UUID, db: AsyncSession) -> FhirServer:
-    stmt = select(FhirServer).where(FhirServer.id == server_id)
-    server = (await db.execute(stmt)).scalar_one_or_none()
-    if not server:
-        raise HTTPException(status_code=404, detail="FHIR server not found")
-    return server
+# Role check (editor, enforced on the router) plus ownership: non-admins only
+# reach configs of their own servers, foreign ones answer 404.
+editor_server_access = server_access(UserRole.editor.value)
 
 
 # ---------------------------------------------------------------------------
@@ -99,12 +98,12 @@ async def get_server_config(
     server_id: UUID,
     resource_type: str,
     db: AsyncSession = Depends(get_db),
+    _server: FhirServer = Depends(editor_server_access),
 ):
     """Effective configuration: defaults merged with server-specific overrides."""
     if resource_type not in SUPPORTED_RESOURCE_TYPES:
         raise HTTPException(status_code=404, detail="Unsupported resource type")
 
-    await _ensure_server_exists(server_id, db)
     rules, is_specific, filters = await _load_effective_config(
         server_id, resource_type, db
     )
@@ -129,12 +128,12 @@ async def replace_server_config(
     resource_type: str,
     payload: ConfigUpdate,
     db: AsyncSession = Depends(get_db),
+    _server: FhirServer = Depends(editor_server_access),
 ):
     """Replace the complete server-specific override."""
     if resource_type not in SUPPORTED_RESOURCE_TYPES:
         raise HTTPException(status_code=404, detail="Unsupported resource type")
 
-    await _ensure_server_exists(server_id, db)
 
     rules_dict = {k: v.model_dump() for k, v in payload.rules.items()}
 
@@ -144,7 +143,7 @@ async def replace_server_config(
     )
     existing = (await db.execute(stmt)).scalar_one_or_none()
 
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     if existing:
         existing.rules = rules_dict
         existing.updated_at = now
@@ -185,6 +184,7 @@ async def patch_rule(
     rule_key: str,
     payload: RuleUpdate,
     db: AsyncSession = Depends(get_db),
+    _server: FhirServer = Depends(editor_server_access),
 ):
     """
     Update a single rule (enabled / severity / pattern).
@@ -201,7 +201,6 @@ async def patch_rule(
             detail=f"Rule '{rule_key}' is not defined for {resource_type}",
         )
 
-    await _ensure_server_exists(server_id, db)
 
     stmt = select(ValidationConfig).where(
         ValidationConfig.server_id == server_id,
@@ -210,7 +209,7 @@ async def patch_rule(
     existing = (await db.execute(stmt)).scalar_one_or_none()
 
     updates = payload.model_dump(exclude_unset=True)
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
 
     if existing:
         rules = dict(existing.rules)
@@ -252,6 +251,7 @@ async def delete_server_config(
     server_id: UUID,
     resource_type: str,
     db: AsyncSession = Depends(get_db),
+    _server: FhirServer = Depends(editor_server_access),
 ):
     """Remove server override entirely, falling back to global defaults."""
     stmt = select(ValidationConfig).where(
@@ -286,6 +286,7 @@ async def update_server_filters(
     resource_type: str,
     payload: FiltersUpdate,
     db: AsyncSession = Depends(get_db),
+    _server: FhirServer = Depends(editor_server_access),
 ):
     """
     Set the FHIR search filters for a resource type on a server.
@@ -295,7 +296,6 @@ async def update_server_filters(
     if resource_type not in SUPPORTED_RESOURCE_TYPES:
         raise HTTPException(status_code=404, detail="Unsupported resource type")
 
-    await _ensure_server_exists(server_id, db)
 
     # Validate + clean (drops empties/unknowns, checks date format & range)
     try:
@@ -309,7 +309,7 @@ async def update_server_filters(
     )
     existing = (await db.execute(stmt)).scalar_one_or_none()
 
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     if existing:
         existing.filters = cleaned  # full replace (new dict -> mutation detected)
         existing.updated_at = now

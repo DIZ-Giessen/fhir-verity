@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 
+import type { AuthUser, Role } from "@/api/queries"
 import {
-  type AuthUser,
-  type Role,
   meQueryOptions,
   updateUserRole,
   userKeys,
@@ -32,7 +31,7 @@ export const Route = createFileRoute("/users/")({
   component: UsersPage,
 })
 
-const ROLES: Role[] = ["viewer", "editor", "admin"]
+const ROLES: Array<Role> = ["viewer", "editor", "admin"]
 
 function UsersPage() {
   const { data: me } = useQuery(meQueryOptions())

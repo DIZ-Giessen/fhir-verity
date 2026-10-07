@@ -4,21 +4,20 @@ import { ChevronDown, LogOut, Play } from "lucide-react"
 import { useState } from "react"
 
 import {
-  NotificationLinesRemove,
-  ClipboardList,
-  UsersGroupRounded,
   Broom,
+  ClipboardList,
   ServerPath,
+  UsersGroupRounded,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
+import type { NotificationLinesRemove } from "@solar-icons/react-perf/category/style/LineDuotone"
 
+import type { AuthUser, Role } from "@/api/queries"
 import {
   authKeys,
   hasRole,
   logout,
   meQueryOptions,
   updateMyPreferences,
-  type AuthUser,
-  type Role,
 } from "@/api/queries"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -41,7 +40,7 @@ type ManagementItem = {
   minRole: Role
 }
 
-const managementItems: ManagementItem[] = [
+const managementItems: Array<ManagementItem> = [
   {
     to: "/cleanup",
     label: "Cleanup Page",

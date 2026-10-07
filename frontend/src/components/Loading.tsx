@@ -1,7 +1,7 @@
-import { AnimatedLoadingText, useLoadingText } from "@/lib/interface/loading"
 import { TextDots } from "./text-dots"
+import { AnimatedLoadingText, useLoadingText } from "@/lib/interface/loading"
 
-export function Loading({ texts }: { texts: string[] }) {
+export function Loading({ texts }: { texts: Array<string> }) {
   const loadingText = useLoadingText(texts)
   return (
     <div>

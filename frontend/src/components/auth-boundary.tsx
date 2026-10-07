@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query"
 import { Navigate, useLocation } from "@tanstack/react-router"
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useState } from "react"
+import { Loading } from "./Loading"
+import type { ReactNode } from "react"
 
 import { SiteHeader } from "@/components/site-header"
 import { meQueryOptions } from "@/api/queries"
-import { Loading } from "./Loading"
 import { LoadingUserMessage, LodatingText } from "@/lib/interface/loading"
 
 const PUBLIC_PATHS = ["/login"]

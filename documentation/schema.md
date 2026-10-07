@@ -31,6 +31,7 @@ Die in Verity registrierten FHIR-Server.
 | project_id              | String    | Projekt-/Mandantenkennung                                  |
 | auth_config             | JSON      | optionale Authentifizierung gegenüber dem FHIR-Server      |
 | is_active               | Boolean   |                                                            |
+| write_fhir_reports      | Boolean   | Reports nach jedem Lauf auf den Server schreiben (Standard: ja) |
 | owner_id                | UUID      | Verweis auf users, bei Löschung des Users auf NULL gesetzt |
 | created_at / updated_at | Timestamp |                                                            |
 
@@ -58,7 +59,7 @@ Ein einzelner Validierungslauf.
 | Spalte                   | Typ       | Bemerkung                                   |
 | ------------------------ | --------- | ------------------------------------------- |
 | id                       | UUID      | Primärschlüssel                             |
-| server_id                | UUID      | Verweis auf fhir_servers                    |
+| server_id                | UUID      | Verweis auf fhir_servers (ON DELETE CASCADE) |
 | resource_types           | JSON      | geprüfte Ressourcentypen                    |
 | total_processed          | Integer   | Anzahl geprüfter Ressourcen                 |
 | total_invalid            | Integer   | Anzahl invalider Ressourcen                 |
@@ -114,7 +115,7 @@ Protokoll aller ausgeführten Bereinigungsaktionen.
 | resource_id             | String    |                                              |
 | triggering_run_id       | UUID      | optional auslösender Lauf                    |
 | invalid_resource_id     | UUID      | optional zugehöriger Invalid-Eintrag         |
-| action                  | Enum      | DELETE oder PATCH                            |
+| action                  | Enum      | DELETE, PATCH, BULK_DELETE, BULK_PATCH, PURGE |
 | fhir_request_payload    | JSON      | der tatsächlich gesendete FHIR-Befehl        |
 | fhir_response_status    | String    | Antwortstatus des FHIR-Servers               |
 | resource_before         | JSON      | Zustand vor der Änderung                     |
@@ -125,8 +126,12 @@ Protokoll aller ausgeführten Bereinigungsaktionen.
 | executed_at             | Timestamp | Ausführungszeitpunkt                         |
 | created_at / updated_at | Timestamp |                                              |
 
-Das Audit-Log ist bewusst umfangreich: Für jede destruktive Aktion werden der gesendete Befehl, der Zustand davor, das Ergebnis, die Begründung und der
+Das Audit-Log ist bewusst umfangreich: Für jede Einzelaktion (DELETE, PATCH) werden der gesendete Befehl, der Zustand davor, das Ergebnis, die Begründung und der
 ausführende Benutzer festgehalten. Damit ist jede Änderung am FHIR-Bestand nachvollziehbar.
+
+Sammelaktionen (BULK_DELETE, BULK_PATCH) und die DB-Bereinigung (PURGE) schreiben dagegen genau **einen** Eintrag pro Vorgang, egal ob 10 oder 50.000 Ressourcen betroffen sind. In `fhir_request_payload` stehen dann der verwendete Filter, die Anzahl der Treffer, Erfolge und Fehler, die Liste aller geänderten Ressourcen (`Typ/id`) sowie die Fehlschläge gruppiert nach Fehlermeldung. `resource_before` bleibt bei Sammelaktionen leer; die vorherigen Versionen hält der FHIR-Server selbst in seiner Versionshistorie (`GET [Typ]/[id]/_history`).
+
+Wird ein Server gelöscht, entfernt die Datenbank per ON DELETE CASCADE alle zugehörigen Läufe, invaliden Ressourcen, Konfigurationen und Audit-Einträge.
 
 ## Beziehungen auf einen Blick
 

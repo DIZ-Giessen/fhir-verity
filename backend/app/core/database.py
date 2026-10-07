@@ -3,9 +3,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from app.core.config import get_settings
 
-# pyright: ignore[reportUnusedImport]
-from app.models.base import Base  # pyright: ignore[reportUnusedImport]
-
 settings = get_settings()
 
 engine = create_async_engine(
@@ -27,7 +24,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 # Dependency für FastAPI
 async def get_db() -> AsyncSession:
-    """Function to get and close the databe"""
+    """Yield a session per request and close it afterwards."""
     async with AsyncSessionLocal() as session:
         try:
             yield session

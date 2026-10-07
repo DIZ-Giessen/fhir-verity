@@ -87,8 +87,6 @@ export function ThemeProvider({
 }
 
 export function useTheme() {
-  const context = useContext(ThemeProviderContext)
-  if (context === undefined)
-    throw new Error("useTheme must be used within a ThemeProvider")
-  return context
+  // The context has a default value, so this also works outside a provider
+  return useContext(ThemeProviderContext)
 }

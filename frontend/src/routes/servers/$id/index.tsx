@@ -12,8 +12,17 @@ import {
 import { useState } from "react"
 
 import {
-  type ResourceCount,
-  type ValidationRunListItem,
+  DangerCircle,
+  DangerTriangle,
+  ExpressionlessSquare,
+  Refresh,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
+import type {
+  ResourceCount,
+  ServerMetadata,
+  ValidationRunListItem,
+} from "@/api/queries"
+import {
   runSummaryQueryOptions,
   serverMetadataQueryOptions,
   serverQueryOptions,
@@ -43,12 +52,6 @@ import {
 import { ApiError } from "@/lib/api-client"
 import { filterEntries, hasActiveFilters } from "@/lib/filter-format"
 import { cn } from "@/lib/utils"
-import {
-  DangerCircle,
-  DangerTriangle,
-  ExpressionlessSquare,
-  Refresh,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
 import { Dots } from "@/components/dots"
 import { TextDots } from "@/components/text-dots"
@@ -411,8 +414,8 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
   return (
     <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
       <span className="col-span-3 text-sm text-muted-foreground">
-        across resource{summary?.by_resource_type?.length === 1 ? "" : "s"}{" "}
-        {summary?.by_resource_type?.map((i) => i.resource_type).join(", ")}
+        across resource{summary?.by_resource_type.length === 1 ? "" : "s"}{" "}
+        {summary?.by_resource_type.map((i) => i.resource_type).join(", ")}
       </span>
       {items.map((item) => (
         <Card key={item.key} className="p-6 shadow-2xs">
@@ -444,14 +447,7 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
 }
 
 interface ConnectionTestCardProps {
-  data?: {
-    ok: boolean
-    response_ms: number | null
-    fhir_version: string | null
-    software_name: string | null
-    software_version: string | null
-    error: string | null
-  } | null
+  data?: ServerMetadata | null
   loading: boolean
   onTest: () => void
 }
@@ -555,7 +551,7 @@ function FilterBadge({ filters }: { filters: Record<string, unknown> }) {
 }
 
 interface ResourceCountsCardProps {
-  counts: ResourceCount[]
+  counts: Array<ResourceCount>
   loading: boolean
   onRefresh: () => void
   filterMap: Map<string, Record<string, unknown>>
@@ -646,7 +642,7 @@ function RecentRunsCard({
   runs,
   loading,
 }: {
-  runs: ValidationRunListItem[]
+  runs: Array<ValidationRunListItem>
   loading: boolean
 }) {
   return (

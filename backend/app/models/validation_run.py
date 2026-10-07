@@ -2,7 +2,7 @@
 
 import uuid
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import (
     Boolean,
     Column,
@@ -34,13 +34,19 @@ class ValidationRun(Base, TimestampMixin):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     server_id = Column(
-        UUID(as_uuid=True), ForeignKey("fhir_servers.id"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("fhir_servers.id", ondelete="CASCADE"),
+        nullable=False,
     )
     resource_types = Column(JSON, nullable=False)
     total_processed = Column(Integer, default=0)
     total_invalid = Column(Integer, default=0)
     status = Column(SQLEnum(ValidationStatus), default=ValidationStatus.RUNNING)
-    started_at = Column(DateTime(timezone=True), nullable=False, default=datetime.now)
+    started_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
     finished_at = Column(DateTime(timezone=True), nullable=True)
     verification_result = Column(JSON, nullable=True)
     test_report = Column(JSON, nullable=True)

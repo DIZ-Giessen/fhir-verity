@@ -16,6 +16,11 @@ class FhirServer(Base, TimestampMixin):
     project_id = Column(String, nullable=False)
     auth_config = Column(EncryptedJSON, nullable=True)
     is_active = Column(Boolean, default=True)
+    # Write TestScript/TestReport/VerificationResult back to this server after
+    # each completed run. Reports are always kept in Verity itself.
+    write_fhir_reports = Column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     owner_id = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),

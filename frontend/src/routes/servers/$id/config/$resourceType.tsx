@@ -2,10 +2,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { CalendarIcon, ChevronLeft } from "lucide-react"
 
+import { Restart } from "@solar-icons/react-perf/category/style/LineDuotone"
+import { useEffect, useState } from "react"
+import { format, parse } from "date-fns"
+import { de } from "date-fns/locale"
+import type {
+  ResourceConfig,
+  ResourceFilters,
+  RuleDefinition,
+  RuleUpdate,
+} from "@/api/queries"
 import {
-  type ResourceConfig,
-  type ResourceFilters,
-  type RuleUpdate,
   configKeys,
   deleteServerConfig,
   patchRule,
@@ -27,17 +34,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { ApiError } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
-import { Restart } from "@solar-icons/react-perf/category/style/LineDuotone"
 import { Label } from "@/components/ui/label"
-import { useEffect, useState } from "react"
-import { format, parse } from "date-fns"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
-import { de } from "date-fns/locale"
 
 type Severity = "error" | "warning" | "info"
 
@@ -98,7 +101,13 @@ function ResourceConfigPage() {
           is_server_specific: true,
           rules: {
             ...previous.rules,
-            [ruleKey]: { ...previous.rules[ruleKey], ...update },
+            // RuleUpdate fields are nullable ("unchanged"); only apply set values
+            [ruleKey]: {
+              ...previous.rules[ruleKey],
+              ...(Object.fromEntries(
+                Object.entries(update).filter(([, v]) => v != null)
+              ) as Partial<RuleDefinition>),
+            },
           },
         })
       }
@@ -172,7 +181,7 @@ function ResourceConfigPage() {
 
       {data && (
         <FilterCard
-          initial={(data.filters ?? {}) as ResourceFilters}
+          initial={data.filters}
           onSave={(f) => filtersMutation.mutate(f)}
           saving={filtersMutation.isPending}
           error={filtersMutation.error}
@@ -256,7 +265,7 @@ function ResourceConfigPage() {
                         <SelectTrigger
                           className={cn(
                             "h-8 w-32",
-                            SEVERITY_TEXT[rule.severity as Severity]
+                            SEVERITY_TEXT[rule.severity]
                           )}
                         >
                           <SelectValue />
@@ -368,10 +377,9 @@ function FilterCard({
             Scope filters.
           </h2>
           <p className="text-xs text-pretty text-muted-foreground">
-            Restrict which{" "}
-            <span className="font-mono">{initial ? "" : ""}</span>resources are
-            validated. Empty = validate everything. Uses FHIR search on the
-            source server, so the crawl only fetches matching resources.
+            Restrict which resources are validated. Empty = validate everything.
+            Uses FHIR search on the source server, so the crawl only fetches
+            matching resources.
           </p>
         </div>
         {active && <Badge variant="secondary">Filtered</Badge>}
@@ -413,7 +421,7 @@ function FilterCard({
           {typeof error.body === "object" &&
           error.body &&
           "detail" in error.body
-            ? String((error.body as { detail: unknown }).detail)
+            ? String(error.body.detail)
             : `HTTP ${error.status}`}
         </p>
       )}

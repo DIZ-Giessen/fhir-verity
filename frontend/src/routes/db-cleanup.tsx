@@ -7,8 +7,11 @@ import { de } from "date-fns/locale"
 import { toast } from "sonner"
 
 import {
-  type DbPurgeRequest,
-  type DbPurgeResult,
+  CheckCircle,
+  Lightbulb,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
+import type { DbPurgeRequest, DbPurgeResult } from "@/api/queries"
+import {
   dbPurge,
   resourceTypesQueryOptions,
   serversQueryOptions,
@@ -47,10 +50,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  CheckCircle,
-  Lightbulb,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
 import { TextDots } from "@/components/text-dots"
 import {
   AnimatedLoadingText,

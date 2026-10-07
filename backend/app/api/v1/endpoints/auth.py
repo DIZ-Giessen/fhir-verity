@@ -30,7 +30,7 @@ settings = get_settings()
 # Applies to every call the client makes (metadata discovery, code exchange,
 # userinfo): without it a network blip to Keycloak hangs until the OS-level
 # TCP timeout gives up (~15 min), holding the login request open the whole
-# time. See documentation/troubleshooting.md.
+# time.
 KEYCLOAK_TIMEOUT = httpx.Timeout(connect=10.0, read=15.0, write=10.0, pool=10.0)
 
 oauth = OAuth()

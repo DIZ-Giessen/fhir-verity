@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link, useRouterState } from "@tanstack/react-router"
-import { type LucideIcon } from "lucide-react"
-
 import {
-  Server2,
   PieChart2,
   PlayCircle,
+  Server2,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
+import type { LucideIcon } from "lucide-react"
 
-import { hasRole, meQueryOptions, type Role } from "@/api/queries"
+import type { Role } from "@/api/queries"
+import { hasRole, meQueryOptions } from "@/api/queries"
 import { cn } from "@/lib/utils"
 
 type NavItem = {
@@ -18,7 +18,7 @@ type NavItem = {
   minRole?: Role
 }
 
-const navItems: NavItem[] = [
+const navItems: Array<NavItem> = [
   { to: "/", label: "Overview", icon: PieChart2 },
   { to: "/runs", label: "Runs", icon: PlayCircle },
   { to: "/servers", label: "Servers", icon: Server2 },

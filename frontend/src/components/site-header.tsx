@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router"
 
-import { MainNav } from "@/components/main-nav"
 import { UserMenu } from "./user-menu"
 import { ModeToggle } from "./mode-toggle"
+import { MainNav } from "@/components/main-nav"
 
 export function SiteHeader() {
   return (

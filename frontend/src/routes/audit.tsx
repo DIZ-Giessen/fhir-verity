@@ -8,8 +8,8 @@ import {
 } from "lucide-react"
 import { Fragment, useEffect, useMemo, useState } from "react"
 
+import type { AuditLogParams } from "@/api/queries"
 import {
-  type AuditLogParams,
   auditLogDetailQueryOptions,
   auditLogQueryOptions,
   resourceTypesQueryOptions,
@@ -47,6 +47,36 @@ export const Route = createFileRoute("/audit")({ component: AuditPage })
 
 const PAGE_SIZE = 50
 const ALL = "all"
+
+const ACTION_LABELS: Record<string, string> = {
+  DELETE: "Delete",
+  PATCH: "Patch",
+  BULK_DELETE: "Bulk delete",
+  BULK_PATCH: "Bulk fix",
+  PURGE: "DB purge",
+}
+
+/** Summary rows written by bulk-delete/-fix and db-purge (one row per operation). */
+const SUMMARY_ACTIONS = new Set(["BULK_DELETE", "BULK_PATCH", "PURGE"])
+
+interface BulkPayload {
+  bulk: true
+  filter?: Record<string, string | null>
+  matched?: number
+  succeeded?: number
+  failed?: number
+  elapsed_seconds?: number
+  succeeded_resources?: Array<string>
+  failed_by_error?: Record<string, Array<string>>
+}
+
+function isBulkPayload(value: unknown): value is BulkPayload {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { bulk?: unknown }).bulk === true
+  )
+}
 
 const STATUS_STYLES: Record<string, string> = {
   success:
@@ -114,7 +144,8 @@ function AuditPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
         <p className="text-sm text-muted-foreground">
-          Every delete and patch executed against a FHIR server.
+          Every delete and patch executed against a FHIR server. Bulk operations
+          and DB purges are logged as a single summary entry.
         </p>
       </div>
 
@@ -161,8 +192,11 @@ function AuditPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>All actions</SelectItem>
-                <SelectItem value="delete">Delete</SelectItem>
-                <SelectItem value="patch">Patch</SelectItem>
+                {Object.entries(ACTION_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -243,12 +277,14 @@ function AuditPage() {
                           <TableCell className="text-xs text-muted-foreground">
                             {dateFormatter.format(new Date(a.executed_at))}
                           </TableCell>
-                          <TableCell className="font-medium capitalize">
-                            {a.action}
+                          <TableCell className="font-medium">
+                            {ACTION_LABELS[a.action] ?? a.action}
                           </TableCell>
                           <TableCell>
                             <span className="font-mono text-xs">
-                              {a.resource_type}/{a.resource_id}
+                              {SUMMARY_ACTIONS.has(a.action)
+                                ? `${a.resource_type === "*" ? "All types" : a.resource_type} · ${a.resource_id}`
+                                : `${a.resource_type}/${a.resource_id}`}
                             </span>
                           </TableCell>
                           <TableCell className="text-xs">
@@ -342,6 +378,10 @@ function AuditDetail({ auditId }: { auditId: string }) {
 
   const d = q.data
   const fhirUrl = `${d.server_base_url.replace(/\/$/, "")}/${d.resource_type}/${d.resource_id}`
+  const isSummary = SUMMARY_ACTIONS.has(d.action)
+  const bulk = isBulkPayload(d.fhir_request_payload)
+    ? d.fhir_request_payload
+    : null
 
   return (
     <div className="space-y-4 px-4 py-4">
@@ -359,19 +399,118 @@ function AuditDetail({ auditId }: { auditId: string }) {
         )}
       </div>
 
-      {d.fhir_request_payload != null && (
-        <JsonBlock label="Patch payload" value={d.fhir_request_payload} />
+      {bulk ? (
+        <BulkSummary payload={bulk} />
+      ) : (
+        d.fhir_request_payload != null && (
+          <JsonBlock
+            label={isSummary ? "Operation" : "Patch payload"}
+            value={d.fhir_request_payload}
+          />
+        )
       )}
       {d.resource_before != null && (
         <JsonBlock label="Resource before" value={d.resource_before} />
       )}
 
-      <Button asChild size="sm" variant="outline" className="gap-1">
-        <a href={fhirUrl} target="_blank" rel="noopener noreferrer">
-          <ExternalLink className="h-3.5 w-3.5" />
-          Open on FHIR server
-        </a>
-      </Button>
+      {!isSummary && (
+        <Button asChild size="sm" variant="outline" className="gap-1">
+          <a href={fhirUrl} target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="h-3.5 w-3.5" />
+            Open on FHIR server
+          </a>
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function BulkSummary({ payload }: { payload: BulkPayload }) {
+  const failedGroups = Object.entries(payload.failed_by_error ?? {})
+  const filter = Object.entries(payload.filter ?? {}).filter(
+    ([, v]) => v != null
+  )
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        <Badge variant="outline">Matched: {payload.matched ?? 0}</Badge>
+        <Badge variant="outline" className={STATUS_STYLES.success}>
+          Succeeded: {payload.succeeded ?? 0}
+        </Badge>
+        {(payload.failed ?? 0) > 0 && (
+          <Badge variant="outline" className={STATUS_STYLES.failed}>
+            Failed: {payload.failed}
+          </Badge>
+        )}
+        {payload.elapsed_seconds != null && (
+          <Badge variant="outline">{payload.elapsed_seconds}s</Badge>
+        )}
+      </div>
+
+      {filter.length > 0 && (
+        <Field label="Filter">
+          <span className="font-mono text-xs">
+            {filter.map(([k, v]) => `${k}=${v}`).join(" · ")}
+          </span>
+        </Field>
+      )}
+
+      {failedGroups.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Failures by error
+          </p>
+          <ul className="space-y-2">
+            {failedGroups.map(([error, refs]) => (
+              <li key={error} className="rounded-lg border bg-background p-2">
+                <p className="text-xs text-red-600 dark:text-red-400">
+                  {error}{" "}
+                  <span className="text-muted-foreground">({refs.length})</span>
+                </p>
+                <ResourceList refs={refs} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(payload.succeeded_resources?.length ?? 0) > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Changed resources ({payload.succeeded_resources?.length})
+          </p>
+          <div className="rounded-lg border bg-background p-2">
+            <ResourceList refs={payload.succeeded_resources ?? []} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const RESOURCE_PREVIEW = 200
+
+function ResourceList({ refs }: { refs: Array<string> }) {
+  const [showAll, setShowAll] = useState(false)
+  const visible = showAll ? refs : refs.slice(0, RESOURCE_PREVIEW)
+  return (
+    <div className="mt-1 max-h-48 overflow-auto">
+      <p className="font-mono text-xs break-all text-muted-foreground">
+        {visible.join(", ")}
+      </p>
+      {refs.length > RESOURCE_PREVIEW && (
+        <Button
+          variant="link"
+          size="sm"
+          className="h-auto p-0 text-xs"
+          onClick={() => setShowAll((v) => !v)}
+        >
+          {showAll
+            ? "Show less"
+            : `Show all ${refs.length.toLocaleString()} resources`}
+        </Button>
+      )}
     </div>
   )
 }

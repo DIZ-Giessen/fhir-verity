@@ -181,6 +181,171 @@ async def delete_resource(
 
 
 # ---------------------------------------------------------------------------
+# Bulk helpers
+# ---------------------------------------------------------------------------
+# Parallel requests against the FHIR server during bulk operations.
+BULK_CONCURRENCY = 20
+# IN (...) lists are chunked to stay far below asyncpg's 32767 bind-parameter
+# limit; a single IN with 50k ids would fail outright.
+BULK_ID_CHUNK = 5000
+# Longer error texts are cut before grouping so near-identical messages
+# collapse into one bucket in the audit summary.
+BULK_ERROR_MAX_LEN = 300
+
+
+class _BulkOutcome:
+    """Collects per-resource results of a bulk run without holding bodies."""
+
+    def __init__(self) -> None:
+        self.succeeded_ids: list[UUID] = []
+        self.succeeded_refs: list[str] = []
+        self.failed_by_error: dict[str, list[str]] = {}
+        self.errors: list[BulkActionError] = []
+
+    def ok(self, row) -> None:
+        self.succeeded_ids.append(row.id)
+        self.succeeded_refs.append(f"{row.resource_type}/{row.resource_id}")
+
+    def fail(self, row, error: str) -> None:
+        error = (error or "unknown error")[:BULK_ERROR_MAX_LEN]
+        ref = f"{row.resource_type}/{row.resource_id}"
+        self.failed_by_error.setdefault(error, []).append(ref)
+        self.errors.append(
+            BulkActionError(
+                resource_type=row.resource_type,
+                resource_id=row.resource_id,
+                error=error,
+            )
+        )
+
+    @property
+    def failed(self) -> int:
+        return len(self.errors)
+
+
+def _invalid_resource_filters(
+    server_id: UUID,
+    resource_type: Optional[str],
+    rule: Optional[str],
+    severity: Optional[str],
+) -> list:
+    """Same filter semantics as the invalid-resources list and db-purge."""
+    filters = [InvalidResource.server_id == server_id]
+    if resource_type:
+        filters.append(InvalidResource.resource_type == resource_type)
+    if rule or severity:
+        issue_match = [InvalidResourceIssue.invalid_resource_id == InvalidResource.id]
+        if rule:
+            issue_match.append(InvalidResourceIssue.rule == rule)
+        if severity:
+            issue_match.append(InvalidResourceIssue.severity == severity)
+        filters.append(exists(select(InvalidResourceIssue.id).where(*issue_match)))
+    return filters
+
+
+async def _count_matches(db: AsyncSession, filters: list) -> int:
+    stmt = select(func.count()).select_from(InvalidResource).where(and_(*filters))
+    return (await db.execute(stmt)).scalar_one()
+
+
+async def _load_targets(db: AsyncSession, filters: list):
+    """Only the identity columns: 50k rows with full issue JSON would be heavy."""
+    stmt = select(
+        InvalidResource.id,
+        InvalidResource.resource_type,
+        InvalidResource.resource_id,
+    ).where(and_(*filters))
+    return (await db.execute(stmt)).all()
+
+
+async def _run_concurrently(items, worker) -> None:
+    """Fixed pool of workers draining one shared iterator. Unlike one task per
+    item, memory stays flat no matter how many resources are matched."""
+    iterator = iter(items)
+
+    async def drain() -> None:
+        for item in iterator:
+            await worker(item)
+
+    await asyncio.gather(*(drain() for _ in range(BULK_CONCURRENCY)))
+
+
+async def _delete_invalid_rows(db: AsyncSession, ids: list[UUID]) -> None:
+    for i in range(0, len(ids), BULK_ID_CHUNK):
+        chunk = ids[i : i + BULK_ID_CHUNK]
+        await db.execute(delete(InvalidResource).where(InvalidResource.id.in_(chunk)))
+
+
+def _bulk_audit_entry(
+    *,
+    action: AuditAction,
+    server: FhirServer,
+    user: User,
+    resource_type: Optional[str],
+    filter_used: dict,
+    matched: int,
+    outcome: _BulkOutcome,
+    reason: Optional[str],
+    elapsed: float,
+) -> AuditLog:
+    """
+    One audit row for the whole bulk operation instead of one per resource,
+    so a 50k cleanup adds one line to the log, not 50k.
+
+    The row still records exactly which resources were changed (as
+    "Type/id" references) and why others failed, grouped by error message.
+    Per-resource snapshots (resource_before) are not kept here; HAPI's
+    version history (GET [type]/[id]/_history) holds the prior versions.
+    Single-resource DELETE/PATCH keep their full snapshot.
+    """
+    failed = outcome.failed
+    return AuditLog(
+        server_id=server.id,
+        server_base_url=str(server.base_url).rstrip("/"),
+        resource_type=resource_type or "*",
+        resource_id=f"{matched} resources",
+        invalid_resource_id=None,
+        action=action,
+        fhir_request_payload={
+            "bulk": True,
+            "filter": filter_used,
+            "matched": matched,
+            "succeeded": len(outcome.succeeded_refs),
+            "failed": failed,
+            "elapsed_seconds": round(elapsed, 2),
+            "succeeded_resources": outcome.succeeded_refs,
+            "failed_by_error": outcome.failed_by_error,
+        },
+        fhir_response_status=None,
+        resource_before=None,
+        status=AuditStatus.SUCCESS if failed == 0 else AuditStatus.FAILED,
+        error_message=(
+            None if failed == 0 else f"{failed} of {matched} operations failed"
+        ),
+        reason=reason,
+        actor_id=user.id,
+        executed_at=datetime.now(timezone.utc),
+    )
+
+
+def _bulk_result(
+    matched: int, outcome: _BulkOutcome, elapsed: float
+) -> BulkActionResult:
+    return BulkActionResult(
+        matched=matched,
+        succeeded=len(outcome.succeeded_ids),
+        failed=outcome.failed,
+        dry_run=False,
+        elapsed_seconds=round(elapsed, 2),
+        errors=outcome.errors[:50],
+    )
+
+
+def _bulk_timeout() -> httpx.Timeout:
+    return httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
+
+
+# ---------------------------------------------------------------------------
 # POST /resources/bulk-delete
 # ---------------------------------------------------------------------------
 @router.post("/resources/bulk-delete", response_model=BulkActionResult)
@@ -196,138 +361,83 @@ async def bulk_delete_resources(
     were previously detected as invalid can be deleted via this endpoint.
 
     With dry_run=true: returns match count without doing anything.
-    Otherwise: deletes each matched resource on the FHIR server in parallel
-    (max 20 concurrent), removes successful entries from invalid_resources,
-    and writes one audit log entry per attempt.
+    Otherwise: deletes each matched resource on the FHIR server
+    (BULK_CONCURRENCY in parallel, ETag-guarded), removes successful entries
+    from invalid_resources and writes a single BULK_DELETE audit entry.
     """
     server = await load_server_scoped(payload.server_id, user, db)
-    auth_config = server.auth_config or {}
     base_url = str(server.base_url).rstrip("/")
-
-    base_filters = [InvalidResource.server_id == payload.server_id]
-    if payload.resource_type:
-        base_filters.append(InvalidResource.resource_type == payload.resource_type)
-
-    stmt = select(InvalidResource).where(and_(*base_filters))
-    rows = (await db.execute(stmt)).scalars().all()
-
-    if payload.rule or payload.severity:
-        filtered = []
-        for row in rows:
-            issues = (row.metrics or {}).get("issues_detail", [])
-            ok = True
-            if payload.rule:
-                ok = ok and any(i.get("rule") == payload.rule for i in issues)
-            if payload.severity:
-                ok = ok and any(i.get("severity") == payload.severity for i in issues)
-            if ok:
-                filtered.append(row)
-        rows = filtered
-
-    matched = len(rows)
+    filters = _invalid_resource_filters(
+        payload.server_id, payload.resource_type, payload.rule, payload.severity
+    )
 
     if payload.dry_run:
         return BulkActionResult(
-            matched=matched,
+            matched=await _count_matches(db, filters),
             succeeded=0,
             failed=0,
             dry_run=True,
             elapsed_seconds=0.0,
         )
 
+    rows = await _load_targets(db, filters)
+    matched = len(rows)
     start = monotonic()
-    semaphore = asyncio.Semaphore(20)
-    audit_entries: list[AuditLog] = []
-    succeeded_invalid_ids: list = []
-    errors: list[BulkActionError] = []
+    outcome = _BulkOutcome()
 
-    timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
-    auth = build_httpx_auth(auth_config)
-    async with httpx.AsyncClient(timeout=timeout, auth=auth) as client:
+    auth = build_httpx_auth(server.auth_config or {})
+    async with httpx.AsyncClient(timeout=_bulk_timeout(), auth=auth) as client:
 
-        async def delete_one(row: InvalidResource):
-            resource_before = None
-            fhir_status: Optional[str] = None
-            audit_status = AuditStatus.SUCCESS
-            error_message: Optional[str] = None
-
-            async with semaphore:
-                try:
-                    resource_before, etag = await _fetch_resource_with_etag(
-                        base_url,
-                        row.resource_type,
-                        row.resource_id,
-                        client,
-                    )
-                    if resource_before is None:
-                        audit_status = AuditStatus.FAILED
-                        error_message = "Resource not found on FHIR server"
-                        fhir_status = "404"
-                    else:
-                        headers = {"Accept": "application/fhir+json"}
-                        if etag:
-                            headers["If-Match"] = etag
-                        url = f"{base_url}/{row.resource_type}/{row.resource_id}"
-                        resp = await client.delete(url, headers=headers)
-                        fhir_status = str(resp.status_code)
-                        if resp.status_code not in (200, 204):
-                            audit_status = AuditStatus.FAILED
-                            error_message = (
-                                f"FHIR server returned {resp.status_code}: "
-                                f"{resp.text[:300]}"
-                            )
-                except Exception as exc:
-                    audit_status = AuditStatus.FAILED
-                    error_message = str(exc)[:500]
-
-            audit = AuditLog(
-                server_id=payload.server_id,
-                server_base_url=base_url,
-                resource_type=row.resource_type,
-                resource_id=row.resource_id,
-                invalid_resource_id=row.id,
-                action=AuditAction.DELETE,
-                fhir_request_payload=None,
-                fhir_response_status=fhir_status,
-                resource_before=resource_before,
-                status=audit_status,
-                error_message=error_message,
-                reason=payload.reason,
-                actor_id=user.id,
-                executed_at=datetime.now(timezone.utc),
-            )
-            audit_entries.append(audit)
-
-            if audit_status == AuditStatus.SUCCESS:
-                succeeded_invalid_ids.append(row.id)
-            else:
-                errors.append(
-                    BulkActionError(
-                        resource_type=row.resource_type,
-                        resource_id=row.resource_id,
-                        error=error_message or "unknown error",
-                    )
+        async def delete_one(row) -> None:
+            try:
+                resource, etag = await _fetch_resource_with_etag(
+                    base_url, row.resource_type, row.resource_id, client
                 )
+                if resource is None:
+                    outcome.fail(row, "Resource not found on FHIR server")
+                    return
+                headers = {"Accept": "application/fhir+json"}
+                if etag:
+                    headers["If-Match"] = etag
+                resp = await client.delete(
+                    f"{base_url}/{row.resource_type}/{row.resource_id}",
+                    headers=headers,
+                )
+                if resp.status_code in (200, 204):
+                    outcome.ok(row)
+                else:
+                    outcome.fail(
+                        row,
+                        f"FHIR server returned {resp.status_code}: {resp.text}",
+                    )
+            except Exception as exc:  # one bad resource must not abort the batch
+                outcome.fail(row, str(exc))
 
-        await asyncio.gather(*[delete_one(row) for row in rows])
+        await _run_concurrently(rows, delete_one)
 
-    db.add_all(audit_entries)
-    if succeeded_invalid_ids:
-        await db.execute(
-            delete(InvalidResource).where(InvalidResource.id.in_(succeeded_invalid_ids))
+    elapsed = monotonic() - start
+    await _delete_invalid_rows(db, outcome.succeeded_ids)
+    if matched:
+        db.add(
+            _bulk_audit_entry(
+                action=AuditAction.BULK_DELETE,
+                server=server,
+                user=user,
+                resource_type=payload.resource_type,
+                filter_used={
+                    "resource_type": payload.resource_type,
+                    "rule": payload.rule,
+                    "severity": payload.severity,
+                },
+                matched=matched,
+                outcome=outcome,
+                reason=payload.reason,
+                elapsed=elapsed,
+            )
         )
     await db.commit()
 
-    elapsed = monotonic() - start
-
-    return BulkActionResult(
-        matched=matched,
-        succeeded=len(succeeded_invalid_ids),
-        failed=len(errors),
-        dry_run=False,
-        elapsed_seconds=round(elapsed, 2),
-        errors=errors[:50],
-    )
+    return _bulk_result(matched, outcome, elapsed)
 
 
 # ---------------------------------------------------------------------------
@@ -343,164 +453,108 @@ async def bulk_fix_resources(
     Bulk-PATCH invalid resources matching (server_id, resource_type, rule).
 
     Requires a pre-defined patch template for the (resource_type, rule) combo.
-    Returns 400 if no template exists — in that case use bulk-delete instead,
-    or wait for the LLM assistant (Block 3) to generate context-aware fixes.
+    Returns 400 if no template exists — in that case use bulk-delete instead.
+    Writes a single BULK_PATCH audit entry for the whole operation.
     """
     if not has_template(payload.resource_type, payload.rule):
         raise HTTPException(
             status_code=400,
             detail=(
                 f"No patch template available for "
-                f"{payload.resource_type}/{payload.rule}. "
-                f"Either use bulk-delete, or wait for the LLM assistant."
+                f"{payload.resource_type}/{payload.rule}. Use bulk-delete instead."
             ),
         )
 
     server = await load_server_scoped(payload.server_id, user, db)
-    auth_config = server.auth_config or {}
     base_url = str(server.base_url).rstrip("/")
-
-    stmt = select(InvalidResource).where(
-        InvalidResource.server_id == payload.server_id,
-        InvalidResource.resource_type == payload.resource_type,
+    filters = _invalid_resource_filters(
+        payload.server_id, payload.resource_type, payload.rule, None
     )
-    rows = (await db.execute(stmt)).scalars().all()
-
-    filtered = []
-    for row in rows:
-        issues = (row.metrics or {}).get("issues_detail", [])
-        if any(i.get("rule") == payload.rule for i in issues):
-            filtered.append(row)
-    rows = filtered
-
-    matched = len(rows)
 
     if payload.dry_run:
         return BulkActionResult(
-            matched=matched,
+            matched=await _count_matches(db, filters),
             succeeded=0,
             failed=0,
             dry_run=True,
             elapsed_seconds=0.0,
         )
 
+    rows = await _load_targets(db, filters)
+    matched = len(rows)
     start = monotonic()
-    semaphore = asyncio.Semaphore(20)
-    audit_entries: list[AuditLog] = []
-    succeeded_invalid_ids: list = []
-    errors: list[BulkActionError] = []
+    outcome = _BulkOutcome()
 
-    auth = build_httpx_auth(auth_config)
-    timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
-    async with httpx.AsyncClient(timeout=timeout, auth=auth) as client:
+    auth = build_httpx_auth(server.auth_config or {})
+    async with httpx.AsyncClient(timeout=_bulk_timeout(), auth=auth) as client:
 
-        async def patch_one(row: InvalidResource):
-            resource_before = None
-            fhir_status: Optional[str] = None
-            audit_status = AuditStatus.SUCCESS
-            error_message: Optional[str] = None
-            patch_body: list[dict] = []
-
-            async with semaphore:
-                try:
-                    resource_before, etag = await _fetch_resource_with_etag(
-                        base_url,
-                        row.resource_type,
-                        row.resource_id,
-                        client,
-                    )
-                    if resource_before is None:
-                        audit_status = AuditStatus.FAILED
-                        error_message = "Resource not found on FHIR server"
-                        fhir_status = "404"
-                    else:
-                        patch_body = (
-                            get_patch_template(
-                                payload.resource_type,
-                                payload.rule,
-                                resource=resource_before,
-                            )
-                            or []
-                        )
-
-                        if not patch_body:
-                            audit_status = AuditStatus.FAILED
-                            error_message = (
-                                "Template produced no operations "
-                                "(resource may already be clean)"
-                            )
-                        else:
-                            headers = {
-                                "Content-Type": "application/json-patch+json",
-                                "Accept": "application/fhir+json",
-                            }
-                            if etag:
-                                headers["If-Match"] = etag
-                            url = f"{base_url}/{row.resource_type}/{row.resource_id}"
-                            resp = await client.patch(
-                                url,
-                                json=patch_body,
-                                headers=headers,
-                            )
-                            fhir_status = str(resp.status_code)
-                            if resp.status_code not in (200, 201):
-                                audit_status = AuditStatus.FAILED
-                                error_message = (
-                                    f"FHIR server returned {resp.status_code}: "
-                                    f"{resp.text[:300]}"
-                                )
-                except Exception as exc:
-                    audit_status = AuditStatus.FAILED
-                    error_message = str(exc)[:500]
-
-            audit = AuditLog(
-                server_id=payload.server_id,
-                server_base_url=base_url,
-                resource_type=row.resource_type,
-                resource_id=row.resource_id,
-                invalid_resource_id=row.id,
-                action=AuditAction.PATCH,
-                fhir_request_payload=patch_body if patch_body else None,
-                fhir_response_status=fhir_status,
-                resource_before=resource_before,
-                status=audit_status,
-                error_message=error_message,
-                reason=payload.reason,
-                actor_id=user.id,
-                executed_at=datetime.now(timezone.utc),
-            )
-            audit_entries.append(audit)
-
-            if audit_status == AuditStatus.SUCCESS:
-                succeeded_invalid_ids.append(row.id)
-            else:
-                errors.append(
-                    BulkActionError(
-                        resource_type=row.resource_type,
-                        resource_id=row.resource_id,
-                        error=error_message or "unknown error",
-                    )
+        async def patch_one(row) -> None:
+            try:
+                resource, etag = await _fetch_resource_with_etag(
+                    base_url, row.resource_type, row.resource_id, client
                 )
+                if resource is None:
+                    outcome.fail(row, "Resource not found on FHIR server")
+                    return
+                patch_body = (
+                    get_patch_template(
+                        payload.resource_type, payload.rule, resource=resource
+                    )
+                    or []
+                )
+                if not patch_body:
+                    outcome.fail(
+                        row,
+                        "Template produced no operations "
+                        "(resource may already be clean)",
+                    )
+                    return
+                headers = {
+                    "Content-Type": "application/json-patch+json",
+                    "Accept": "application/fhir+json",
+                }
+                if etag:
+                    headers["If-Match"] = etag
+                resp = await client.patch(
+                    f"{base_url}/{row.resource_type}/{row.resource_id}",
+                    json=patch_body,
+                    headers=headers,
+                )
+                if resp.status_code in (200, 201):
+                    outcome.ok(row)
+                else:
+                    outcome.fail(
+                        row,
+                        f"FHIR server returned {resp.status_code}: {resp.text}",
+                    )
+            except Exception as exc:  # one bad resource must not abort the batch
+                outcome.fail(row, str(exc))
 
-        await asyncio.gather(*[patch_one(row) for row in rows])
+        await _run_concurrently(rows, patch_one)
 
-    db.add_all(audit_entries)
-    if succeeded_invalid_ids:
-        await db.execute(
-            delete(InvalidResource).where(InvalidResource.id.in_(succeeded_invalid_ids))
+    elapsed = monotonic() - start
+    await _delete_invalid_rows(db, outcome.succeeded_ids)
+    if matched:
+        db.add(
+            _bulk_audit_entry(
+                action=AuditAction.BULK_PATCH,
+                server=server,
+                user=user,
+                resource_type=payload.resource_type,
+                filter_used={
+                    "resource_type": payload.resource_type,
+                    "rule": payload.rule,
+                    "patch_template": f"{payload.resource_type}/{payload.rule}",
+                },
+                matched=matched,
+                outcome=outcome,
+                reason=payload.reason,
+                elapsed=elapsed,
+            )
         )
     await db.commit()
 
-    elapsed = monotonic() - start
-
-    return BulkActionResult(
-        matched=matched,
-        succeeded=len(succeeded_invalid_ids),
-        failed=len(errors),
-        dry_run=False,
-        elapsed_seconds=round(elapsed, 2),
-        errors=errors[:50],
-    )
+    return _bulk_result(matched, outcome, elapsed)
 
 
 # ---------------------------------------------------------------------------
@@ -731,8 +785,8 @@ async def list_audit_log(
     limit: int = 50,
     server_id: Optional[UUID] = None,
     resource_type: Optional[str] = None,
-    action: Optional[str] = None,
-    status_filter: Optional[str] = None,
+    action: Optional[AuditAction] = None,
+    status_filter: Optional[AuditStatus] = None,
     actor_id: Optional[UUID] = None,
     _: User = Depends(require_role(UserRole.admin.value)),
     db: AsyncSession = Depends(get_db),

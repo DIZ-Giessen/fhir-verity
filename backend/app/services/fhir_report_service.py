@@ -26,15 +26,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.validation_run import ValidationRun
 from app.models.validation_config import ValidationConfig
 from app.services.validation_rules import VALIDATORS
+from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
 from app.services.fhir_auth import build_httpx_auth
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 # ---------------------------------------------------------------------------
-# Naming System base used for all identifiers
+# Site identity written into every report. Both are configurable so each
+# site publishes under its own name and canonical URL (see .env.example).
 # ---------------------------------------------------------------------------
-NAMING_SYSTEM_BASE = "http://dizfhir.med.uni-giessen.de/NamingSystem/validierung"
+NAMING_SYSTEM_BASE = (
+    settings.FHIR_REPORT_NAMING_SYSTEM
+    or f"{settings.BACKEND_BASE_URL.rstrip('/')}/fhir/NamingSystem/verity"
+).rstrip("/")
+PUBLISHER = settings.FHIR_REPORT_PUBLISHER
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +243,7 @@ def build_test_script(
         "status": "active",
         "experimental": False,
         "date": now,
-        "publisher": "FHIR Verity – DIZ Gießen.",
+        "publisher": PUBLISHER,
         "description": (
             f"Automatisch generiertes TestScript für die Validierung "
             f"von {resource_type}-Ressourcen durch FHIR Verity. "
@@ -381,7 +388,7 @@ def build_test_report(
         "result": overall_result,
         # score: 0.0–100.0 as per FHIR spec (decimal percentage)
         "score": quality_score_percent,
-        "tester": "FHIR Verity – DIZ Gießen.",
+        "tester": PUBLISHER,
         "issued": issued,
         # Extensions at root level for run metadata
         "extension": [
@@ -552,7 +559,7 @@ def build_verification_result(
         },
         "primarySource": [
             {
-                "who": {"display": "FHIR Verity DIZ Gießen"},
+                "who": {"display": PUBLISHER},
                 "type": [
                     {
                         "coding": [
@@ -577,7 +584,7 @@ def build_verification_result(
             }
         ],
         "attestation": {
-            "who": {"display": "FHIR Verity – DIZ Gießen Automatische Validierung"},
+            "who": {"display": f"{PUBLISHER} (automated validation)"},
             "communicationMethod": {
                 "coding": [
                     {
@@ -690,9 +697,14 @@ async def generate_and_post_reports(
     server_id: str,
     auth_config: dict,
     db: AsyncSession,
+    post_to_server: bool = True,
 ) -> None:
     """
     Main entry point. Called after a validation run completes.
+
+    With post_to_server=False the reports are still built and summarised in
+    ValidationRun.test_report (score, result, violation counts), but nothing
+    is written to the FHIR server and every server_id stays None.
 
     For each resource type that was validated:
       1. Load active rules from validation_configs
@@ -721,6 +733,7 @@ async def generate_and_post_reports(
         "test_scripts": {},
         "test_reports": {},
         "verification_result": None,
+        "posted_to_server": post_to_server,
     }
 
     has_any_error = False
@@ -729,6 +742,23 @@ async def generate_and_post_reports(
     auth = build_httpx_auth(auth_config)
 
     async with httpx.AsyncClient(timeout=timeout, auth=auth) as client:
+
+        async def publish(resource: dict, resource_type: str) -> str | None:
+            if not post_to_server:
+                return None
+            return await post_to_fhir(
+                resource=resource,
+                resource_type=resource_type,
+                base_url=server_base_url,
+                client=client,
+            )
+
+        if not post_to_server:
+            logger.info(
+                "Report upload disabled for server %s, keeping run %s reports local",
+                server_id,
+                run_id,
+            )
 
         for resource_type in resource_types:
 
@@ -760,12 +790,7 @@ async def generate_and_post_reports(
                 server_base_url=server_base_url,
             )
 
-            ts_server_id = await post_to_fhir(
-                resource=test_script,
-                resource_type="TestScript",
-                base_url=server_base_url,
-                client=client,
-            )
+            ts_server_id = await publish(test_script, "TestScript")
 
             report_summary["test_scripts"][resource_type] = {
                 "local_id": test_script["id"],
@@ -788,12 +813,7 @@ async def generate_and_post_reports(
                 finished_at=run.finished_at,
             )
 
-            tr_server_id = await post_to_fhir(
-                resource=test_report,
-                resource_type="TestReport",
-                base_url=server_base_url,
-                client=client,
-            )
+            tr_server_id = await publish(test_report, "TestReport")
 
             tr_ref = (
                 f"{server_base_url}/TestReport/{tr_server_id}"
@@ -826,12 +846,7 @@ async def generate_and_post_reports(
             has_errors=has_any_error,
         )
 
-        vr_server_id = await post_to_fhir(
-            resource=verification_result,
-            resource_type="VerificationResult",
-            base_url=server_base_url,
-            client=client,
-        )
+        vr_server_id = await publish(verification_result, "VerificationResult")
 
         report_summary["verification_result"] = {
             "local_id": verification_result["id"],

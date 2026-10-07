@@ -1,10 +1,20 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import { toast } from "sonner"
 
-import { resourceTypesQueryOptions, serverQueryOptions } from "@/api/queries"
+import type { FhirServer } from "@/api/queries"
+import {
+  resourceTypesQueryOptions,
+  serverKeys,
+  serverQueryOptions,
+  updateServer,
+} from "@/api/queries"
+import { Card, CardContent } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ApiError } from "@/lib/api-client"
+import { Switch } from "@/components/ui/switch"
+import { ApiError, apiErrorMessage } from "@/lib/api-client"
 
 export const Route = createFileRoute("/servers/$id/config/")({
   component: ConfigOverviewPage,
@@ -37,6 +47,14 @@ function ConfigOverviewPage() {
             Changes apply only to this server.
           </p>
         </div>
+      </div>
+
+      <div className="mx-auto max-w-7xl">
+        {serverQ.data ? (
+          <FhirReportsSetting server={serverQ.data} />
+        ) : (
+          <Skeleton className="h-24 w-full" />
+        )}
       </div>
 
       {isPending && (
@@ -76,5 +94,65 @@ function ConfigOverviewPage() {
         </div>
       )}
     </div>
+  )
+}
+
+function FhirReportsSetting({ server }: { server: FhirServer }) {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: (enabled: boolean) =>
+      updateServer(server.id, { write_fhir_reports: enabled }),
+    onSuccess: (updated, enabled) => {
+      if (updated)
+        queryClient.setQueryData(serverKeys.detail(server.id), updated)
+      queryClient.invalidateQueries({ queryKey: serverKeys.all })
+      if (enabled) {
+        toast.success("FHIR reports enabled", {
+          description: `From the next completed run on, a TestScript and TestReport per resource type and one VerificationResult are written to ${server.name}.`,
+        })
+      } else {
+        toast.success("FHIR reports disabled", {
+          description: `Nothing will be written to ${server.name} anymore. Scores and results of each run remain visible in Verity.`,
+        })
+      }
+    },
+    onError: (err) => {
+      toast.error("Could not change the report setting", {
+        description: apiErrorMessage(err),
+      })
+    },
+  })
+
+  // Show the requested state while the PATCH is in flight
+  const checked = mutation.isPending
+    ? mutation.variables
+    : server.write_fhir_reports
+
+  return (
+    <Card className="shadow-none">
+      <CardContent className="flex items-start justify-between gap-6">
+        <div className="space-y-1">
+          <Label htmlFor="write-fhir-reports" className="text-base">
+            Write FHIR reports to the server
+          </Label>
+          <p className="text-sm text-muted-foreground">
+            After each completed run, Verity posts the results as FHIR resources
+            to this server: one <b>TestScript</b> and one <b>TestReport</b> per
+            validated resource type and one <b>VerificationResult</b> for the
+            whole run. Turn this off for read-only or production servers where
+            Verity must not create any resources. The results remain visible in
+            Verity either way.
+          </p>
+        </div>
+        <Switch
+          id="write-fhir-reports"
+          checked={checked}
+          disabled={mutation.isPending}
+          onCheckedChange={(value) => mutation.mutate(value)}
+          aria-label="Write FHIR reports to the server"
+        />
+      </CardContent>
+    </Card>
   )
 }

@@ -2,7 +2,9 @@ import {
   ArrowRightUp,
   SquareBottomUp,
 } from "@solar-icons/react-perf/category/style/LineDuotone"
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
+
+import { env } from "@/lib/env"
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -19,7 +21,7 @@ function HomePage() {
         </p>
         <div className="flex items-center gap-4 pt-4">
           <a
-            href="https://mirgitlab.med.uni-giessen.de/povoc1/fhir-verity/-/tree/main/documentation?ref_type=heads"
+            href={env.DOCS_URL}
             rel="noopener noreferrer"
             target="_blank"
             className="inline-flex items-center gap-1 text-sm text-muted-foreground underline hover:text-primary"
@@ -27,12 +29,12 @@ function HomePage() {
             Read the documentation <ArrowRightUp className="h-4 w-4" />
           </a>
           <a
-            href="https://mirgitlab.med.uni-giessen.de/povoc1/fhir-verity"
+            href={env.PROJECT_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm text-muted-foreground underline hover:text-primary"
           >
-            view the Project <SquareBottomUp className="h-4 w-4" />
+            View the project <SquareBottomUp className="h-4 w-4" />
           </a>
         </div>
       </div>

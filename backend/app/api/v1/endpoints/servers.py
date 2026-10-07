@@ -4,7 +4,6 @@ API endpoints for managing FHIR Servers.
 
 import asyncio
 from time import monotonic
-from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 import httpx
 from sqlalchemy.exc import IntegrityError
@@ -13,6 +12,7 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.core.security import get_current_user, server_access
 from app.models.fhir_server import FhirServer
+from app.models.validation_run import ValidationRun, ValidationStatus
 from app.models.user import User, UserRole
 from app.schemas.server import (
     FhirServerCreate,
@@ -87,6 +87,7 @@ def _to_read(server: FhirServer) -> FhirServerRead:
         base_url=server.base_url,
         project_id=server.project_id,
         is_active=server.is_active,
+        write_fhir_reports=server.write_fhir_reports,
         has_auth_config=server.auth_config is not None,
         auth_type=cfg["type"],
         owner_id=server.owner_id,
@@ -115,12 +116,12 @@ async def update_fhir_server(
 
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A server with this base_url already exists",
-        )
+        ) from exc
 
     await db.refresh(server)
     return _to_read(server)
@@ -135,7 +136,30 @@ async def delete_fhir_server(
     server: FhirServer = Depends(server_access()),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Delete FHIR Server"""
+    """
+    Delete a FHIR server together with everything Verity stored for it:
+    validation runs, invalid resources (and their issues), server-specific
+    configs and audit log entries. All of it cascades in the database.
+    The FHIR server itself is not touched.
+
+    Refused with 409 while a run is in progress, since the background task
+    would keep writing rows for a server that no longer exists.
+    """
+    running = (
+        await db.execute(
+            select(ValidationRun.id).where(
+                ValidationRun.server_id == server.id,
+                ValidationRun.status == ValidationStatus.RUNNING,
+            )
+        )
+    ).scalar_one_or_none()
+    if running is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A validation run is in progress for this server. "
+            "Cancel it first, then delete the server.",
+        )
+
     await db.delete(server)
     await db.commit()
 

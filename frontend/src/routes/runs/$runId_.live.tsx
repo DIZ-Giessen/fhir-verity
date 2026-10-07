@@ -1,30 +1,25 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { ChevronLeft } from "lucide-react"
-import React, {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
+import { intervalToDuration } from "date-fns"
+import {
+  CheckCircle,
+  DangerCircle,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
+import type { ReactNode } from "react"
 
+import type { LiveMetrics, LogEntry, MetricPoint } from "@/lib/interface"
 import { runQueryOptions } from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { env } from "@/lib/env"
 import { cn } from "@/lib/utils"
-import type { LiveMetrics, LogEntry, MetricPoint } from "@/lib/interface"
 import { MOMENTUM } from "@/lib/functions"
 import LiveLineChart from "@/components/charts/live-line-chart"
 import LiveLine from "@/components/charts/live-line"
 import { ChartTooltip } from "@/components/charts/tooltip"
-import { intervalToDuration } from "date-fns"
-import {
-  CheckCircle,
-  DangerCircle,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
 
 export const Route = createFileRoute("/runs/$runId_/live")({
   component: LivePage,
@@ -108,7 +103,7 @@ function LivePage() {
   const { runId } = Route.useParams()
   const queryClient = useQueryClient()
   const runQ = useQuery(runQueryOptions(runId))
-  const [history, setHistory] = useState<MetricPoint[]>([])
+  const [history, setHistory] = useState<Array<MetricPoint>>([])
 
   const [conn, setConn] = useState<ConnState>("connecting")
   const [runState, setRunState] = useState<string>("running")
@@ -122,7 +117,7 @@ function LivePage() {
     progressPercent: null,
     etaSeconds: null,
   })
-  const [log, setLog] = useState<LogEntry[]>([])
+  const [log, setLog] = useState<Array<LogEntry>>([])
 
   const logIdRef = useRef(0)
   const terminalRef = useRef(false)
@@ -305,7 +300,6 @@ function LivePage() {
       if (reconnectTimer) clearTimeout(reconnectTimer)
       ws?.close()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId, wsUrl])
 
   const pct = metrics.progressPercent ?? (runState === "completed" ? 100 : 0)
@@ -574,7 +568,7 @@ function Sparkline({
   stroke,
   momentum,
 }: {
-  data: MetricPoint[]
+  data: Array<MetricPoint>
   dataKey: "processed" | "invalid" | "rps"
   stroke?: string
   momentum?: boolean

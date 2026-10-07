@@ -15,6 +15,8 @@ import {
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
+import { DangerTriangle } from "@solar-icons/react-perf/category/style/LineDuotone"
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import {
   resourceTypesQueryOptions,
   serverResourceConfigQueryOptions,
@@ -46,8 +48,6 @@ import {
 } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
 import { filterEntries, hasActiveFilters } from "@/lib/filter-format"
-import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
-import { DangerTriangle } from "@solar-icons/react-perf/category/style/LineDuotone"
 
 const DEFAULT_UNCHECKED_TYPES = new Set([
   "Condition",
@@ -122,7 +122,7 @@ export function StartValidationDialog({
     )
 
   const mutation = useMutation({
-    mutationFn: (vars: { server_id: string; resource_types: string[] }) =>
+    mutationFn: (vars: { server_id: string; resource_types: Array<string> }) =>
       startValidation(vars),
     onSuccess: (run) => {
       if (!run) return
@@ -354,7 +354,7 @@ function ServerPicker({
   value,
   onChange,
 }: {
-  servers: { id: string; name: string; base_url: string }[]
+  servers: Array<{ id: string; name: string; base_url: string }>
   value?: string
   onChange: (id: string) => void
 }) {

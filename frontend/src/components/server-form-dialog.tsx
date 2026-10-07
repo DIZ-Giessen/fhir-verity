@@ -4,12 +4,10 @@ import { useEffect } from "react"
 import { Controller, useForm } from "react-hook-form"
 import { z } from "zod"
 
-import {
-  type FhirServer,
-  createServer,
-  serverKeys,
-  updateServer,
-} from "@/api/queries"
+import { toast } from "sonner"
+import { Field, FieldDescription, FieldError, FieldLabel } from "./ui/field"
+import type { FhirServer } from "@/api/queries"
+import { createServer, serverKeys, updateServer } from "@/api/queries"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -22,8 +20,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { ApiError } from "@/lib/api-client"
-import { Field, FieldDescription, FieldError, FieldLabel } from "./ui/field"
-import { toast } from "sonner"
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required").max(255),
@@ -113,7 +109,7 @@ export function ServerFormDialog({
       ? typeof mutation.error.body === "object" &&
         mutation.error.body !== null &&
         "detail" in mutation.error.body
-        ? String((mutation.error.body as { detail: unknown }).detail)
+        ? String(mutation.error.body.detail)
         : mutation.error.message
       : mutation.error?.message
 

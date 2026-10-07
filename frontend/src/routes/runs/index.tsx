@@ -3,17 +3,21 @@ import { Link, createFileRoute } from "@tanstack/react-router"
 import { ChevronLeft, ChevronRight, Play } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
+import {
+  Documents,
+  InfoCircle,
+  NotificationLinesRemove,
+  SquareTopDown,
+} from "@solar-icons/react-perf/category/style/LineDuotone"
+import type { MonthlyBucket, TestReportSummary } from "@/lib/interface"
+import type { ValidationRunListItem } from "@/api/queries"
 import { AreaChart } from "@/components/charts/area-chart"
 import { Area } from "@/components/charts/area"
 import { XAxis } from "@/components/charts/x-axis"
 import { Grid } from "@/components/charts/grid"
 import { ChartTooltip } from "@/components/charts/tooltip"
 
-import {
-  type ValidationRunListItem,
-  runsQueryOptions,
-  serversQueryOptions,
-} from "@/api/queries"
+import { runsQueryOptions, serversQueryOptions } from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -38,12 +42,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Documents,
-  InfoCircle,
-  NotificationLinesRemove,
-  SquareTopDown,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -55,12 +53,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  RUN_STATUS_STYLES,
   dateFormatter,
   formatDuration,
   monthLabelFormatter,
-  RUN_STATUS_STYLES,
 } from "@/lib/functions/runs"
-import type { MonthlyBucket, TestReportSummary } from "@/lib/interface"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
 import { TextDots } from "@/components/text-dots"
 
@@ -71,11 +68,11 @@ type RunWithReport = ValidationRunListItem & {
 }
 
 function bucketByMonth(
-  runs: ValidationRunListItem[] | undefined,
+  runs: Array<ValidationRunListItem> | undefined,
   months: number
-): MonthlyBucket[] {
+): Array<MonthlyBucket> {
   const now = new Date()
-  const buckets: MonthlyBucket[] = []
+  const buckets: Array<MonthlyBucket> = []
   for (let i = months - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     buckets.push({
@@ -182,7 +179,7 @@ function BarCard({
   totalRuns,
   loading,
 }: {
-  data: MonthlyBucket[]
+  data: Array<MonthlyBucket>
   totalRuns: number
   loading: boolean
 }) {
@@ -243,7 +240,7 @@ function RunsTable({
   serverMap,
   loading,
 }: {
-  runs: ValidationRunListItem[]
+  runs: Array<ValidationRunListItem>
   serverMap: Map<string, { id: string; name: string; base_url: string }>
   loading: boolean
 }) {
@@ -482,10 +479,10 @@ export function FhirResourcesPopover({
   const base = baseUrl.replace(/\/$/, "")
   const vrId = report.verification_result?.server_id
   const scripts = Object.entries(report.test_scripts ?? {})
-    .map(([rt, info]) => ({ rt, id: info?.server_id }))
+    .map(([rt, info]) => ({ rt, id: info.server_id }))
     .filter((x): x is { rt: string; id: string } => Boolean(x.id))
   const reports = Object.entries(report.test_reports ?? {})
-    .map(([rt, info]) => ({ rt, id: info?.server_id }))
+    .map(([rt, info]) => ({ rt, id: info.server_id }))
     .filter((x): x is { rt: string; id: string } => Boolean(x.id))
 
   const empty = !vrId && scripts.length === 0 && reports.length === 0
@@ -502,8 +499,10 @@ export function FhirResourcesPopover({
         <div className="max-h-96 overflow-y-auto p-4">
           {empty && (
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
-              <InfoCircle className="size-4" />
-              Reports were not successfully posted to the FHIR server.
+              <InfoCircle className="size-4 shrink-0" />
+              {report.posted_to_server === false
+                ? "Writing FHIR reports was disabled for this server, so no resources were created on it."
+                : "Reports were not successfully posted to the FHIR server."}
             </p>
           )}
 

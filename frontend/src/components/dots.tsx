@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
 
 function Dots({
   className,
@@ -23,7 +23,7 @@ function Dots({
         role="status"
         className={cn(
           "inline-flex items-center justify-center gap-[12%]",
-          className,
+          className
         )}
         {...props}
       >
@@ -43,7 +43,7 @@ function Dots({
         <span className="sr-only">Loading</span>
       </span>
     </>
-  );
+  )
 }
 
-export { Dots };
+export { Dots }

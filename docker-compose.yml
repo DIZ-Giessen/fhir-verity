@@ -1,9 +1,51 @@
+# FHIR Verity - Docker Compose
+#
+# Datenbank: zwei Wege, einer davon muss gewählt werden.
+#
+#   Weg A - externe PostgreSQL (aktiv, so läuft Verity in Gießen)
+#     Eine bestehende PostgreSQL wird genutzt. In der .env zeigt DATABASE_URL
+#     auf den externen Host, z. B.
+#       DATABASE_URL=postgresql+asyncpg://verity:<passwort>@db-host.example.org:5432/verity
+#     Der Verity-Benutzer braucht CREATE-Rechte auf dem Schema (siehe
+#     documentation/datenbank.md). Die Datei bleibt dafür wie sie ist.
+#
+#   Weg B - mitgelieferte PostgreSQL im Container (für Standorte ohne eigene DB)
+#     Verity bringt seine eigene Datenbank mit, es muss nichts vorbereitet
+#     werden. Dafür unten die drei mit "Weg B" markierten Blöcke einkommentieren
+#     (db-Service, depends_on im backend, pgdata-Volume) und in der .env setzen:
+#       POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB
+#       DATABASE_URL=postgresql+asyncpg://<POSTGRES_USER>:<POSTGRES_PASSWORD>@db:5432/<POSTGRES_DB>
+#     Host ist dann immer "db", die Daten liegen im Volume "pgdata".
+#
+# Details: documentation/deployment.md
+
 services:
+  # --- Weg B: mitgelieferte Datenbank (einkommentieren) ----------------------
+  # db:
+  #   image: postgres:17
+  #   environment:
+  #     POSTGRES_USER: ${POSTGRES_USER}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #     POSTGRES_DB: ${POSTGRES_DB}
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
+  #   restart: unless-stopped
+  #   # kein "ports:" - die Datenbank ist nur für das Backend im Compose-Netz erreichbar
+
   backend:
     build: ./backend
     env_file: ./.env
     expose:
       - "8000"
+    # --- Weg B: erst starten, wenn die Datenbank bereit ist (einkommentieren)
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -33,3 +75,5 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  # --- Weg B: Datenbank-Volume (einkommentieren)
+  # pgdata:

@@ -5,7 +5,7 @@ from typing import Any
 
 import uuid
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column,
@@ -25,6 +25,9 @@ class AuditAction(str, enum.Enum):
     DELETE = "DELETE"
     PATCH = "PATCH"
     PURGE = "PURGE"  # DB-only removal from invalid_resources; no FHIR call made
+    # One summary row per bulk operation instead of one row per resource
+    BULK_DELETE = "BULK_DELETE"
+    BULK_PATCH = "BULK_PATCH"
 
 
 class AuditStatus(str, enum.Enum):
@@ -67,7 +70,7 @@ class AuditLog(Base, TimestampMixin):
     error_message = Column(Text, nullable=True)
     reason = Column(Text, nullable=True)
 
-    # Who triggered this (for when auth is added later)
+    # Who triggered this
     actor_id = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -76,6 +79,6 @@ class AuditLog(Base, TimestampMixin):
     )
     executed_at = Column(
         DateTime(timezone=True),
-        default=datetime.now,
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )

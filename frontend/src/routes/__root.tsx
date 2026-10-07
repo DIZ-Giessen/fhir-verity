@@ -1,12 +1,12 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
+import { Toaster } from "sonner"
+import appCss from "../styles.css?url"
 import type { ReactNode } from "react"
 
 import { AuthBoundary } from "@/components/auth-boundary"
 import { TooltipProvider } from "@/components/ui/tooltip"
 
-import appCss from "../styles.css?url"
 import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "sonner"
 
 export const Route = createRootRoute({
   head: () => ({

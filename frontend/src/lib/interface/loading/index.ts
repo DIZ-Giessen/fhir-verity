@@ -81,7 +81,7 @@ export const PurgeText = [
   "Loading",
 ]
 
-export const useLoadingText = (texts: string[]) => {
+export const useLoadingText = (texts: Array<string>) => {
   const [loadingText, setLoadingText] = useState(texts[0])
   useEffect(() => {
     const interval = setInterval(() => {

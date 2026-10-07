@@ -2,18 +2,35 @@
 
 import json
 import logging
+import uuid
 from typing import Dict
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
+from sqlalchemy import select
+
+from app.core.config import get_settings
+from app.core.database import AsyncSessionLocal
+from app.core.security import load_server_scoped
+from app.models.user import User
+from app.models.validation_run import ValidationRun
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 active_connections: Dict[str, list[WebSocket]] = {}
 
 
 @router.websocket("/ws/validation/{run_id}")
 async def websocket_endpoint(websocket: WebSocket, run_id: str):
-    """WebSocket for live progress of a validation run."""
+    """WebSocket for live progress of a validation run.
+
+    Same access rules as GET /validation/runs/{run_id}: the session cookie
+    must belong to a user who can see the run's server.
+    """
+    if not await _may_watch(websocket, run_id):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
     await websocket.accept()
 
     if run_id not in active_connections:
@@ -35,6 +52,40 @@ async def websocket_endpoint(websocket: WebSocket, run_id: str):
     except WebSocketDisconnect:
         _remove_connection(run_id, websocket)
         logger.debug("WebSocket disconnected for run %s", run_id)
+
+
+async def _may_watch(websocket: WebSocket, run_id: str) -> bool:
+    """True if the connecting session may follow this run."""
+    try:
+        run_uuid = uuid.UUID(run_id)
+    except ValueError:
+        return False
+    if not settings.AUTH_ENABLED:
+        return True
+
+    user_id = websocket.session.get("user_id")
+    if not user_id:
+        return False
+
+    async with AsyncSessionLocal() as db:
+        try:
+            user = (
+                await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+            ).scalar_one_or_none()
+        except ValueError:
+            return False
+        server_id = (
+            await db.execute(
+                select(ValidationRun.server_id).where(ValidationRun.id == run_uuid)
+            )
+        ).scalar_one_or_none()
+        if user is None or server_id is None:
+            return False
+        try:
+            await load_server_scoped(server_id, user, db)
+        except HTTPException:
+            return False
+    return True
 
 
 def _remove_connection(run_id: str, websocket: WebSocket):

@@ -19,6 +19,8 @@ export interface TestReportEntry extends ResourceRef {
 export interface TestReportSummary {
   run_id?: string
   generated_at?: string
+  /** false when the server had "Write FHIR reports" switched off for this run */
+  posted_to_server?: boolean
   test_scripts?: Record<string, ResourceRef>
   test_reports?: Record<string, TestReportEntry>
   verification_result?: {
@@ -46,7 +48,7 @@ export interface InvalidResourcesParams {
   severity?: string | null
   only_current_run?: boolean
   sort_by?: string | null
-  sort_dir?: "asc" | "desc" | null
+  sort_dir?: "asc" | "desc"
 }
 
 // ?  LIVE PROGRESS
