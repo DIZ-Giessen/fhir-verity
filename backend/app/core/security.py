@@ -27,10 +27,15 @@ def _admin_bootstrap_set() -> set[str]:
     return {x.strip().lower() for x in raw.split(",") if x.strip()}
 
 
+# Built-in user every request runs as when AUTH_ENABLED=false.
+DEV_USER_ID = uuid.UUID(int=0)
+DEV_USER_SUB = "dev-bypass"
+
+
 def _dev_user() -> User:
     return User(
-        id=uuid.UUID(int=0),
-        keycloak_sub="dev-bypass",
+        id=DEV_USER_ID,
+        keycloak_sub=DEV_USER_SUB,
         username="dev",
         email=None,
         full_name="Development User",
@@ -83,7 +88,7 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> User:
     if not settings.AUTH_ENABLED:
-        return _dev_user()
+        return await ensure_dev_user(db)
 
     user_id_str = request.session.get("user_id")
     if not user_id_str:
@@ -181,14 +186,21 @@ def server_access(min_role: str = UserRole.viewer.value):
     return _dep
 
 
-async def ensure_dev_user(db: AsyncSession) -> None:
-    """Persist the dev-bypass user so owner_id/actor_id FKs resolve when AUTH_ENABLED=false."""
-    if settings.AUTH_ENABLED:
-        return
-    dev = _dev_user()
-    exists = (
-        await db.execute(select(User).where(User.id == dev.id))
-    ).scalar_one_or_none()
-    if exists is None:
-        db.add(dev)
-        await db.commit()
+async def ensure_dev_user(db: AsyncSession) -> User:
+    """Return the persisted dev-bypass user, creating it if missing.
+
+    Loaded from the session (not built in memory) so preference changes are
+    saved and owner_id/actor_id foreign keys resolve. Always admin: in this
+    mode there is nobody else to grant roles.
+    """
+    user = await db.get(User, DEV_USER_ID)
+    if user is None:
+        user = _dev_user()
+        db.add(user)
+    elif user.role == UserRole.admin.value:
+        return user
+    else:
+        user.role = UserRole.admin.value
+    await db.commit()
+    await db.refresh(user)
+    return user

@@ -181,7 +181,19 @@ export type AuthUser = components["schemas"]["UserRead"]
 
 export const authKeys = {
   me: ["auth", "me"] as const,
+  config: ["auth", "config"] as const,
 }
+
+/** Whether sign-in is required (AUTH_ENABLED on the backend). Fixed per deployment. */
+export const authConfigQueryOptions = () =>
+  queryOptions({
+    queryKey: authKeys.config,
+    queryFn: async () => {
+      const { data } = await api.GET("/api/v1/auth/config")
+      return data
+    },
+    staleTime: Infinity,
+  })
 
 export const meQueryOptions = () =>
   queryOptions({
@@ -396,8 +408,8 @@ export interface AuditLogParams {
   limit?: number
   server_id?: string
   resource_type?: string
-  action?: string
-  status_filter?: string
+  action?: components["schemas"]["AuditAction"]
+  status_filter?: components["schemas"]["AuditStatus"]
 }
 
 export const auditLogQueryOptions = (params: AuditLogParams = {}) =>

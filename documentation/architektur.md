@@ -89,8 +89,10 @@ HTTPS ist im Produktionsmodus zwingend, weil das Session-Cookie dann mit dem `Se
 
 Die Anmeldung läuft über Keycloak per OpenID Connect im Backend-for-Frontend-Muster (BFF). Das heißt, das Backend führt den
 OIDC-Ablauf durch und verwaltet eine serverseitige Session; das Frontend hält kein Token, sondern nur ein Session-Cookie. Der Ablauf: Das Frontend leitet auf `/api/v1/auth/login`, das Backend leitet weiter zu Keycloak, Keycloak leitet
-nach erfolgreicher Anmeldung zurück auf `/api/v1/auth/callback`, das Backend legt die Session an und leitet zurück in die Oberfläche. Für lokale Entwicklung ohne Keycloak kann die Authentifizierung abgeschaltet werden; dann wird beim
-Start ein Entwickler-Benutzer angelegt. Details in [rollenverwaltung.md](rollenverwaltung.md) und [deployment.md](deployment.md).
+nach erfolgreicher Anmeldung zurück auf `/api/v1/auth/callback`, das Backend legt die Session an und leitet zurück in die Oberfläche. Standorte ohne eigenen Keycloak
+können den mitgelieferten zuschalten (`docker-compose.keycloak.yml`). Für lokale Entwicklung lässt sich die Anmeldung mit `AUTH_ENABLED=false` abschalten;
+dann arbeitet jede Anfrage als eingebauter Admin `dev`, in Produktion verweigert das Backend diesen Modus. Details in
+[rollenverwaltung.md](rollenverwaltung.md) und [deployment.md](deployment.md).
 
 ## Migrationen beim Start
 

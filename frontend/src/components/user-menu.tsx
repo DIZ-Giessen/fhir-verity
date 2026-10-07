@@ -13,6 +13,7 @@ import type { NotificationLinesRemove } from "@solar-icons/react-perf/category/s
 
 import type { AuthUser, Role } from "@/api/queries"
 import {
+  authConfigQueryOptions,
   authKeys,
   hasRole,
   logout,
@@ -64,6 +65,9 @@ const managementItems: Array<ManagementItem> = [
 
 export function UserMenu() {
   const { data: user } = useQuery(meQueryOptions())
+  const { data: authConfig } = useQuery(authConfigQueryOptions())
+  // Without auth there is no session to end; "Sign out" would just bounce back.
+  const canSignOut = authConfig?.auth_enabled !== false
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
@@ -157,23 +161,28 @@ export function UserMenu() {
               </div>
             </>
           )}
-          <Separator />
-          <div className="flex items-center justify-between gap-3 p-4">
-            <div className="space-y-0.5">
-              <Label
-                htmlFor="email-notifications"
-                className="text-sm font-medium"
-              >
-                Email-Benachrichtigungen
-              </Label>
-            </div>
-            <Switch
-              id="email-notifications"
-              checked={user.email_notifications_enabled}
-              onCheckedChange={(v) => emailPref.mutate(v)}
-              disabled={emailPref.isPending}
-            />
-          </div>
+          {/* Notifications go to user.email; without one the switch does nothing. */}
+          {user.email && (
+            <>
+              <Separator />
+              <div className="flex items-center justify-between gap-3 p-4">
+                <div className="space-y-0.5">
+                  <Label
+                    htmlFor="email-notifications"
+                    className="text-sm font-medium"
+                  >
+                    Email-Benachrichtigungen
+                  </Label>
+                </div>
+                <Switch
+                  id="email-notifications"
+                  checked={user.email_notifications_enabled}
+                  onCheckedChange={(v) => emailPref.mutate(v)}
+                  disabled={emailPref.isPending}
+                />
+              </div>
+            </>
+          )}
           <Separator />
           <div className="p-1 px-3">
             <Button
@@ -187,18 +196,22 @@ export function UserMenu() {
               Start validation
             </Button>
           </div>
-          <Separator />
-          <div className="p-1">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-destructive hover:text-destructive"
-              onClick={() => logoutMutation.mutate()}
-              disabled={logoutMutation.isPending}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              {logoutMutation.isPending ? "Signing out…" : "Sign out"}
-            </Button>
-          </div>
+          {canSignOut && (
+            <>
+              <Separator />
+              <div className="p-1">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-destructive hover:text-destructive"
+                  onClick={() => logoutMutation.mutate()}
+                  disabled={logoutMutation.isPending}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {logoutMutation.isPending ? "Signing out…" : "Sign out"}
+                </Button>
+              </div>
+            </>
+          )}
         </PopoverContent>
       </Popover>
       <StartValidationDialog open={startOpen} onOpenChange={setStartOpen} />

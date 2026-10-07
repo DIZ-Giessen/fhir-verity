@@ -85,6 +85,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Auth Config
+         * @description Public: whether sign-in is required. Lets the SPA hide login/logout.
+         */
+        get: operations["auth_config_api_v1_auth_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me": {
         parameters: {
             query?: never;
@@ -697,6 +717,7 @@ export interface paths {
          * @description Returns a list of users in the system, ordered by creation date.
          *
          *     Accessible only to admin users. Supports pagination via `skip` and `limit` parameters.
+         *     The built-in dev user (AUTH_ENABLED=false) is listed only while that mode is on.
          */
         get: operations["list_users_api_v1_users_get"];
         put?: never;
@@ -785,6 +806,11 @@ export interface components {
              */
             executed_at: string;
         };
+        /**
+         * AuditAction
+         * @enum {string}
+         */
+        AuditAction: "DELETE" | "PATCH" | "PURGE" | "BULK_DELETE" | "BULK_PATCH";
         /** AuditLogDetail */
         AuditLogDetail: {
             /**
@@ -854,6 +880,19 @@ export interface components {
              * Format: date-time
              */
             executed_at: string;
+        };
+        /**
+         * AuditStatus
+         * @enum {string}
+         */
+        AuditStatus: "success" | "failed";
+        /**
+         * AuthConfigRead
+         * @description Public auth settings the frontend needs before anyone is signed in.
+         */
+        AuthConfigRead: {
+            /** Auth Enabled */
+            auth_enabled: boolean;
         };
         /**
          * AutoFixRequest
@@ -1745,6 +1784,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    auth_config_api_v1_auth_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthConfigRead"];
                 };
             };
         };
@@ -2694,8 +2753,8 @@ export interface operations {
                 limit?: number;
                 server_id?: string | null;
                 resource_type?: string | null;
-                action?: string | null;
-                status_filter?: string | null;
+                action?: components["schemas"]["AuditAction"] | null;
+                status_filter?: components["schemas"]["AuditStatus"] | null;
                 actor_id?: string | null;
             };
             header?: never;

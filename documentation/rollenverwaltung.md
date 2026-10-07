@@ -16,9 +16,22 @@ kein Login stattgefunden hat, und kein Fehler.
 
 Das Session-Cookie wird im Produktionsmodus mit dem `Secure`-Flag gesetzt und erfordert damit HTTPS. Das ist der Grund, warum der Produktionsbetrieb zwingend über HTTPS läuft.
 
+Wer keinen eigenen Keycloak hat, nutzt den mitgelieferten (siehe [deployment.md](deployment.md#weg-2-mitgelieferter-keycloak)). Rollen, Ownership und
+Audit funktionieren damit genauso.
+
 ### Entwicklungsmodus ohne Keycloak
 
-Für lokale Entwicklung lässt sich die Authentifizierung über `AUTH_ENABLED=false` in `.env` abschalten. In diesem Fall wird beim Start ein Entwickler-Benutzer angelegt, mit dem man ohne Keycloak arbeiten kann. Dieser Modus ist ausschließlich für die lokale Entwicklung gedacht und sollte in Produktion nicht verwendet werden.
+Für lokale Entwicklung und Demos lässt sich die Anmeldung mit `AUTH_ENABLED=false` abschalten. Dann gilt:
+
+- Jede Anfrage läuft als eingebauter Benutzer `dev` (feste ID `00000000-0000-0000-0000-000000000000`, Rolle **admin**). Er wird beim Start in der
+  Datenbank angelegt, damit Eigentümer- und Audit-Einträge auf ihn verweisen können, und bleibt immer admin.
+- Es gibt keine Trennung nach Benutzern: alle sehen alle Server, Läufe und Audit-Einträge.
+- `/api/v1/auth/config` meldet `auth_enabled: false`. Die Oberfläche blendet daraufhin Login-Seite und „Sign out“ aus und zeigt einen Hinweisbalken.
+- Keycloak-Variablen und `SESSION_SECRET_KEY` werden nicht gebraucht.
+- Mit `ENVIRONMENT=production` startet das Backend in diesem Modus nicht.
+
+Beim Wechsel zurück auf `AUTH_ENABLED=true` bleibt `dev` in der Datenbank, taucht aber in der Benutzerverwaltung nicht mehr auf und zählt nicht als
+Admin. Server, die unter `dev` angelegt wurden, sind dann nur noch für Admins sichtbar.
 
 ## Die drei Rollen
 
@@ -35,8 +48,8 @@ mindestens viewer, die Konfiguration verlangt editor, die Benutzerverwaltung ist
 ## Erste Administratoren
 
 Damit es überhaupt jemanden gibt, der Rollen vergeben kann, wird über die `.env`-Variable `INITIAL_ADMIN_USERS` festgelegt, welche Benutzer beim ersten
-Login automatisch die admin-Rolle erhalten. Der Eintrag muss exakt der Kennung entsprechen, die Keycloak zurückliefert (in der Regel die E-Mail-Adresse).
-Mehrere Adressen werden durch Komma getrennt.
+Login automatisch die admin-Rolle erhalten. Verglichen wird mit dem Benutzernamen und der E-Mail-Adresse, die Keycloak zurückliefert, ohne Beachtung der
+Groß-/Kleinschreibung. Mehrere Einträge werden durch Komma getrennt. Beim mitgelieferten Keycloak ist das `verity-admin`.
 
 ```bash
 #  Beispiel: INITIAL_ADMIN_USERS=meine-email@institut.de,admin2@institut.de

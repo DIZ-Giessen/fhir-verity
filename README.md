@@ -30,6 +30,11 @@ Voraussetzung: Docker Engine und das Compose-Plugin. Für die Datenbank gibt es 
 - **Externe PostgreSQL (Standard):** Es gibt am Standort bereits eine PostgreSQL. In der `.env` wird nur die `DATABASE_URL` auf diesen Host gesetzt.
 - **Mitgelieferte PostgreSQL:** Es gibt keine. Dann in der `docker-compose.yml` die mit „Weg B“ markierten Blöcke einkommentieren — Verity bringt seinen eigenen Datenbank-Container mit, es muss nichts vorab angelegt werden.
 
+Für die Anmeldung genauso:
+
+- **Eigener Keycloak (Standard):** In der `.env` die `KEYCLOAK_*`-Werte des Standort-Keycloak eintragen.
+- **Mitgelieferter Keycloak:** Es gibt keinen. Dann in der `.env` den Block „Weg 2“ einkommentieren — Verity startet einen fertig eingerichteten Keycloak unter `https://<DOMAIN>/kc`.
+
 ```bash
 git clone <repo-url> fhir-verity
 cd fhir-verity
@@ -53,7 +58,8 @@ cd backend
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
-# .env auf die lokale Datenbank und deinen Keycloak zeigen lassen
+# .env auf die lokale Datenbank und deinen Keycloak zeigen lassen,
+# oder ohne Keycloak: AUTH_ENABLED=false (nur mit ENVIRONMENT=development)
 alembic upgrade head
 uvicorn app.main:app --reload
 ```

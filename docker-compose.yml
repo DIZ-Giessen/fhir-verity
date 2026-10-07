@@ -17,6 +17,12 @@
 #       DATABASE_URL=postgresql+asyncpg://<POSTGRES_USER>:<POSTGRES_PASSWORD>@db:5432/<POSTGRES_DB>
 #     Host ist dann immer "db", die Daten liegen im Volume "pgdata".
 #
+# Anmeldung: Keycloak ist im Betrieb Pflicht (AUTH_ENABLED=true).
+#   Eigener Keycloak des Standorts: nur KEYCLOAK_* in der .env setzen.
+#   Kein Keycloak vorhanden: der mitgelieferte wird mit einer Zeile in der
+#   .env zugeschaltet (siehe docker-compose.keycloak.yml):
+#       COMPOSE_FILE=docker-compose.yml:docker-compose.keycloak.yml
+#
 # Details: documentation/deployment.md
 
 services:

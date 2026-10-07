@@ -20,6 +20,12 @@ class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AuthConfigRead(BaseModel):
+    """Public auth settings the frontend needs before anyone is signed in."""
+
+    auth_enabled: bool
+
+
 class UserRoleUpdate(BaseModel):
     """
     Schema for updating the user's role.

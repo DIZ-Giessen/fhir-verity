@@ -1,6 +1,7 @@
 """Main App"""
 
 import logging
+import secrets
 from contextlib import asynccontextmanager
 import time
 from fastapi import Depends, FastAPI, Request
@@ -92,8 +93,13 @@ async def lifespan(application: FastAPI):
     logger.info("Starting FHIR Verity API")
     await reconcile_orphaned_runs()
     await seed_default_configs()
-    async with AsyncSessionLocal() as db:
-        await ensure_dev_user(db)
+    if not settings.AUTH_ENABLED:
+        logger.warning(
+            "AUTH_ENABLED=false: authentication is off, every request runs as "
+            "the built-in admin 'dev'. Use only for development and demos."
+        )
+        async with AsyncSessionLocal() as db:
+            await ensure_dev_user(db)
     yield
     logger.info("Shutting down FHIR Verity API")
 
@@ -120,7 +126,8 @@ app.add_middleware(SlowAPIMiddleware)
 # manages the cookie inside).
 app.add_middleware(
     SessionMiddleware,
-    secret_key=settings.SESSION_SECRET_KEY,
+    # Without auth no session data matters, so a per-process key is enough.
+    secret_key=settings.SESSION_SECRET_KEY or secrets.token_urlsafe(32),
     same_site="lax",
     https_only=settings.ENVIRONMENT == "production",
     session_cookie="verity_session",

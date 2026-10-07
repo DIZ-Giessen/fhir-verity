@@ -6,14 +6,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.security import require_role
+from app.core.security import DEV_USER_SUB, require_role
 from app.models.user import User, UserRole
 from app.schemas.user import UserRead, UserRoleUpdate
 from app.core.security import get_current_user
 from app.schemas.user import UserPreferencesUpdate
 
 router = APIRouter()
+settings = get_settings()
 
 
 @router.get("/users", response_model=list[UserRead])
@@ -27,13 +29,13 @@ async def list_users(
     Returns a list of users in the system, ordered by creation date.
 
     Accessible only to admin users. Supports pagination via `skip` and `limit` parameters.
+    The built-in dev user (AUTH_ENABLED=false) is listed only while that mode is on.
     """
+    stmt = select(User)
+    if settings.AUTH_ENABLED:
+        stmt = stmt.where(User.keycloak_sub != DEV_USER_SUB)
     rows = (
-        (
-            await db.execute(
-                select(User).order_by(User.created_at).offset(skip).limit(limit)
-            )
-        )
+        (await db.execute(stmt.order_by(User.created_at).offset(skip).limit(limit)))
         .scalars()
         .all()
     )
@@ -69,7 +71,12 @@ async def update_user_role(
     if target.role == UserRole.admin.value and new_role != UserRole.admin.value:
         admin_count = (
             await db.execute(
-                select(func.count(User.id)).where(User.role == UserRole.admin.value)
+                select(func.count(User.id)).where(
+                    User.role == UserRole.admin.value,
+                    # The dev user cannot sign in once auth is on, so it
+                    # must not count as the admin that keeps the system usable.
+                    User.keycloak_sub != DEV_USER_SUB,
+                )
             )
         ).scalar_one()
         if admin_count <= 1:

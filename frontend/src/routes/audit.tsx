@@ -102,8 +102,10 @@ function AuditPage() {
     limit: PAGE_SIZE,
     server_id: serverId === ALL ? undefined : serverId,
     resource_type: resourceType === ALL ? undefined : resourceType,
-    action: action === ALL ? undefined : action,
-    status_filter: status === ALL ? undefined : status,
+    // Select values come from the AuditAction/AuditStatus option lists below.
+    action: action === ALL ? undefined : (action as AuditLogParams["action"]),
+    status_filter:
+      status === ALL ? undefined : (status as AuditLogParams["status_filter"]),
   }
 
   const listQ = useQuery(auditLogQueryOptions(params))

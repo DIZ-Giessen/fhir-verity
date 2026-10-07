@@ -6,6 +6,9 @@ Flow:
   3) Keycloak redirects to /api/v1/auth/callback with the code.
   4) We exchange the code (using the confidential client_secret, server-side),
      provision the user, set the session cookie, then redirect back to the SPA.
+
+With AUTH_ENABLED=false there is no Keycloak: login/callback just send the
+browser back to the SPA, and /auth/me returns the built-in dev user.
 """
 
 import logging
@@ -21,7 +24,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import get_current_user, provision_user
 from app.models.user import User
-from app.schemas.user import UserRead
+from app.schemas.user import AuthConfigRead, UserRead
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -34,13 +37,14 @@ settings = get_settings()
 KEYCLOAK_TIMEOUT = httpx.Timeout(connect=10.0, read=15.0, write=10.0, pool=10.0)
 
 oauth = OAuth()
-oauth.register(
-    name="keycloak",
-    client_id=settings.KEYCLOAK_CLIENT_ID,
-    client_secret=settings.KEYCLOAK_CLIENT_SECRET,
-    server_metadata_url=settings.KEYCLOAK_DISCOVERY_URL,
-    client_kwargs={"scope": "openid profile email", "timeout": KEYCLOAK_TIMEOUT},
-)
+if settings.AUTH_ENABLED:
+    oauth.register(
+        name="keycloak",
+        client_id=settings.KEYCLOAK_CLIENT_ID,
+        client_secret=settings.KEYCLOAK_CLIENT_SECRET,
+        server_metadata_url=settings.KEYCLOAK_DISCOVERY_URL,
+        client_kwargs={"scope": "openid profile email", "timeout": KEYCLOAK_TIMEOUT},
+    )
 
 
 def _frontend_url(path: str = "/") -> str:
@@ -50,6 +54,8 @@ def _frontend_url(path: str = "/") -> str:
 @router.get("/auth/login")
 async def login(request: Request):
     """Starts the authentication process by redirecting to Keycloak."""
+    if not settings.AUTH_ENABLED:
+        return RedirectResponse(_frontend_url("/"))
     redirect_uri = f"{settings.BACKEND_BASE_URL.rstrip('/')}/api/v1/auth/callback"
     try:
         return await oauth.keycloak.authorize_redirect(request, redirect_uri)
@@ -64,6 +70,8 @@ async def callback(request: Request, db: AsyncSession = Depends(get_db)):
     Callback endpoint for Keycloak OAuth2. Exchanges the authorization code for tokens,
     fetches user info from the IdP, provisions the user in the local DB, and sets a session.
     """
+    if not settings.AUTH_ENABLED:
+        return RedirectResponse(_frontend_url("/"))
     try:
         token = await oauth.keycloak.authorize_access_token(request)
     except OAuthError as exc:
@@ -92,6 +100,12 @@ async def logout(request: Request):
     """Logs out the current user by clearing the session."""
     request.session.clear()
     return {"status": "ok"}
+
+
+@router.get("/auth/config", response_model=AuthConfigRead)
+async def auth_config():
+    """Public: whether sign-in is required. Lets the SPA hide login/logout."""
+    return AuthConfigRead(auth_enabled=settings.AUTH_ENABLED)
 
 
 @router.get("/auth/me", response_model=UserRead)

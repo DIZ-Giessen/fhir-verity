@@ -1,0 +1,49 @@
+{
+  "realm": "verity",
+  "displayName": "FHIR Verity",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "bruteForceProtected": true,
+  "clients": [
+    {
+      "clientId": "${KEYCLOAK_CLIENT_ID}",
+      "name": "FHIR Verity",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["${VERITY_PUBLIC_URL}/api/v1/auth/callback"],
+      "webOrigins": ["${VERITY_PUBLIC_URL}"],
+      "attributes": {
+        "post.logout.redirect.uris": "${VERITY_PUBLIC_URL}/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "verity-admin",
+      "enabled": true,
+      "firstName": "Verity",
+      "lastName": "Admin",
+      "email": "${VERITY_ADMIN_EMAIL}",
+      "emailVerified": true,
+      "requiredActions": ["UPDATE_PASSWORD"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${VERITY_ADMIN_PASSWORD}",
+          "temporary": true
+        }
+      ]
+    }
+  ]
+}

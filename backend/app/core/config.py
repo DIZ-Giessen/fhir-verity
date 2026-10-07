@@ -7,6 +7,7 @@ Use get_settings() to access a cached Settings instance throughout the applicati
 """
 
 from functools import lru_cache
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -28,13 +29,17 @@ class Settings(BaseSettings):
     FIELD_ENCRYPTION_KEY: str
 
     # --- Auth (BFF) ---
+    # false = demo/development mode without Keycloak: every request runs as a
+    # single built-in admin, there is no ownership separation. Refused when
+    # ENVIRONMENT=production (see _check_auth). The Keycloak settings and
+    # SESSION_SECRET_KEY are only required while auth is enabled.
     AUTH_ENABLED: bool = True
-    SESSION_SECRET_KEY: str
+    SESSION_SECRET_KEY: str = ""
     BACKEND_BASE_URL: str = "http://localhost:8000"
     FRONTEND_BASE_URL: str = "http://localhost:3000"
-    KEYCLOAK_DISCOVERY_URL: str
+    KEYCLOAK_DISCOVERY_URL: str = ""
     KEYCLOAK_CLIENT_ID: str = "fhir-verity"
-    KEYCLOAK_CLIENT_SECRET: str
+    KEYCLOAK_CLIENT_SECRET: str = ""
     INITIAL_ADMIN_USERS: str = ""
 
     # --- SMTP (email notifications) ---
@@ -56,6 +61,32 @@ class Settings(BaseSettings):
     # once reports exist, otherwise old and new reports use different systems.
     # Empty = derived from BACKEND_BASE_URL.
     FHIR_REPORT_NAMING_SYSTEM: str = ""
+
+    @model_validator(mode="after")
+    def _check_auth(self) -> "Settings":
+        if not self.AUTH_ENABLED:
+            if self.ENVIRONMENT == "production":
+                raise ValueError(
+                    "AUTH_ENABLED=false is not allowed with ENVIRONMENT=production: "
+                    "everyone who can reach Verity would act as admin. Configure "
+                    "Keycloak (or the bundled one, docker compose --profile keycloak) "
+                    "or set ENVIRONMENT=development for a demo setup."
+                )
+            return self
+        missing = [
+            name
+            for name in (
+                "SESSION_SECRET_KEY",
+                "KEYCLOAK_DISCOVERY_URL",
+                "KEYCLOAK_CLIENT_SECRET",
+            )
+            if not getattr(self, name)
+        ]
+        if missing:
+            raise ValueError(
+                f"AUTH_ENABLED=true requires {', '.join(missing)} to be set"
+            )
+        return self
 
     @property
     def cors_origins_list(self) -> list[str]:
