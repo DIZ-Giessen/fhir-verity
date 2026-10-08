@@ -75,11 +75,9 @@ Filter und Statistik. Im FHIR-TestScript werden `warning`- und `info`-Regeln als
 Für jeden Lauf wird die Konfiguration pro Ressourcentyp so zusammengesetzt:
 
 1. **Globale Grundkonfiguration**: Zeile in `validation_configs` mit `server_id = NULL`. Sie wird beim ersten Start aus `MII_KDS_DEFAULTS` angelegt.
-2. **Server-Override**: Zeile mit der `server_id` des Servers. Sie entsteht, sobald jemand auf der Konfigurationsseite eines Servers eine Regel ändert.
-   Überschrieben wird regelweise: Eine geänderte Regel ersetzt die globale vollständig, alle anderen gelten unverändert weiter.
+2. **Server-Override**: Zeile mit der `server_id` des Servers. Sie entsteht, sobald jemand auf der Konfigurationsseite eines Servers eine Regel ändert. Überschrieben wird regelweise: Eine geänderte Regel ersetzt die globale vollständig, alle anderen gelten unverändert weiter.
 
-Pro Regel lassen sich `enabled`, `severity` und `pattern` ändern. Neue Regeln lassen sich über die Oberfläche nicht anlegen, nur solche, die in
-`MII_KDS_DEFAULTS` definiert sind.
+Pro Regel lassen sich `enabled`, `severity` und `pattern` ändern. Neue Regeln lassen sich über die Oberfläche nicht anlegen, nur solche, die in `MII_KDS_DEFAULTS` definiert sind.
 
 ### Filter
 
@@ -92,41 +90,19 @@ Pro Server und Ressourcentyp kann der Crawl eingeschränkt werden. Die Filter we
 | `profile`           | `_profile=<Wert>`       |
 | `tag`               | `_tag=<Wert>`           |
 
-Ist ein Filter aktiv, werden nicht mehr alle Ressourcen des Typs besucht. Verity räumt dann nach dem Lauf **keine** veralteten Einträge aus
-`invalid_resources` auf, weil nicht feststeht, ob eine nicht besuchte Ressource inzwischen korrigiert wurde.
+Ist ein Filter aktiv, werden nicht mehr alle Ressourcen des Typs besucht. Verity räumt dann nach dem Lauf **keine** veralteten Einträge aus `invalid_resources` auf, weil nicht feststeht, ob eine nicht besuchte Ressource inzwischen korrigiert wurde.
 
 ### Allgemeine Prüfregeln
 
 Diese Details gelten für alle Typen und erklären Grenzfälle:
 
 - **„fehlt“** heißt: Feld nicht vorhanden, `null`, leere Zeichenkette, leere Liste oder leeres Objekt.
-- **Zukunftsprüfungen** vergleichen mit der aktuellen Zeit in UTC. Ein Datum ohne Zeitzone (`2026-10-07`) wird als Mitternacht UTC gelesen. Nicht
-  lesbare Werte schlagen nicht an.
-- **Referenzformat** (`subject_reference_format`) prüft nur, ob `subject.reference` mit `Patient/` beginnt. Ob der Patient auf dem Server existiert,
-  wird nicht geprüft. Fehlt `subject.reference` ganz, schlägt diese Regel nicht an; das deckt `subject_required` ab. Absolute URLs
-  (`https://…/Patient/123`), `urn:uuid:`-Verweise und reine `identifier`-Verweise gelten als Verstoß.
+- **Zukunftsprüfungen** vergleichen mit der aktuellen Zeit in UTC. Ein Datum ohne Zeitzone (`2026-10-07`) wird als Mitternacht UTC gelesen. Nicht lesbare Werte schlagen nicht an.
+- **Referenzformat** (`subject_reference_format`) prüft nur, ob `subject.reference` mit `Patient/` beginnt. Ob der Patient auf dem Server existiert, wird nicht geprüft. Fehlt `subject.reference` ganz, schlägt diese Regel nicht an; das deckt `subject_required` ab. Absolute URLs (`https://…/Patient/123`), `urn:uuid:`-Verweise und reine `identifier`-Verweise gelten als Verstoß.
 - **Freitext-Regeln** (`note_cleartext_check`, `value_string_cleartext_forbidden`) erkennen keine Namen, sondern schlagen bei langen Texten an
   (Schwellwerte je Regel unten). Sie sind ein Hinweis zum manuellen Nachsehen.
 - Eine Regel meldet pro Ressource höchstens einen Befund, auch wenn mehrere Einträge eines Feldes betroffen sind. Ausnahme:
   `Encounter.pseudonym_format_check` kann für `id` und `identifier` je einen Befund melden.
-
-## Übersicht der Ressourcentypen
-
-| Ressourcentyp            | MII-KDS-Modul  | Regeln | Standardmäßig aktiv | Validator |
-| ------------------------ | -------------- | -----: | ------------------: | --------- |
-| Patient                  | Person         |     15 |                  11 | ja        |
-| Encounter                | Fall           |     11 |                   9 | ja        |
-| Condition                | Diagnose       |      7 |                   4 | ja        |
-| Observation              | Labor          |      9 |                   8 | ja        |
-| Medication               | Medikation     |      3 |                   3 | ja        |
-| MedicationRequest        | Medikation     |      8 |                   8 | ja        |
-| MedicationAdministration | Medikation     |      8 |                   8 | ja        |
-| MedicationStatement      | Medikation     |      4 |                   4 | **nein**  |
-| Procedure                | Prozedur       |      6 |                   6 | ja        |
-| DiagnosticReport         | Labor (Befund) |      5 |                   5 | ja        |
-
-Regeln, die in der Konfiguration stehen, aber im Validator noch keine Prüflogik haben, sind unten mit **nicht implementiert** markiert. Sie lassen sich
-in der Oberfläche schalten, schlagen aber nie an. Die Liste steht gesammelt unter [Bekannte Lücken](#bekannte-lücken-und-einschränkungen).
 
 Spalten der Regeltabellen: **Std.** = standardmäßig aktiv, **Fix** = Auto-Fix verfügbar (siehe [Auto-Fix](#auto-fix)).
 

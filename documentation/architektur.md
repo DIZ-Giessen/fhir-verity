@@ -67,12 +67,6 @@ HTTPS ist im Produktionsmodus zwingend, weil das Session-Cookie dann mit dem `Se
 
 ## Datenfluss einer Validierung
 ![Architektur Diagramm](/documentation/images/archi.svg)
-1. Ein Validierungslauf wird über die Oberfläche gestartet und ausgewählt, welcher Server und welche Ressourcentypen geprüft werden.
-2. Das Backend liest den Ressourcen-Bestand des FHIR-Servers seitenweise ein. Die Crawl-Architektur ist so ausgelegt, dass sie über sehr große Bestände stabil bleibt, bei Fehlern zurücksetzt und ein unterbrochener Lauf wieder aufgenommen werden kann.
-3. Jede Ressource durchläuft die Regel-Engine. Verstöße werden pro Ressource mit dem konkreten Befund festgehalten.
-4. Invalide Ressourcen und Metriken werden in PostgreSQL gespeichert. Der Fortschritt wird währenddessen über WebSocket live an die Oberfläche gemeldet.
-5. Am Ende erzeugt Verity FHIR-konforme Report-Ressourcen (`VerificationResult`, `TestReport`, `TestScript`) und schreibt sie auf den geprüften Server zurück.
-6. Über den Bereinigungs-Workflow können invalide Ressourcen anschließend gezielt von dem jeweiligen Server korrigiert oder gelöscht werden — jede Aktion mit vorheriger Anzeige des exakten FHIR-Befehls und vollständiger Protokollierung.
 
 ## Authentifizierung
 
