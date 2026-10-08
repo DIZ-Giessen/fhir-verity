@@ -9,5 +9,5 @@
 		reverse_proxy frontend:3000
 	}
 
-	tls /etc/letsencrypt/live/{$DOMAIN}/fullchain.pem /etc/letsencrypt/live/{$DOMAIN}/privkey.pem
+	tls {$CADDY_TLS}
 }

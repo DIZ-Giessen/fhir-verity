@@ -6,11 +6,14 @@
 # Danach wie gewohnt: docker compose up -d
 #
 # Startet Keycloak mit eigener PostgreSQL (Volume "keycloak_pgdata") unter
-# https://<DOMAIN>/kc. Beim ersten Start wird keycloak/verity-realm.json
-# importiert: Realm "verity", Client für Verity und der Benutzer
-# "verity-admin" (Passwort VERITY_ADMIN_PASSWORD, muss beim ersten Login
-# geändert werden). Weitere Benutzer legt man in der Admin-Konsole
+# https://<DOMAIN>/kc. Beim ersten Start wird keycloak/verity-realm.json importiert: Realm "verity", Client für Verity und der Benutzer "verity-admin" (Passwort VERITY_ADMIN_PASSWORD, muss beim ersten Login geändert werden). Weitere Benutzer legt man in der Admin-Konsole
 # https://<DOMAIN>/kc/admin an (Benutzer "admin", KEYCLOAK_ADMIN_PASSWORD).
+#
+#
+#
+#
+#
+#
 #
 # Details: documentation/deployment.md
 
@@ -45,18 +48,29 @@ services:
       KC_HTTP_RELATIVE_PATH: /kc
       KC_PROXY_HEADERS: xforwarded
       # Browser-URLs (Login-Seite, Issuer) zeigen auf die öffentliche Adresse,
+
+
       # das Backend spricht Keycloak intern über http://keycloak:8080 an.
       KC_HOSTNAME: https://${DOMAIN:-localhost}/kc
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+
+
       # Admin der Keycloak-Admin-Konsole (Realm "master").
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD in .env setzen}
+
+
       # Platzhalter in keycloak/verity-realm.json
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-fhir-verity}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?KEYCLOAK_CLIENT_SECRET in .env setzen}
       VERITY_PUBLIC_URL: https://${DOMAIN:-localhost}
+
+      # Benutzer für Verity (Realm "verity")
       VERITY_ADMIN_EMAIL: ${VERITY_ADMIN_EMAIL:?VERITY_ADMIN_EMAIL in .env setzen}
       VERITY_ADMIN_PASSWORD: ${VERITY_ADMIN_PASSWORD:?VERITY_ADMIN_PASSWORD in .env setzen}
+
+
+
     volumes:
       - ./keycloak/verity-realm.json:/opt/keycloak/data/import/verity-realm.json:ro
     depends_on:
