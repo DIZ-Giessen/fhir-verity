@@ -1,45 +1,38 @@
 # FHIR Verity
 
-Fhir Verity ist eine Server-weite Datenqualitäts-Validierung und Bereinigung für FHIR-Server im Umfeld der Medizininformatik-Initiative (MII).
+Fhir Verity ist eine Server-weite Datenqualitäts-Validierung und Bereinigung für FHIR-Server.
 
-FHIR Verity liest den vollständigen Ressourcen-Bestand eines FHIR-Servers, prüft ihn gegen **konfigurierbare Qualitätsregeln** in vier Dimensionen
-(**Pseudonymisierung/Datenschutz, Vollständigkeit, Plausibilität, referentielle Integrität**), speichert die invaliden Ressourcen samt Befund und stellt einen Bereinigungs-Workflow bereit. Die Ergebnisse werden zusätzlich als FHIR-konforme Reports (`VerificationResult`, `TestReport`) auf den geprüften
-Server zurückgeschrieben.
-
-Das Tool ist als Ersatz für eine bestehende, schwer wartbare Mirth-Connect-Lösung entstanden und von Anfang an so gebaut, dass es an jedem DIZ oder alle andere FHIR Basierte Instituten ohne Codeänderung deploybar ist.
+FHIR Verity liest den vollständigen Ressourcen-Bestand eines FHIR-Servers, prüft ihn gegen **konfigurierbare Qualitätsregeln** in vier Dimensionen (**Pseudonymisierung/Datenschutz, Vollständigkeit, Plausibilität, referentielle Integrität**), speichert die invaliden Ressourcen samt Befund und stellt einen Bereinigungs-Workflow bereit. Die Ergebnisse werden zusätzlich als FHIR-konforme Reports (`VerificationResult`, `TestReport`) auf den geprüften Server zurückgeschrieben.
 
 ## Ziel
 
-Bestehende FHIR-Validatoren prüfen einzelne Ressourcen oder Bundles gegen Profile. Was in der Praxis fehlt, ist zweierlei: die Prüfung eines
-**kompletten Server-Bestands** in einem Durchlauf, und Qualitätskriterien, die über reine Profilkonformität hinausgehen — etwa ob Pseudonymisierung
-tatsächlich greift, ob Pflichtfelder gefüllt sind, ob Werte plausibel sind und ob Referenzen ins Leere zeigen oder unplausibel sind. Genau diese Lücke schließt Verity.
+Bestehende FHIR-Validatoren prüfen einzelne Ressourcen oder Bundles gegen Profile. Was in der Praxis fehlt, ist zweierlei: die Prüfung eines **kompletten Server-Bestands** in einem Durchlauf, und Qualitätskriterien, die über reine Profilkonformität hinausgehen — etwa ob Pseudonymisierung tatsächlich greift, ob Pflichtfelder gefüllt sind, ob Werte plausibel sind und ob Referenzen ins Leere zeigen oder unplausibel sind. Genau diese Lücke schließt Verity.
 
 ## Architektur in einem Satz
 
-Vier Container hinter einem Reverse Proxy: ein FastAPI-Backend, ein TanStack-Start-Frontend, eine PostgreSQL-Datenbank und Caddy als einziger nach
-außen offener Dienst. Caddy terminiert TLS und leitet `/api/*` an das Backend, alles andere an das Frontend — dadurch gibt es nur eine Origin, kein CORS und keine standortspezifisch eingebackene Backend-URL. Details in [documentation/architektur.md](documentation/architektur.md).
+Vier Container hinter einem Reverse Proxy: ein FastAPI-Backend, ein [TanStack-Start-Frontend](https://tanstack.com/start/latest/docs/framework/react/overview) , eine PostgreSQL-Datenbank und [Caddy](https://caddyserver.com/docs/getting-started) als einziger nach außen offener Dienst. Caddy terminiert TLS und leitet `/api/*` an das Backend wenn gewünscht `/kc` an Keycloack, alles andere an das Frontend — dadurch gibt es nur eine Origin, kein CORS und keine standortspezifisch eingebackene Backend-URL. Details in [documentation/architektur.md](documentation/architektur.md).
 
 ## Schnellstart
 
-Es gibt zwei Betriebsarten. Für einen produktiven Standort ist Docker der Weg, für die Entwicklung der lokale.
+Es gibt zwei Betriebsarten. Für einen produktiven Standort ist Docker Empfohlen.
 
 ### Mit Docker (empfohlen)
 
 Voraussetzung: Docker Engine und das Compose-Plugin. Für die Datenbank gibt es zwei Wege:
 
-- **Externe PostgreSQL (Standard):** Es gibt am Standort bereits eine PostgreSQL. In der `.env` wird nur die `DATABASE_URL` auf diesen Host gesetzt.
-- **Mitgelieferte PostgreSQL:** Es gibt keine. Dann in der `docker-compose.yml` die mit „Weg B“ markierten Blöcke einkommentieren — Verity bringt seinen eigenen Datenbank-Container mit, es muss nichts vorab angelegt werden.
+- **Eigene externe PostgreSQL (Standard):** Es gibt am Standort bereits eine PostgreSQL. In der `.env` wird nur die `DATABASE_URL` auf diesen Host gesetzt.
+- **Mitgelieferte PostgreSQL:** Es gibt keine. Dann in der `docker-compose.yml` die mit "Weg B" markierten Blöcke einkommentieren: Es wird dann einen eigenen Datenbank-Container mit, es muss nichts vorab angelegt werden.
 
 Für die Anmeldung genauso:
 
 - **Eigener Keycloak (Standard):** In der `.env` die `KEYCLOAK_*`-Werte des Standort-Keycloak eintragen.
-- **Mitgelieferter Keycloak:** Es gibt keinen. Dann in der `.env` den Block „Weg 2“ einkommentieren — Verity startet einen fertig eingerichteten Keycloak unter `https://<DOMAIN>/kc`.
+- **Mitgelieferter Keycloak:** Es gibt keinen. Dann in der `.env` den Block "Weg 2" einkommentieren: Es wird einen fertig eingerichteten Keycloak unter `https://<DOMAIN>/kc` gestartet.
 
 ```bash
 git clone <repo-url> fhir-verity
 cd fhir-verity
 cp .env.example .env
-# .env mit echten Werten füllen (Domain, Passwörter, Keycloak, SMTP)
+# .env mit echten Werten füllen (Domain, Passwörter, Keycloak, SMTP falls vorhanden)
 docker compose up -d --build
 docker compose logs -f backend
 
@@ -47,7 +40,7 @@ docker compose logs -f backend
 
 Die vollständige Anleitung inklusive Keycloak-Einrichtung, Zertifikaten und beiden Datenbank-Wegen steht in [documentation/deployment.md](documentation/deployment.md).
 
-### Lokal ohne Docker
+### Lokal 
 
 Voraussetzung: Python 3.12+, Node 22+, pnpm (oder ein anderer Paketmanager), eine PostgreSQL.
 
@@ -73,8 +66,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-Das Frontend läuft dann auf `http://localhost:3000`, das Backend auf `http://localhost:8000`. Weil beide auf unterschiedlichen Ports laufen, ist im
-lokalen Betrieb CORS aktiv — im Docker-Betrieb entfällt das durch die Single-Origin-Architektur mit Caddy.
+Das Frontend läuft dann auf `http://localhost:3000`, das Backend auf `http://localhost:8000`.
 
 ## Dokumentation
 
