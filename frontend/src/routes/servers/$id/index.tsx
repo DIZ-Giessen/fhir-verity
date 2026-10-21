@@ -12,11 +12,11 @@ import {
 import { useState } from "react"
 
 import {
-  DangerCircle,
-  DangerTriangle,
-  ExpressionlessSquare,
-  Refresh,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
+  DangerCircleIcon,
+  DangerTriangleIcon,
+  ExpressionlessSquareIcon,
+  RefreshIcon,
+} from "@solar-icons/react/line-duotone"
 import type {
   ResourceCount,
   ServerMetadata,
@@ -362,7 +362,7 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
       key: "error",
       name: "Errors",
       stat: counts.error,
-      Icon: DangerTriangle,
+      Icon: DangerTriangleIcon,
       tone: "text-red-500",
       description: "Critical issues that block successful validation.",
 
@@ -372,7 +372,7 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
       key: "warning",
       name: "Warnings",
       stat: counts.warning,
-      Icon: DangerTriangle,
+      Icon: DangerTriangleIcon,
       tone: "text-orange-500",
       description: "Should be resolved to improve validation quality.",
 
@@ -382,7 +382,7 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
       key: "info",
       name: "Infos",
       stat: counts.info,
-      Icon: DangerCircle,
+      Icon: DangerCircleIcon,
       tone: "text-blue-500",
       description: "Non-critical information.",
 
@@ -394,7 +394,7 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
     return (
       <Card className="p-6 shadow-2xs">
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <ExpressionlessSquare className="size-5.5" />
+          <ExpressionlessSquareIcon className="size-5.5" />
           No completed validation runs yet. Start one to see issue counts.
         </p>
       </Card>
@@ -575,7 +575,11 @@ function ResourceCountsCard({
           disabled={loading}
           aria-label="Refresh counts"
         >
-          {loading ? <Dots className="w-5" /> : <Refresh className="size-5" />}
+          {loading ? (
+            <Dots className="w-5" />
+          ) : (
+            <RefreshIcon className="size-5" />
+          )}
         </Button>
       </CardHeader>
       <CardContent>

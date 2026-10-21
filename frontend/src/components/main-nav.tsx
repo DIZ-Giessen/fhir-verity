@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link, useRouterState } from "@tanstack/react-router"
 import {
-  PieChart2,
-  PlayCircle,
-  Server2,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
+  HomeSmileIcon,
+  NotificationRemoveIcon,
+  PlayCircleIcon,
+  ServerSquareIcon,
+} from "@solar-icons/react/line-duotone"
 import type { LucideIcon } from "lucide-react"
 
 import type { Role } from "@/api/queries"
@@ -12,16 +13,17 @@ import { hasRole, meQueryOptions } from "@/api/queries"
 import { cn } from "@/lib/utils"
 
 type NavItem = {
-  to: "/" | "/servers" | "/runs"
+  to: "/" | "/servers" | "/runs" | "/cleanup"
   label: string
   icon: LucideIcon
   minRole?: Role
 }
 
 const navItems: Array<NavItem> = [
-  { to: "/", label: "Overview", icon: PieChart2 },
-  { to: "/runs", label: "Runs", icon: PlayCircle },
-  { to: "/servers", label: "Servers", icon: Server2 },
+  { to: "/", label: "Overview", icon: HomeSmileIcon },
+  { to: "/servers", label: "Servers", icon: ServerSquareIcon },
+  { to: "/runs", label: "Runs", icon: PlayCircleIcon },
+  { to: "/cleanup", label: "Cleanup", icon: NotificationRemoveIcon },
 ]
 
 export function MainNav() {
@@ -54,7 +56,8 @@ export function MainNav() {
             )}
           >
             <Icon
-              className={cn("size-4", item.to === "/runs" ? "size-4.5" : "")}
+              strokeWidth={2}
+              className={cn("size-5", item.to === "/runs" ? "size-5.5" : "")}
               aria-hidden
             />
             <span>{item.label}</span>

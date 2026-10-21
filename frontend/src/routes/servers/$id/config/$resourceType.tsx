@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { CalendarIcon, ChevronLeft } from "lucide-react"
 
-import { Restart } from "@solar-icons/react-perf/category/style/LineDuotone"
+import { RestartIcon } from "@solar-icons/react/line-duotone"
 import { useEffect, useState } from "react"
 import { format, parse } from "date-fns"
 import { de } from "date-fns/locale"
@@ -166,7 +166,7 @@ function ResourceConfigPage() {
               onClick={() => resetMutation.mutate()}
               disabled={resetMutation.isPending}
             >
-              <Restart className="mr-2 h-4 w-4" />
+              <RestartIcon className="mr-2 h-4 w-4" />
               {resetMutation.isPending
                 ? "Resetting..."
                 : "Reset to default Configuration"}

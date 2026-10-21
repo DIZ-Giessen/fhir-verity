@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { env } from "@/lib/env"
+import { LoginIcon } from "@solar-icons/react/line-duotone"
 
 export const Route = createFileRoute("/login")({ component: LoginPage })
 
@@ -14,7 +15,7 @@ function LoginPage() {
 
   return (
     <div className="flex min-h-dvh items-center justify-center">
-      <Card className="w-full max-w-sm rounded-4xl px-6 py-10 pt-14 shadow-2xs">
+      <Card className="w-full max-w-sm rounded-4xl px-6 py-10 pt-14 shadow-sm">
         <CardContent>
           <div className="flex flex-col items-center space-y-8">
             <img src="logo-white.svg" className="size-28" />
@@ -34,13 +35,14 @@ function LoginPage() {
             )}
 
             <Button
-              className="w-full rounded-xl"
+              className="group w-full rounded-xl"
               size="lg"
               onClick={() => {
                 window.location.href = `${env.API_URL}/api/v1/auth/login`
               }}
             >
-              Sign in with Keycloak
+              Sign in
+              <LoginIcon className="size-6 translate-x-0 transition-transform group-hover:translate-x-1" />
             </Button>
           </div>
         </CardContent>

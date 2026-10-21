@@ -4,11 +4,11 @@ import { ChevronLeft, ChevronRight, Play } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import {
-  Documents,
-  InfoCircle,
-  NotificationLinesRemove,
-  SquareTopDown,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
+  DocumentsIcon,
+  InfoCircleIcon,
+  NotificationLinesRemoveIcon,
+  SquareTopDownIcon,
+} from "@solar-icons/react/line-duotone"
 import type { MonthlyBucket, TestReportSummary } from "@/lib/interface"
 import type { ValidationRunListItem } from "@/api/queries"
 import { AreaChart } from "@/components/charts/area-chart"
@@ -470,7 +470,7 @@ export function FhirResourcesPopover({
   if (!report || !baseUrl) {
     return (
       <Button variant="ghost" size="sm" disabled className="h-7 gap-1">
-        <NotificationLinesRemove className="size-4.5" />
+        <NotificationLinesRemoveIcon className="size-4.5" />
         <span>Not available</span>
       </Button>
     )
@@ -491,7 +491,7 @@ export function FhirResourcesPopover({
     <Popover>
       <PopoverTrigger asChild>
         <Button variant="outline" className="h-7 gap-1">
-          <Documents className="size-4.5" />
+          <DocumentsIcon className="size-4.5" />
           <span className="text-xs text-muted-foreground">View Resources</span>
         </Button>
       </PopoverTrigger>
@@ -499,7 +499,7 @@ export function FhirResourcesPopover({
         <div className="max-h-96 overflow-y-auto p-4">
           {empty && (
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
-              <InfoCircle className="size-4 shrink-0" />
+              <InfoCircleIcon className="size-4 shrink-0" />
               {report.posted_to_server === false
                 ? "Writing FHIR reports was disabled for this server, so no resources were created on it."
                 : "Reports were not successfully posted to the FHIR server."}
@@ -568,7 +568,7 @@ function ResourceLink({ href, label }: { href: string; label: string }) {
       className="flex items-center justify-between gap-2 rounded-xl border bg-accent px-2 py-1.5 text-xs hover:bg-muted/50"
     >
       <span className="font-medium">{label}</span>
-      <SquareTopDown className="size-3 text-muted-foreground" />
+      <SquareTopDownIcon className="size-3 text-muted-foreground" />
     </a>
   )
 }

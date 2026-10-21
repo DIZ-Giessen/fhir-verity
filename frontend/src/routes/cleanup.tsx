@@ -5,10 +5,10 @@ import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import {
-  Broom,
-  Lightbulb,
-  NotificationLinesRemove,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
+  BroomIcon,
+  LightbulbIcon,
+  NotificationLinesRemoveIcon,
+} from "@solar-icons/react/line-duotone"
 import type {
   BulkActionResult,
   BulkDeleteRequest,
@@ -215,14 +215,14 @@ function CleanupPage() {
                 value="delete"
                 className="gap-1 data-[state=active]:text-orange-500 data-[state=active]:dark:text-orange-500"
               >
-                <NotificationLinesRemove className="size-4" />
+                <NotificationLinesRemoveIcon className="size-4" />
                 Delete Invalid Resources
               </TabsTrigger>
               <TabsTrigger
                 value="fix"
                 className="gap-1 data-[state=active]:text-orange-500 data-[state=active]:dark:text-orange-500"
               >
-                <Broom className="size-4.5" />
+                <BroomIcon className="size-4.5" />
                 Fix Invalid Resources
               </TabsTrigger>
             </TabsList>
@@ -465,7 +465,7 @@ function CleanupPage() {
       </AlertDialog>
 
       <Alert className="border-0 shadow-none">
-        <Lightbulb className="size-4.5 text-blue-500!" />
+        <LightbulbIcon className="size-4.5 text-blue-500!" />
         <AlertTitle>Important Information</AlertTitle>
         <AlertDescription>
           Please review this information before deleting or fixing the

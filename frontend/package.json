@@ -18,7 +18,7 @@
     "@fontsource-variable/noto-sans": "^5.2.10",
     "@hookform/resolvers": "^5.4.0",
     "@number-flow/react": "^0.6.0",
-    "@solar-icons/react-perf": "^2.1.1",
+    "@solar-icons/react": "^2.3.3",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-devtools": "^0.10.0",
     "@tanstack/react-query": "^5.100.14",

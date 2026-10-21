@@ -15,7 +15,7 @@ import {
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { DangerTriangle } from "@solar-icons/react-perf/category/style/LineDuotone"
+import { DangerTriangleIcon } from "@solar-icons/react/line-duotone"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import {
   resourceTypesQueryOptions,
@@ -241,7 +241,7 @@ export function StartValidationDialog({
           {(Array.from(selected).includes("Condition") ||
             Array.from(selected).includes("Observation")) && (
             <Alert className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-50">
-              <DangerTriangle className="size-5" />
+              <DangerTriangleIcon className="size-5" />
               <AlertTitle>Attention</AlertTitle>
 
               <AlertDescription>

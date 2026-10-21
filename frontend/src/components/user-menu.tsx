@@ -4,12 +4,11 @@ import { ChevronDown, LogOut, Play } from "lucide-react"
 import { useState } from "react"
 
 import {
-  Broom,
-  ClipboardList,
-  ServerPath,
-  UsersGroupRounded,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
-import type { NotificationLinesRemove } from "@solar-icons/react-perf/category/style/LineDuotone"
+  BroomIcon,
+  ClipboardListIcon,
+  ServerPathIcon,
+  UsersGroupRoundedIcon,
+} from "@solar-icons/react/line-duotone"
 
 import type { AuthUser, Role } from "@/api/queries"
 import {
@@ -37,7 +36,7 @@ import { initials } from "@/lib/functions"
 type ManagementItem = {
   to: "/cleanup" | "/db-cleanup" | "/audit" | "/users"
   label: string
-  icon: typeof NotificationLinesRemove
+  icon: React.ElementType
   minRole: Role
 }
 
@@ -45,20 +44,25 @@ const managementItems: Array<ManagementItem> = [
   {
     to: "/cleanup",
     label: "Cleanup Page",
-    icon: Broom,
+    icon: BroomIcon,
     minRole: "editor",
   },
   {
     to: "/db-cleanup",
     label: "Database Cleanup",
-    icon: ServerPath,
+    icon: ServerPathIcon,
     minRole: "admin",
   },
-  { to: "/audit", label: "Audit Page", icon: ClipboardList, minRole: "admin" },
+  {
+    to: "/audit",
+    label: "Audit Page",
+    icon: ClipboardListIcon,
+    minRole: "admin",
+  },
   {
     to: "/users",
     label: "Users Page",
-    icon: UsersGroupRounded,
+    icon: UsersGroupRoundedIcon,
     minRole: "admin",
   },
 ]

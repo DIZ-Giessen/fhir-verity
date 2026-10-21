@@ -1,7 +1,4 @@
-import {
-  MoonStars,
-  Sun2,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
+import { MoonStarsIcon, Sun2Icon } from "@solar-icons/react/line-duotone"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -18,8 +15,8 @@ export function ModeToggle() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="icon-sm">
-          <Sun2 className="scale-110 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
-          <MoonStars className="absolute scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
+          <Sun2Icon className="scale-110 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
+          <MoonStarsIcon className="absolute scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>

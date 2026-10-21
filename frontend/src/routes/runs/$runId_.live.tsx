@@ -4,9 +4,9 @@ import { ChevronLeft } from "lucide-react"
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { intervalToDuration } from "date-fns"
 import {
-  CheckCircle,
-  DangerCircle,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
+  CheckCircleIcon,
+  DangerCircleIcon,
+} from "@solar-icons/react/line-duotone"
 import type { ReactNode } from "react"
 
 import type { LiveMetrics, LogEntry, MetricPoint } from "@/lib/interface"
@@ -341,7 +341,7 @@ function LivePage() {
       {runState === "completed" && (
         <Card className="border-emerald-500/30 shadow-xs">
           <CardContent className="flex items-center gap-3 py-4">
-            <CheckCircle className="size-7 text-emerald-500" />
+            <CheckCircleIcon className="size-7 text-emerald-500" />
             <p className="text-sm font-medium">
               This run has finished — showing final results.
             </p>
@@ -356,7 +356,7 @@ function LivePage() {
       {(runState === "failed" || runState === "cancelled") && (
         <Card className="border-red-500/30">
           <CardContent className="flex items-center gap-3 py-4">
-            <DangerCircle className="size-7 text-red-500" />
+            <DangerCircleIcon className="size-7 text-red-500" />
             <p className="text-sm font-medium">
               {runState === "cancelled"
                 ? "This run was cancelled."

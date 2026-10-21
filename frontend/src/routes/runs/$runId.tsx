@@ -6,13 +6,13 @@ import { AlertTriangle, ArrowRight, ChevronLeft, WifiOff } from "lucide-react"
 import { PolarAngleAxis, RadialBar, RadialBarChart } from "recharts"
 
 import {
-  ArrowRightUp,
-  CourseUp,
-  DangerTriangle,
-  Export,
-  PieChart2,
-  RestartCircle,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
+  ArrowRightUpIcon,
+  CourseUpIcon,
+  DangerTriangleIcon,
+  ExportIcon,
+  PieChart2Icon,
+  RestartCircleIcon,
+} from "@solar-icons/react/line-duotone"
 import { toast } from "sonner"
 import { FhirResourcesPopover } from "./index"
 import type { PerResourceStats } from "@/api/queries"
@@ -214,7 +214,7 @@ function RunDetailPage() {
               <Dots className="w-7" />
             ) : (
               <>
-                <RestartCircle className="mr-1 size-5" />
+                <RestartCircleIcon className="mr-1 size-5" />
                 Restart this run
               </>
             )}
@@ -237,7 +237,10 @@ function RunDetailPage() {
       ) : runQ.isError || !run ? (
         <Card className="border-red-500/30 shadow-2xs">
           <CardContent className="flex items-start gap-3 py-6">
-            <DangerTriangle className="size-8 text-rose-500" strokeWidth={3} />
+            <DangerTriangleIcon
+              className="size-8 text-rose-500"
+              strokeWidth={3}
+            />
             <div>
               <p className="text-sm font-medium">Could not load this run.</p>
               <p className="text-xs text-muted-foreground">
@@ -283,7 +286,7 @@ function RunDetailPage() {
                   >
                     <Link to="/runs/$runId/live" params={{ runId: run.id }}>
                       Live view
-                      <ArrowRightUp className="ml-1 size-4" />
+                      <ArrowRightUpIcon className="ml-1 size-4" />
                     </Link>
                   </Button>
                 </div>
@@ -316,7 +319,7 @@ function RunDetailPage() {
                       className="inline-flex items-center gap-1 font-medium text-foreground hover:underline"
                     >
                       {serverQ.data.name}
-                      <ArrowRightUp className="size-4" />
+                      <ArrowRightUpIcon className="size-4" />
                     </Link>
                   ) : (
                     <span>—</span>
@@ -435,14 +438,14 @@ function RunDetailPage() {
               <Button onClick={() => setShowBar(!showBar)} variant="ghost">
                 {showBar ? "Show as Radial Chart" : "Show as Bar Chart"}
                 {showBar ? (
-                  <PieChart2 className="ml-1 size-5" />
+                  <PieChart2Icon className="ml-1 size-5" />
                 ) : (
-                  <CourseUp className="ml-1 size-5" />
+                  <CourseUpIcon className="ml-1 size-5" />
                 )}
               </Button>
               <Button onClick={() => exportAsPNG()} size="sm" variant="ghost">
                 Export the charts as PNG
-                <Export className="ml-1 size-5" />
+                <ExportIcon className="ml-1 size-5" />
               </Button>
             </div>
           </div>

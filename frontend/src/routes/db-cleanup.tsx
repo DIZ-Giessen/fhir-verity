@@ -6,10 +6,7 @@ import { format } from "date-fns"
 import { de } from "date-fns/locale"
 import { toast } from "sonner"
 
-import {
-  CheckCircle,
-  Lightbulb,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
+import { CheckCircleIcon, LightbulbIcon } from "@solar-icons/react/line-duotone"
 import type { DbPurgeRequest, DbPurgeResult } from "@/api/queries"
 import {
   dbPurge,
@@ -191,7 +188,7 @@ function DbCleanupPage() {
       {result && (
         <>
           <Alert className="border-emerald-500/20 bg-emerald-500/5 text-emerald-700 dark:border-emerald-900/20 dark:bg-emerald-900/10 dark:text-emerald-400">
-            <CheckCircle />
+            <CheckCircleIcon />
             <AlertTitle className="font-semibold">
               Database purge successful
             </AlertTitle>
@@ -383,7 +380,7 @@ function DbCleanupPage() {
       </AlertDialog>
 
       <Alert className="border-0 shadow-none">
-        <Lightbulb className="size-6 text-blue-500!" />
+        <LightbulbIcon className="size-6 text-blue-500!" />
         <AlertTitle>Important Information</AlertTitle>
         <AlertDescription>
           <ul className="list-disc pl-5">

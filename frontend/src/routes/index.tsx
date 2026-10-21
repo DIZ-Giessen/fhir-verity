@@ -1,7 +1,7 @@
 import {
-  ArrowRightUp,
-  SquareBottomUp,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
+  ArrowRightUpIcon,
+  SquareBottomUpIcon,
+} from "@solar-icons/react/line-duotone"
 import { createFileRoute } from "@tanstack/react-router"
 
 import { env } from "@/lib/env"
@@ -26,7 +26,7 @@ function HomePage() {
             target="_blank"
             className="inline-flex items-center gap-1 text-sm text-muted-foreground underline hover:text-primary"
           >
-            Read the documentation <ArrowRightUp className="h-4 w-4" />
+            Read the documentation <ArrowRightUpIcon className="h-4 w-4" />
           </a>
           <a
             href={env.PROJECT_URL}
@@ -34,7 +34,7 @@ function HomePage() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm text-muted-foreground underline hover:text-primary"
           >
-            View the project <SquareBottomUp className="h-4 w-4" />
+            View the project <SquareBottomUpIcon className="h-4 w-4" />
           </a>
         </div>
       </div>

@@ -10,11 +10,11 @@ import {
 import { Fragment, useEffect, useMemo, useState } from "react"
 
 import {
-  LinkRound,
-  PenNewSquare,
-  Restart,
-  TrashBinMinimalistic,
-} from "@solar-icons/react-perf/category/style/LineDuotone"
+  LinkRoundIcon,
+  PenNewSquareIcon,
+  RestartIcon,
+  TrashBinMinimalisticIcon,
+} from "@solar-icons/react/line-duotone"
 import { toast } from "sonner"
 import type { InvalidResourcesParams } from "@/lib/interface"
 import type { InvalidResourceRead } from "@/api/queries"
@@ -288,7 +288,7 @@ function InvalidResourcesPage() {
                 }}
               >
                 Reset
-                <Restart className="ml-1 h-4 w-4" />
+                <RestartIcon className="ml-1 h-4 w-4" />
               </Button>
             )}
           </div>
@@ -608,7 +608,7 @@ function ResourceActions({
     } else {
       toast.custom(
         () => (
-          <div className="z-50 flex w-[400px] flex-col gap-3 rounded-md border bg-background! p-4 shadow-lg">
+          <div className="z-50 flex w-100 flex-col gap-3 rounded-md border bg-background! p-4 shadow-lg">
             <div className="flex items-start gap-3">
               <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-white">
                 <XIcon className="size-3.5" />
@@ -683,7 +683,7 @@ function ResourceActions({
             className="gap-1 border-orange-500/20 text-orange-500!"
             onClick={() => setPending("fix")}
           >
-            <PenNewSquare className="size-4" />
+            <PenNewSquareIcon className="size-4" />
             Fix
           </Button>
         )}
@@ -694,12 +694,12 @@ function ResourceActions({
           className="gap-1 text-red-600 hover:text-red-600 dark:text-red-400"
           onClick={() => setPending("delete")}
         >
-          <TrashBinMinimalistic className="size-4" />
+          <TrashBinMinimalisticIcon className="size-4" />
           Delete
         </Button>
         <Button asChild size="sm" variant="outline" className="gap-1">
           <a href={fhirUrl} target="_blank" rel="noopener noreferrer">
-            <LinkRound className="size-4" />
+            <LinkRoundIcon className="size-4" />
             Open on FHIR server
           </a>
         </Button>
