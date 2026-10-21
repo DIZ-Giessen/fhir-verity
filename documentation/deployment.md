@@ -1,19 +1,18 @@
 # Deployment
 
-Diese Anleitung beschreibt das Deployment mit Docker Compose. Sie deckt beide Datenbank-Wege ab (externe oder mitgelieferte Datenbank), beide Keycloak-Wege
-(eigener oder mitgelieferter Keycloak), Zertifikate und die häufigsten Stolpersteine bei der ersten Inbetriebnahme.
+Diese Anleitung beschreibt das Deployment mit Docker Compose. Sie deckt beide Datenbank-Optionen ab (externe oder mitgelieferte Container Datenbank), beide Keycloak-Optionen (eigener oder mitgelieferter Container Keycloak), Zertifikate und die häufigsten Stolpersteine bei der ersten Inbetriebnahme.
 
 ## Voraussetzungen
 
 Auf dem Zielserver:
 
-- Docker Engine und das Compose-Plugin (`docker compose`, nicht das alte `docker-compose` mit Bindestrich).
+- Docker Engine und das Compose-Plugin.
 - Ein freier Port für den Reverse Proxy (443 für HTTPS; siehe Abschnitt Ports).
-- Netzwerkzugriff vom Server zum FHIR-Server und, falls genutzt, zum eigenen Keycloak, zur externen Datenbank und zum SMTP-Server.
+- Netzwerkzugriff vom Server zum FHIR-Server und, falls genutzt, zum eigenen Keycloak, zur externen Datenbank und zum SMTP-Server für die Email Vergabe.
 
 Außerhalb des Servers:
 
-- Bei eigenem Keycloak: ein Client für Verity mit korrekt eingetragener Redirect-URI (siehe [Keycloak](#keycloak)). Gibt es am Standort keinen Keycloak, bringt Verity einen mit, es muss dann nichts vorbereitet werden.
+- Bei eigenem Keycloak: ein Client für Verity mit korrekt eingetragener Redirect-URI (siehe [Keycloak](#keycloak)). Gibt es am Standort keinen Keycloak, nutzen SIe die Option 2 bei Keycloak, es muss dann nichts vorbereitet werden.
 - Bei externer Datenbank: eine für Verity angelegte Datenbank mit passenden Schema-Rechten (siehe [datenbank.md](datenbank.md)).
 
 Prüfen, ob Docker einsatzbereit ist:
@@ -26,8 +25,7 @@ docker ps
 
 ## Ports prüfen
 
-Der Reverse Proxy braucht seinen Port exklusiv. Läuft auf dem Server bereits etwas auf Port 80 oder 443 (etwa ein anderer Webdienst oder ein FHIR-Server),
-kollidiert das. Prüfen:
+Der Reverse Proxy braucht seinen Port exklusiv. Läuft auf dem Server bereits etwas auf Port 80 oder 443, kollidiert das. Prüfen:
 
 ```bash
 sudo ss -tlnp | grep -E ':80 |:443 '
@@ -55,8 +53,8 @@ Die wichtigsten Werte:
 | Variable                                        | Bedeutung                                                                       |
 | ----------------------------------------------- | ------------------------------------------------------------------------------- |
 | DOMAIN                                          | die Domain, unter der Verity erreichbar ist                                     |
-| DATABASE_URL                                    | vollständige Verbindungs-URL; externer Host (Weg A) oder `db` (Weg B)           |
-| POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB | nur bei Weg B: Zugangsdaten der mitgelieferten Datenbank                        |
+| DATABASE_URL                                    | vollständige Verbindungs-URL; externer Host (Option A) oder `db` (Option B)     |
+| POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB | nur bei Option B: Zugangsdaten der mitgelieferten Datenbank                     |
 | ENVIRONMENT                                     | `production` setzt das Secure-Cookie                                            |
 | CORS_ORIGINS                                    | erlaubte Origin; im Single-Origin-Betrieb die eigene Domain                     |
 | AUTH_ENABLED                                    | im Betrieb immer `true`; `false` nur mit `ENVIRONMENT=development`              |
@@ -70,7 +68,7 @@ Die wichtigsten Werte:
 | VERITY_ADMIN_EMAIL / VERITY_ADMIN_PASSWORD      | nur beim mitgelieferten Keycloak: erster Benutzer `verity-admin`                |
 | FHIR_REPORT_PUBLISHER                           | Name des Standorts, der in den FHIR-Reports als Herausgeber erscheint           |
 | FHIR_REPORT_NAMING_SYSTEM                       | kanonische Basis-URL der Report-Identifier; einmal festlegen, dann nicht ändern |
-| EMAIL                                           | SMTP-Zugang für Benachrichtigungen                                              |
+| EMAIL                                           | SMTP-Zugang für Email Benachrichtigungen                                        |
 
 Den Session-Schlüssel mit einem echten Zufallswert setzen:
 
@@ -78,39 +76,32 @@ Den Session-Schlüssel mit einem echten Zufallswert setzen:
 openssl rand -hex 32
 ```
 
-Zwei Dinge, die zusammenpassen müssen, sonst startet nichts sauber:
-
-- Bei Weg B müssen `POSTGRES_PASSWORD` und das Passwort in `DATABASE_URL` identisch sein, und der Host in `DATABASE_URL` ist `db`.
-- `BACKEND_BASE_URL`, `FRONTEND_BASE_URL` und `CORS_ORIGINS` zeigen alle auf die eigene Domain.
-
 ## Welche Datenbank?
 
-Verity braucht eine PostgreSQL-Datenbank für seine eigenen Daten (Server, Läufe, invalide Ressourcen, Audit-Log). Welcher Weg passt, hängt davon ab, ob am Standort bereits eine PostgreSQL betrieben wird:
+Verity braucht eine PostgreSQL-Datenbank für seine eigenen Daten (Server, Läufe, invalide Ressourcen, Audit-Log). Welcher Option passt, hängt davon ab, ob am Standort bereits eine PostgreSQL betrieben wird:
 
-| Situation                                                          | Weg                                  |
+| Situation                                                          | Option                               |
 | ------------------------------------------------------------------ | ------------------------------------ |
 | Es gibt eine PostgreSQL, die von der IT betreut und gesichert wird | **A — externe Datenbank** (Standard) |
 | Es gibt keine, Verity soll möglichst ohne Vorarbeit laufen         | **B — mitgelieferte Datenbank**      |
 
-Die `docker-compose.yml` ist für Weg A vorbereitet; der Datenbank-Container für Weg B steht auskommentiert darin und ist mit „Weg B“ markiert.
+Die `docker-compose.yml` ist für Option A vorbereitet; der Datenbank-Container für Option B steht auskommentiert darin und ist mit Option B“ markiert.
 
-## Weg A: externe Datenbank (Standard)
+## Option A : externe Datenbank (Standard)
 
-An der `docker-compose.yml` muss nichts geändert werden.
-
-In der `.env` zeigt die `DATABASE_URL` auf den externen Host:
+An der `docker-compose.yml` muss nichts geändert werden. In der `.env` zeigt die `DATABASE_URL` auf den externen Host:
 
 ```bash
 DATABASE_URL=postgresql+asyncpg://verity:<passwort>@db-host.example.org:5432/verity
 ```
 
-Der Verity-Benutzer muss Eigentümer des Schemas dieser Datenbank sein oder CREATE-Rechte haben — andernfalls scheitert die Migration mit `permission denied for schema public`. Die genauen SQL-Befehle stehen in [datenbank.md](datenbank.md). Backups und Updates der Datenbank laufen dann über die bestehende Infrastruktur. Weiter mit „Bauen und Starten".
+Der Verity-Benutzer muss Eigentümer des Schemas dieser Datenbank sein oder CREATE-Rechte haben — andernfalls scheitert die Migration mit `permission denied for schema public`[datenbank.md](datenbank.md).
 
-## Weg B: mitgelieferte Datenbank
+## Option B: mitgelieferte Datenbank
 
 Verity bringt einen eigenen PostgreSQL-Container mit. Es muss nichts vorbereitet werden — der Container legt Datenbank und Benutzer beim ersten Start an, der Benutzer ist automatisch Eigentümer.
 
-1. In der `docker-compose.yml` die drei mit „Weg B“ markierten Blöcke einkommentieren: den `db`-Service, das `depends_on` beim `backend` und das Volume `pgdata`.
+1. In der `docker-compose.yml` die drei mit „Option B“ markierten Blöcke einkommentieren: den `db`-Service, das `depends_on` beim `backend` und das Volume `pgdata`.
 2. In der `.env` die Zugangsdaten setzen und die `DATABASE_URL` auf den Host `db` zeigen lassen:
 
 ```bash
@@ -120,21 +111,20 @@ POSTGRES_DB=verity
 DATABASE_URL=postgresql+asyncpg://verity:<zufälliges-passwort>@db:5432/verity
 ```
 
-Die Daten liegen im Docker-Volume `pgdata` und überleben `docker compose down` und Neustarts. Die Datenbank ist nur im Compose-Netz erreichbar, nicht von außen. Für Backups selbst sorgen, etwa mit `docker compose exec db pg_dump -U verity verity > verity.sql`. Weiter mit „Bauen und Starten".
+Die Daten liegen im Docker-Volume `pgdata`
 
 ## Keycloak
 
-Verity meldet Benutzer über Keycloak an (OpenID Connect). Im Betrieb ist das Pflicht: Ohne Anmeldung gäbe es keine Rollen und keine Trennung der Server
-nach Eigentümer, und jeder, der Verity erreicht, könnte als Admin FHIR-Ressourcen löschen. Das Backend startet deshalb nicht, wenn `AUTH_ENABLED=false`
+Verity meldet Benutzer über Keycloak an (OpenID Connect). Im Betrieb ist das Pflicht: Ohne Anmeldung gäbe es keine Rollen und keine Trennung der Server nach Eigentümer, und jeder, der Verity erreicht, könnte als Admin FHIR-Ressourcen löschen. Das Backend startet deshalb nicht, wenn `AUTH_ENABLED=false`
 mit `ENVIRONMENT=production` kombiniert wird.
 
-| Situation                                                   | Weg                                       |
+| Situation                                                   | Option                                    |
 | ----------------------------------------------------------- | ----------------------------------------- |
 | Am Standort gibt es bereits einen Keycloak                  | **1 — eigener Keycloak** (Standard)       |
 | Es gibt keinen, Verity soll ohne Vorarbeit laufen           | **2 — mitgelieferter Keycloak**           |
 | Nur lokal ausprobieren oder entwickeln, ohne jede Anmeldung | **ohne Anmeldung** (`AUTH_ENABLED=false`) |
 
-### Weg 1: eigener Keycloak (Standard)
+### Option 1: eigener Keycloak (Standard)
 
 Verity braucht einen Keycloak-Client im richtigen Realm. Der Realm ist der aus der `KEYCLOAK_DISCOVERY_URL` (der Teil `.../realms/<Realm>/...`). Beim Client:
 
@@ -145,9 +135,7 @@ Verity braucht einen Keycloak-Client im richtigen Realm. Der Realm ist der aus d
 - **Valid post logout redirect URIs**: `https://<DOMAIN>`, sonst schlägt der
   Logout-Redirect fehl.
 
-Der häufigste Fehler beim ersten Login ist „Ungültiger Parameter: redirect_uri". Das heißt fast immer: Die eingetragene Redirect-URI weicht vom
-gesendeten Wert ab, sie steht im falschen Realm oder Client, oder es wurde nach dem Eintragen nicht gespeichert. Zum Eingrenzen hilft, testweise zusätzlich
-`https://<DOMAIN>/*` als Redirect-URI einzutragen; klappt der Login damit, lag es am exakten Pfad. Für Produktion danach wieder auf den exakten Pfad zurück.
+Der häufigste Fehler beim ersten Login ist „Ungültiger Parameter: redirect_uri". Das heißt fast immer: Die eingetragene Redirect-URI weicht vom gesendeten Wert ab, sie steht im falschen Realm oder Client, oder es wurde nach dem Eintragen nicht gespeichert. Zum Eingrenzen hilft, testweise zusätzlich `https://<DOMAIN>/*` als Redirect-URI einzutragen; klappt der Login damit, lag es am exakten Pfad. Für Produktion danach wieder auf den exakten Pfad zurück.
 
 Prüfen, dass der Realm erreichbar ist und der Name stimmt:
 
@@ -155,13 +143,11 @@ Prüfen, dass der Realm erreichbar ist und der Name stimmt:
 curl -k -s https://<keycloak-host>/.../realms/<Realm>/.well-known/openid-configuration | head -c 300
 ```
 
-### Weg 2: mitgelieferter Keycloak
+### Option 2: mitgelieferter Keycloak
 
-Verity bringt einen fertig eingerichteten Keycloak mit eigener PostgreSQL mit (`docker-compose.keycloak.yml`). Er läuft hinter demselben Caddy unter
-`https://<DOMAIN>/kc`, braucht also weder eigene Domain noch eigenes Zertifikat. Beim ersten Start wird `keycloak/verity-realm.json` importiert: der Realm
-`verity`, der Client für Verity mit der passenden Redirect-URI und ein erster Benutzer `verity-admin`.
+Verity bringt einen fertig eingerichteten Keycloak mit eigener PostgreSQL mit (`docker-compose.keycloak.yml`). Er läuft hinter demselben Caddy unter `https://<DOMAIN>/kc`, braucht also weder eigene Domain noch eigenes Zertifikat. Beim ersten Start wird `keycloak/verity-realm.json` importiert: der Realm `verity`, der Client für Verity mit der passenden Redirect-URI und ein erster Benutzer `verity-admin`.
 
-1. In der `.env` den Block „Weg 2“ einkommentieren und die beiden Zeilen von Weg 1 (`KEYCLOAK_DISCOVERY_URL`, `INITIAL_ADMIN_USERS`) auskommentieren:
+1. In der `.env` den Block „Option 2“ einkommentieren und die beiden Zeilen von Option 1 auskommentieren:
 
    ```bash
    COMPOSE_PATH_SEPARATOR=:
@@ -173,10 +159,11 @@ Verity bringt einen fertig eingerichteten Keycloak mit eigener PostgreSQL mit (`
    KEYCLOAK_ADMIN_PASSWORD=<zufälliger-wert>
    VERITY_ADMIN_EMAIL=admin@dein-standort.de
    VERITY_ADMIN_PASSWORD=<startpasswort>
+   KEYCLOAK_CLIENT_ID=fhir-verity
+   KEYCLOAK_CLIENT_SECRET=change_me
    ```
 
-   `COMPOSE_FILE` sorgt dafür, dass `docker compose` die Keycloak-Datei automatisch mitlädt; alle Befehle bleiben gleich. Fehlt einer der Werte, bricht
-   `docker compose up` ab und nennt die fehlende Variable.
+   `COMPOSE_FILE` sorgt dafür, dass `docker compose` die Keycloak-Datei automatisch mitlädt; alle Befehle bleiben gleich. Fehlt einer der Werte, bricht `docker compose up` ab und nennt die fehlende Variable.
 
 2. Wie gewohnt starten (siehe „Bauen und Starten“). Keycloak braucht beim ersten Start etwa eine Minute.
 3. `https://<DOMAIN>` öffnen, „Sign in with Keycloak“ wählen und als `verity-admin` mit dem Startpasswort anmelden. Keycloak verlangt dabei ein neues
@@ -187,13 +174,10 @@ Verity bringt einen fertig eingerichteten Keycloak mit eigener PostgreSQL mit (`
 
 Hinweise:
 
-- Das Backend spricht Keycloak intern über `http://keycloak:8080` an, der Browser über `https://<DOMAIN>/kc`. Keycloak trennt beides selbst
-  (`KC_HOSTNAME_BACKCHANNEL_DYNAMIC`), deshalb steht in `KEYCLOAK_DISCOVERY_URL` die interne Adresse.
-- Der Realm wird nur importiert, solange er noch nicht existiert. Spätere Änderungen an `verity-realm.json` oder an `KEYCLOAK_CLIENT_SECRET` wirken nicht
-  mehr automatisch; dann in der Admin-Konsole anpassen (Client `fhir-verity` → „Credentials“).
+- Das Backend spricht Keycloak intern über `http://keycloak:8080` an, der Browser über `https://<DOMAIN>/kc`. Keycloak trennt beides selbst (`KC_HOSTNAME_BACKCHANNEL_DYNAMIC`), deshalb steht in `KEYCLOAK_DISCOVERY_URL` die interne Adresse.
+- Der Realm wird nur importiert, solange er noch nicht existiert. Spätere Änderungen an `verity-realm.json` oder an `KEYCLOAK_CLIENT_SECRET` wirken nicht mehr automatisch; dann in der Admin-Konsole anpassen (Client `fhir-verity` → „Credentials“).
 - Wird `DOMAIN` später geändert, in der Admin-Konsole beim Client die Redirect-URI und die Web Origins nachziehen.
-- Die Keycloak-Daten liegen im Volume `keycloak_pgdata`. Sicherung etwa mit
-  `docker compose exec keycloak-db pg_dump -U keycloak keycloak > keycloak.sql`.
+- Die Keycloak-Daten liegen im Volume `keycloak_pgdata`. Sicherung etwa mit `docker compose exec keycloak-db pg_dump -U keycloak keycloak > keycloak.sql`.
 
 ### Ohne Anmeldung (nur Entwicklung und Demo)
 
