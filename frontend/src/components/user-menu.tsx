@@ -1,12 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { ChevronDown, LogOut, Play } from "lucide-react"
+import { ChevronDown, Play } from "lucide-react"
 import { useState } from "react"
 
 import {
-  BroomIcon,
-  ClipboardListIcon,
-  ServerPathIcon,
+  ExitIcon,
+  Rows4Icon,
   UsersGroupRoundedIcon,
 } from "@solar-icons/react/line-duotone"
 
@@ -20,7 +19,7 @@ import {
   updateMyPreferences,
 } from "@/api/queries"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar"
 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -34,7 +33,7 @@ import { Switch } from "@/components/ui/switch"
 import { initials } from "@/lib/functions"
 
 type ManagementItem = {
-  to: "/cleanup" | "/db-cleanup" | "/audit" | "/users"
+  to: "/audit" | "/users"
   label: string
   icon: React.ElementType
   minRole: Role
@@ -42,21 +41,9 @@ type ManagementItem = {
 
 const managementItems: Array<ManagementItem> = [
   {
-    to: "/cleanup",
-    label: "Cleanup Page",
-    icon: BroomIcon,
-    minRole: "editor",
-  },
-  {
-    to: "/db-cleanup",
-    label: "Database Cleanup",
-    icon: ServerPathIcon,
-    minRole: "admin",
-  },
-  {
     to: "/audit",
     label: "Audit Page",
-    icon: ClipboardListIcon,
+    icon: Rows4Icon,
     minRole: "admin",
   },
   {
@@ -121,8 +108,11 @@ export function UserMenu() {
               <AvatarFallback className="text-xs">
                 {initials(user.username)}
               </AvatarFallback>
+              {user.role === "admin" && (
+                <AvatarBadge className="bg-orange-600 dark:bg-orange-800" />
+              )}
             </Avatar>
-            <span className="text-sm font-medium">
+            <span className="hidden text-sm font-medium">
               {user.username ?? displayName}
             </span>
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -157,7 +147,7 @@ export function UserMenu() {
                       onClick={() => setMenuOpen(false)}
                       className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm text-foreground hover:bg-accent/60 hover:text-orange-500"
                     >
-                      <Icon className="size-4" aria-hidden />
+                      <Icon className="hidden size-4" aria-hidden />
                       <span>{item.label}</span>
                     </Link>
                   )
@@ -169,7 +159,7 @@ export function UserMenu() {
           {user.email && (
             <>
               <Separator />
-              <div className="flex items-center justify-between gap-3 p-4">
+              <div className="flex items-center justify-between gap-3 p-2">
                 <div className="space-y-0.5">
                   <Label
                     htmlFor="email-notifications"
@@ -210,7 +200,7 @@ export function UserMenu() {
                   onClick={() => logoutMutation.mutate()}
                   disabled={logoutMutation.isPending}
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
+                  <ExitIcon className="mr-2 size-5" strokeWidth={2} />
                   {logoutMutation.isPending ? "Signing out…" : "Sign out"}
                 </Button>
               </div>

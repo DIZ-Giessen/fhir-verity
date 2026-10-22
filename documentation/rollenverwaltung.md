@@ -71,5 +71,7 @@ Backend gebündelt, damit sie überall gleich greift.
 Jede ausgeführte Bereinigungsaktion wird protokolliert. Bei Einzelaktionen (Löschen oder Korrigieren einer Ressource) werden der ausführende Benutzer, der exakte an den FHIR-Server gesendete Befehl, der Zustand der Ressource vor der Änderung, das Ergebnis, eine Begründung und der Zeitpunkt festgehalten. Damit ist jede Veränderung am FHIR-Bestand nachvollziehbar, wer sie wann und mit welchem Ergebnis
 durchgeführt hat.
 
-Sammelaktionen auf der Cleanup-Seite und die DB-Bereinigung schreiben einen einzigen Eintrag pro Vorgang: Benutzer, Filter, Zeitpunkt, Begründung, die Liste aller geänderten Ressourcen und die Fehlschläge nach Fehlermeldung gruppiert. So bleibt das Audit-Log auch nach einer Bereinigung von 50.000 Ressourcen lesbar.
+Sammelaktionen auf der Cleanup-Seite schreiben einen einzigen Eintrag pro Vorgang: Benutzer, Filter, Zeitpunkt, Begründung, die Liste aller geänderten Ressourcen und die Fehlschläge nach Fehlermeldung gruppiert. So bleibt das Audit-Log auch nach einer Bereinigung von 50.000 Ressourcen lesbar.
+
+Auch das Löschen eines Servers wird protokolliert, mit Benutzer, Zeitpunkt und den Stammdaten des Servers. Die bisherigen Audit-Einträge eines gelöschten Servers bleiben erhalten; sie sind danach über die Server-URL zuzuordnen.
 Struktur der Audit-Tabelle siehe [schema.md](schema.md).

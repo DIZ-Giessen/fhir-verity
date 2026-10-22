@@ -32,8 +32,6 @@ export type FixableTemplate = components["schemas"]["FixableTemplate"]
 export type BulkActionResult = components["schemas"]["BulkActionResult"]
 export type BulkDeleteRequest = components["schemas"]["BulkDeleteRequest"]
 export type BulkFixRequest = components["schemas"]["BulkFixRequest"]
-export type DbPurgeRequest = components["schemas"]["DbPurgeRequest"]
-export type DbPurgeResult = components["schemas"]["DbPurgeResult"]
 export type AuditLogListItem = components["schemas"]["AuditLogListItem"]
 export type AuditLogDetail = components["schemas"]["AuditLogDetail"]
 export type UserRoleUpdate = components["schemas"]["UserRoleUpdate"]
@@ -395,11 +393,6 @@ export async function bulkDelete(body: BulkDeleteRequest) {
 
 export async function bulkFix(body: BulkFixRequest) {
   const { data } = await api.POST("/api/v1/resources/bulk-fix", { body })
-  return data
-}
-
-export async function dbPurge(body: DbPurgeRequest) {
-  const { data } = await api.POST("/api/v1/resources/db-purge", { body })
   return data
 }
 

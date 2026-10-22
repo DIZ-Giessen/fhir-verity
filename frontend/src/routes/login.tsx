@@ -42,7 +42,10 @@ function LoginPage() {
               }}
             >
               Sign in
-              <LoginIcon className="size-6 translate-x-0 transition-transform group-hover:translate-x-1" />
+              <LoginIcon
+                strokeWidth={2.3}
+                className="size-6 translate-x-0 transition-transform group-hover:translate-x-1"
+              />
             </Button>
           </div>
         </CardContent>

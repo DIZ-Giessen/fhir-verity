@@ -130,11 +130,12 @@ async def start_validation(
 ):
     """Start a new validation run asynchronously."""
 
-    # Ownership scope (404 for foreign servers), then active check.
+    # Ownership scope (404 for foreign servers), then active check (409).
     server = await load_server_scoped(request.server_id, user, db)
     if not server.is_active:
         raise HTTPException(
-            status_code=404, detail="FHIR Server not found or is not active"
+            status_code=409,
+            detail="This server is inactive. Activate it in the server settings first.",
         )
     await _assert_no_running_run(request.server_id, db)
 
@@ -200,7 +201,8 @@ async def resume_validation(
     server = await load_server_scoped(run.server_id, user, db)
     if not server.is_active:
         raise HTTPException(
-            status_code=404, detail="FHIR Server not found or is not active"
+            status_code=409,
+            detail="This server is inactive. Activate it in the server settings first.",
         )
     await _assert_no_running_run(run.server_id, db)
 

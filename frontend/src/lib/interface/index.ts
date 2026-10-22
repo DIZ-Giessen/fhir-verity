@@ -5,9 +5,14 @@
 // ---------------------------------------------------------------------------
 
 export interface ResourceRef {
-  local_id?: string
   server_id?: string | null
+}
+
+export interface TestScriptEntry extends ResourceRef {
   url?: string
+  version?: string
+  /** true when an existing TestScript with the same url and version was used */
+  reused?: boolean
 }
 
 export interface TestReportEntry extends ResourceRef {
@@ -21,14 +26,11 @@ export interface TestReportSummary {
   generated_at?: string
   /** false when the server had "Write FHIR reports" switched off for this run */
   posted_to_server?: boolean
-  test_scripts?: Record<string, ResourceRef>
+  test_scripts?: Record<string, TestScriptEntry>
   test_reports?: Record<string, TestReportEntry>
-  verification_result?: {
-    local_id?: string
-    server_id?: string | null
-    status?: string
-    has_errors?: boolean
-  } | null
+  /** List resource referencing all TestReports of the run */
+  run_list?: ResourceRef | null
+  has_errors?: boolean
 }
 
 // ---------------------------------------------------------------------------

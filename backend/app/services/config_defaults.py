@@ -65,7 +65,7 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "enabled": True,
             "severity": "error",
             "category": "privacy",
-            "description": ("Checks whether the field 'name' is present"),
+            "description": "Checks whether the field 'photo' is present.",
         },
         "pseudonym_format_check": {
             "enabled": True,
@@ -213,7 +213,9 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "severity": "error",
             "category": "plausibility",
             "description": (
-                "If period.end is present, it must be after period.start. "
+                "If period.end is present, it must not be before period.start "
+                "(FHIR invariant per-1). Values are compared at the precision of the "
+                "less precise one."
             ),
         },
         "period_not_future": {
@@ -589,7 +591,10 @@ MII_KDS_DEFAULTS: dict[str, dict[str, dict]] = {
             "enabled": True,
             "severity": "error",
             "category": "plausibility",
-            "description": ("If effectivePeriod is used, end must be after start. "),
+            "description": (
+                "If effectivePeriod is used, end must not be before start "
+                "(FHIR invariant per-1)."
+            ),
         },
         # --- Referential Integrity ---
         "subject_reference_format": {

@@ -477,7 +477,7 @@ export function FhirResourcesPopover({
   }
 
   const base = baseUrl.replace(/\/$/, "")
-  const vrId = report.verification_result?.server_id
+  const listId = report.run_list?.server_id
   const scripts = Object.entries(report.test_scripts ?? {})
     .map(([rt, info]) => ({ rt, id: info.server_id }))
     .filter((x): x is { rt: string; id: string } => Boolean(x.id))
@@ -485,7 +485,7 @@ export function FhirResourcesPopover({
     .map(([rt, info]) => ({ rt, id: info.server_id }))
     .filter((x): x is { rt: string; id: string } => Boolean(x.id))
 
-  const empty = !vrId && scripts.length === 0 && reports.length === 0
+  const empty = !listId && scripts.length === 0 && reports.length === 0
 
   return (
     <Popover>
@@ -506,13 +506,13 @@ export function FhirResourcesPopover({
             </p>
           )}
 
-          {vrId && (
+          {listId && (
             <section>
               <Label className="py-2 text-xs text-orange-500/80">
-                VerificationResult
+                Run (List)
               </Label>
               <ResourceLink
-                href={`${base}/VerificationResult/${vrId}`}
+                href={`${base}/List/${listId}`}
                 label="View on FHIR server"
               />
             </section>

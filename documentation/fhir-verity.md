@@ -10,7 +10,7 @@ FHIR Verity ersetzt diesen Aufbau durch eine moderne Web-Anwendung mit einer kla
 
 Verity nimmt einen FHIR-Server, liest dessen kompletten Ressourcen-Bestand ein und prüft jede Ressource gegen ein **konfigurierbares Regelwerk.** Ressourcen, die gegen eine Regel verstoßen, werden mit dem konkreten Befund in der Datenbank festgehalten. Über die Oberfläche lassen sich die Ergebnisse einsehen, filtern und auswerten, und für die invaliden Ressourcen steht ein Bereinigungs-Workflowbereit, der jede Aktion vor der Ausführung als konkreten FHIR-Befehl anzeigt und protokolliert.
 
-Zusätzlich schreibt Verity die Ergebnisse als FHIR-konforme Report-Ressourcen (`VerificationResult`, `TestReport`) Version 4 auf den geprüften Server zurück, sodass die Qualitätsbewertung selbst wieder Teil des FHIR-Datenbestands ist und von anderen Systemen weiterverarbeitet werden kann.
+Zusätzlich schreibt Verity die Ergebnisse als FHIR-R4-Ressourcen (`TestScript`, `TestReport`, `List`) auf den geprüften Server zurück, sodass die Qualitätsbewertung selbst wieder Teil des FHIR-Datenbestands ist und von anderen Systemen weiterverarbeitet werden kann.
 
 ## Was Verity von bestehenden Validatoren unterscheidet
 

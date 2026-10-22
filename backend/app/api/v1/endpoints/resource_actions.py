@@ -32,8 +32,6 @@ from app.schemas.resource_action import (
     BulkActionResult,
     BulkDeleteRequest,
     BulkFixRequest,
-    DbPurgeRequest,
-    DbPurgeResult,
     DeleteRequest,
     FixableTemplate,
     PaginatedAuditLog,
@@ -229,7 +227,7 @@ def _invalid_resource_filters(
     rule: Optional[str],
     severity: Optional[str],
 ) -> list:
-    """Same filter semantics as the invalid-resources list and db-purge."""
+    """Same filter semantics as the invalid-resources list."""
     filters = [InvalidResource.server_id == server_id]
     if resource_type:
         filters.append(InvalidResource.resource_type == resource_type)
@@ -555,116 +553,6 @@ async def bulk_fix_resources(
     await db.commit()
 
     return _bulk_result(matched, outcome, elapsed)
-
-
-# ---------------------------------------------------------------------------
-# POST /resources/db-purge — DB-only cleanup, never touches the FHIR server
-# ---------------------------------------------------------------------------
-@router.post("/resources/db-purge", response_model=DbPurgeResult)
-async def purge_invalid_resources(
-    payload: DbPurgeRequest,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(UserRole.admin.value)),
-):
-    """
-    Delete invalid_resources rows from Verity's own database only — set-based,
-    no per-row round trip through Python.
-
-    Never calls the FHIR server — the underlying resources are left exactly
-    as they are. Meant for admins to clear out rows that piled up before
-    validation runs started sweeping stale entries automatically, or that
-    are simply no longer worth tracking (e.g. everything not reconfirmed
-    invalid in months).
-
-    Writes a single audit_logs row summarizing the operation (filter used +
-    count), not one row per deleted resource: at 100k+ rows, one audit entry
-    per resource just relocates the bloat instead of removing it, and this
-    is a DB-only bookkeeping cleanup, not a FHIR-side mutation that needs a
-    forensic trail per resource the way DELETE/PATCH do.
-
-    With dry_run=true: returns the match count without deleting anything.
-    """
-    start = monotonic()
-
-    server = await load_server_scoped(payload.server_id, user, db)  # 404 if unknown
-
-    filters = [InvalidResource.server_id == payload.server_id]
-    if payload.resource_type:
-        filters.append(InvalidResource.resource_type == payload.resource_type)
-    if payload.last_seen_before:
-        filters.append(InvalidResource.last_seen_at < payload.last_seen_before)
-    if payload.last_seen_after:
-        filters.append(InvalidResource.last_seen_at >= payload.last_seen_after)
-
-    if payload.rule or payload.severity:
-        issue_match = [InvalidResourceIssue.invalid_resource_id == InvalidResource.id]
-        if payload.rule:
-            issue_match.append(InvalidResourceIssue.rule == payload.rule)
-        if payload.severity:
-            issue_match.append(InvalidResourceIssue.severity == payload.severity)
-        filters.append(exists(select(InvalidResourceIssue.id).where(*issue_match)))
-
-    where_clause = and_(*filters)
-
-    if payload.dry_run:
-        count_stmt = (
-            select(func.count()).select_from(InvalidResource).where(where_clause)
-        )
-        matched = (await db.execute(count_stmt)).scalar_one()
-        return DbPurgeResult(
-            matched=matched,
-            deleted=0,
-            dry_run=True,
-            elapsed_seconds=round(monotonic() - start, 2),
-        )
-
-    result = await db.execute(delete(InvalidResource).where(where_clause))
-    deleted = result.rowcount or 0
-
-    if deleted:
-        db.add(
-            AuditLog(
-                server_id=server.id,
-                server_base_url=server.base_url,
-                resource_type=payload.resource_type or "*",
-                resource_id=f"{deleted} resources purged",
-                invalid_resource_id=None,
-                action=AuditAction.PURGE,
-                fhir_request_payload={
-                    "filter": {
-                        "resource_type": payload.resource_type,
-                        "rule": payload.rule,
-                        "severity": payload.severity,
-                        "last_seen_before": (
-                            payload.last_seen_before.isoformat()
-                            if payload.last_seen_before
-                            else None
-                        ),
-                        "last_seen_after": (
-                            payload.last_seen_after.isoformat()
-                            if payload.last_seen_after
-                            else None
-                        ),
-                    },
-                    "deleted_count": deleted,
-                },
-                fhir_response_status=None,
-                resource_before=None,
-                status=AuditStatus.SUCCESS,
-                error_message=None,
-                reason=payload.reason,
-                actor_id=user.id,
-                executed_at=datetime.now(timezone.utc),
-            )
-        )
-    await db.commit()
-
-    return DbPurgeResult(
-        matched=deleted,
-        deleted=deleted,
-        dry_run=False,
-        elapsed_seconds=round(monotonic() - start, 2),
-    )
 
 
 # ---------------------------------------------------------------------------

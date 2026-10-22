@@ -57,7 +57,7 @@ class FhirServerUpdate(BaseModel):
     write_fhir_reports: bool | None = Field(
         default=None,
         description=(
-            "Post TestScript, TestReport and VerificationResult resources to "
+            "Post TestScript, TestReport and List resources to "
             "this FHIR server after each completed run."
         ),
     )

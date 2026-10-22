@@ -6,7 +6,6 @@ import {
   PlayCircleIcon,
   ServerSquareIcon,
 } from "@solar-icons/react/line-duotone"
-import type { LucideIcon } from "lucide-react"
 
 import type { Role } from "@/api/queries"
 import { hasRole, meQueryOptions } from "@/api/queries"
@@ -15,7 +14,7 @@ import { cn } from "@/lib/utils"
 type NavItem = {
   to: "/" | "/servers" | "/runs" | "/cleanup"
   label: string
-  icon: LucideIcon
+  icon: React.ElementType
   minRole?: Role
 }
 
@@ -23,7 +22,12 @@ const navItems: Array<NavItem> = [
   { to: "/", label: "Overview", icon: HomeSmileIcon },
   { to: "/servers", label: "Servers", icon: ServerSquareIcon },
   { to: "/runs", label: "Runs", icon: PlayCircleIcon },
-  { to: "/cleanup", label: "Cleanup", icon: NotificationRemoveIcon },
+  {
+    to: "/cleanup",
+    label: "Cleanup",
+    icon: NotificationRemoveIcon,
+    minRole: "editor",
+  },
 ]
 
 export function MainNav() {
@@ -56,7 +60,7 @@ export function MainNav() {
             )}
           >
             <Icon
-              strokeWidth={2}
+              strokeWidth={1.8}
               className={cn("size-5", item.to === "/runs" ? "size-5.5" : "")}
               aria-hidden
             />

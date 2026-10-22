@@ -48,7 +48,6 @@ class ValidationRun(Base, TimestampMixin):
         default=lambda: datetime.now(timezone.utc),
     )
     finished_at = Column(DateTime(timezone=True), nullable=True)
-    verification_result = Column(JSON, nullable=True)
     test_report = Column(JSON, nullable=True)
     error_message = Column(String, nullable=True)
 

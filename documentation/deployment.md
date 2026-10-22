@@ -67,7 +67,7 @@ Die wichtigsten Werte:
 | KEYCLOAK_DB_PASSWORD / KEYCLOAK_ADMIN_PASSWORD  | nur beim mitgelieferten Keycloak: Datenbank und Admin-Konsole                   |
 | VERITY_ADMIN_EMAIL / VERITY_ADMIN_PASSWORD      | nur beim mitgelieferten Keycloak: erster Benutzer `verity-admin`                |
 | FHIR_REPORT_PUBLISHER                           | Name des Standorts, der in den FHIR-Reports als Herausgeber erscheint           |
-| FHIR_REPORT_NAMING_SYSTEM                       | kanonische Basis-URL der Report-Identifier; einmal festlegen, dann nicht ändern |
+| VERITY_CANONICAL_BASE                           | optional; kanonische Basis der Reports, Standard ist die Projekt-URL            |
 | EMAIL                                           | SMTP-Zugang für Email Benachrichtigungen                                        |
 
 Den Session-Schlüssel mit einem echten Zufallswert setzen:

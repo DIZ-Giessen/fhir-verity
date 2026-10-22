@@ -48,7 +48,8 @@ class ActionResult(BaseModel):
 
 class AuditLogListItem(BaseModel):
     id: UUID
-    server_id: UUID
+    server_id: Optional[UUID] = None
+    server_base_url: str
     resource_type: str
     resource_id: str
     action: str
@@ -109,29 +110,6 @@ class BulkFixRequest(BaseModel):
     reason: Optional[str] = None
 
 
-class DbPurgeRequest(BaseModel):
-    """Filter criteria for purging invalid_resources rows from Verity's own
-    database only — never touches the source FHIR server."""
-
-    server_id: UUID
-    resource_type: Optional[str] = None
-    rule: Optional[str] = None
-    severity: Optional[str] = None
-    last_seen_before: Optional[datetime] = None
-    last_seen_after: Optional[datetime] = None
-    dry_run: bool = False
-    reason: Optional[str] = None
-
-
-class DbPurgeResult(BaseModel):
-    """Outcome of a DB-only purge."""
-
-    matched: int
-    deleted: int
-    dry_run: bool
-    elapsed_seconds: float
-
-
 class FixableTemplate(BaseModel):
     """Model for a Fixable Template"""
 
@@ -147,7 +125,7 @@ class AutoFixRequest(BaseModel):
 
 class AuditLogDetail(BaseModel):
     id: UUID
-    server_id: UUID
+    server_id: Optional[UUID] = None
     server_base_url: str
     resource_type: str
     resource_id: str

@@ -166,8 +166,9 @@ export interface paths {
         /**
          * Delete FHIR server
          * @description Delete a FHIR server together with everything Verity stored for it:
-         *     validation runs, invalid resources (and their issues), server-specific
-         *     configs and audit log entries. All of it cascades in the database.
+         *     validation runs, invalid resources (and their issues) and server-specific
+         *     configs. All of it cascades in the database. Audit log entries are kept
+         *     (server_id is set to NULL) and a SERVER_DELETE entry is added.
          *     The FHIR server itself is not touched.
          *
          *     Refused with 409 while a run is in progress, since the background task
@@ -590,41 +591,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/resources/db-purge": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Purge Invalid Resources
-         * @description Delete invalid_resources rows from Verity's own database only — set-based,
-         *     no per-row round trip through Python.
-         *
-         *     Never calls the FHIR server — the underlying resources are left exactly
-         *     as they are. Meant for admins to clear out rows that piled up before
-         *     validation runs started sweeping stale entries automatically, or that
-         *     are simply no longer worth tracking (e.g. everything not reconfirmed
-         *     invalid in months).
-         *
-         *     Writes a single audit_logs row summarizing the operation (filter used +
-         *     count), not one row per deleted resource: at 100k+ rows, one audit entry
-         *     per resource just relocates the bloat instead of removing it, and this
-         *     is a DB-only bookkeeping cleanup, not a FHIR-side mutation that needs a
-         *     forensic trail per resource the way DELETE/PATCH do.
-         *
-         *     With dry_run=true: returns the match count without deleting anything.
-         */
-        post: operations["purge_invalid_resources_api_v1_resources_db_purge_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/audit-log": {
         parameters: {
             query?: never;
@@ -810,7 +776,7 @@ export interface components {
          * AuditAction
          * @enum {string}
          */
-        AuditAction: "DELETE" | "PATCH" | "PURGE" | "BULK_DELETE" | "BULK_PATCH";
+        AuditAction: "DELETE" | "PATCH" | "BULK_DELETE" | "BULK_PATCH" | "SERVER_DELETE";
         /** AuditLogDetail */
         AuditLogDetail: {
             /**
@@ -818,11 +784,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /**
-             * Server Id
-             * Format: uuid
-             */
-            server_id: string;
+            /** Server Id */
+            server_id?: string | null;
             /** Server Base Url */
             server_base_url: string;
             /** Resource Type */
@@ -858,11 +821,10 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /**
-             * Server Id
-             * Format: uuid
-             */
-            server_id: string;
+            /** Server Id */
+            server_id?: string | null;
+            /** Server Base Url */
+            server_base_url: string;
             /** Resource Type */
             resource_type: string;
             /** Resource Id */
@@ -992,49 +954,6 @@ export interface components {
             };
         };
         /**
-         * DbPurgeRequest
-         * @description Filter criteria for purging invalid_resources rows from Verity's own
-         *     database only — never touches the source FHIR server.
-         */
-        DbPurgeRequest: {
-            /**
-             * Server Id
-             * Format: uuid
-             */
-            server_id: string;
-            /** Resource Type */
-            resource_type?: string | null;
-            /** Rule */
-            rule?: string | null;
-            /** Severity */
-            severity?: string | null;
-            /** Last Seen Before */
-            last_seen_before?: string | null;
-            /** Last Seen After */
-            last_seen_after?: string | null;
-            /**
-             * Dry Run
-             * @default false
-             */
-            dry_run: boolean;
-            /** Reason */
-            reason?: string | null;
-        };
-        /**
-         * DbPurgeResult
-         * @description Outcome of a DB-only purge.
-         */
-        DbPurgeResult: {
-            /** Matched */
-            matched: number;
-            /** Deleted */
-            deleted: number;
-            /** Dry Run */
-            dry_run: boolean;
-            /** Elapsed Seconds */
-            elapsed_seconds: number;
-        };
-        /**
          * DeleteRequest
          * @description Delete Request Schemas
          */
@@ -1127,7 +1046,7 @@ export interface components {
             is_active?: boolean | null;
             /**
              * Write Fhir Reports
-             * @description Post TestScript, TestReport and VerificationResult resources to this FHIR server after each completed run.
+             * @description Post TestScript, TestReport and List resources to this FHIR server after each completed run.
              */
             write_fhir_reports?: boolean | null;
         };
@@ -2700,39 +2619,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BulkActionResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    purge_invalid_resources_api_v1_resources_db_purge_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DbPurgeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DbPurgeResult"];
                 };
             };
             /** @description Validation Error */

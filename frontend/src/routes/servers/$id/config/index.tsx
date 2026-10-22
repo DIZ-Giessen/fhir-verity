@@ -109,7 +109,7 @@ function FhirReportsSetting({ server }: { server: FhirServer }) {
       queryClient.invalidateQueries({ queryKey: serverKeys.all })
       if (enabled) {
         toast.success("FHIR reports enabled", {
-          description: `From the next completed run on, a TestScript and TestReport per resource type and one VerificationResult are written to ${server.name}.`,
+          description: `From the next completed run on, a TestReport per resource type and one List for the run are written to ${server.name}. TestScripts are only written when the rule configuration changed.`,
         })
       } else {
         toast.success("FHIR reports disabled", {
@@ -138,11 +138,12 @@ function FhirReportsSetting({ server }: { server: FhirServer }) {
           </Label>
           <p className="text-sm text-muted-foreground">
             After each completed run, Verity posts the results as FHIR resources
-            to this server: one <b>TestScript</b> and one <b>TestReport</b> per
-            validated resource type and one <b>VerificationResult</b> for the
-            whole run. Turn this off for read-only or production servers where
-            Verity must not create any resources. The results remain visible in
-            Verity either way.
+            to this server: one <b>TestReport</b> per validated resource type
+            and one <b>List</b> referencing them for the whole run. The rules
+            are described by one <b>TestScript</b> per resource type, which is
+            reused as long as the configuration does not change. Turn this off
+            for read-only or production servers where Verity must not create any
+            resources. The results remain visible in Verity either way.
           </p>
         </div>
         <Switch

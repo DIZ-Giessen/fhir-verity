@@ -24,6 +24,9 @@ from app.api.v1.endpoints.websocket import broadcast_progress
 
 logger = logging.getLogger(__name__)
 
+# FHIR date: YYYY, YYYY-MM or YYYY-MM-DD
+FHIR_DATE = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")
+
 
 class FhirServerUnresponsiveError(Exception):
     """The FHIR server did not answer a request after exhausting all retries.
@@ -199,6 +202,29 @@ class BaseValidator:
             return datetime.fromisoformat(raw.replace("Z", "+00:00"))
         except ValueError:
             return None
+
+    @staticmethod
+    def _as_utc(raw: str) -> datetime:
+        """Parse a FHIR date/dateTime; values without time zone count as UTC."""
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+    @staticmethod
+    def _end_before_start(start: str, end: str) -> bool:
+        """
+        True if a Period ends before it starts (FHIR invariant per-1 allows
+        start == end). Values of different precision, e.g. a date against a
+        dateTime, are compared at the lower precision. Raises ValueError for
+        values that are not FHIR date/dateTime strings.
+        """
+        if "T" in start and "T" in end:
+            return BaseValidator._as_utc(end) < BaseValidator._as_utc(start)
+        start_date = start.split("T")[0]
+        end_date = end.split("T")[0]
+        if not (FHIR_DATE.match(start_date) and FHIR_DATE.match(end_date)):
+            raise ValueError(f"not a FHIR date: {start!r} / {end!r}")
+        precision = min(len(start_date), len(end_date))
+        return end_date[:precision] < start_date[:precision]
 
     @staticmethod
     def _next_link(bundle: dict) -> str | None:
@@ -964,22 +990,17 @@ class EncounterValidator(BaseValidator):
                     end = period.get("end")
                     if start and end:
                         try:
-                            start_dt = datetime.fromisoformat(
-                                start.replace("Z", "+00:00")
-                            )
-                            end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
-                            if end_dt <= start_dt:
+                            if self._end_before_start(start, end):
                                 issues.append(
                                     {
                                         "rule": "period_end_after_start",
                                         "severity": config["period_end_after_start"][
                                             "severity"
                                         ],
-                                        "message": f"""
-                                            Encounter.period.end '{end}'
-                                            is not 
-                                            after period.start '{start}'.
-                                            """,
+                                        "message": (
+                                            f"Encounter.period.end '{end}' is before "
+                                            f"period.start '{start}'."
+                                        ),
                                     }
                                 )
                                 metrics["period_end_after_start"] = False
@@ -993,11 +1014,9 @@ class EncounterValidator(BaseValidator):
                     end = period.get("end")
                     if start and end:
                         try:
-                            start_dt = datetime.fromisoformat(
-                                start.replace("Z", "+00:00")
-                            )
-                            end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
-                            duration_days = (end_dt - start_dt).days
+                            duration_days = (
+                                self._as_utc(end) - self._as_utc(start)
+                            ).days
                             if duration_days > 730:
                                 issues.append(
                                     {
@@ -1605,18 +1624,14 @@ class MedicationAdministrationValidator(BaseValidator):
                     end = period.get("end")
                     if start and end:
                         try:
-                            start_dt = datetime.fromisoformat(
-                                start.replace("Z", "+00:00")
-                            )
-                            end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
-                            if end_dt <= start_dt:
+                            if self._end_before_start(start, end):
                                 issues.append(
                                     {
                                         "rule": "effective_period_end_after_start",
                                         "severity": config[
                                             "effective_period_end_after_start"
                                         ]["severity"],
-                                        "message": "MedicationAdministration.effectivePeriod.end is not after start.",
+                                        "message": "MedicationAdministration.effectivePeriod.end is before start.",
                                     }
                                 )
                                 metrics["effective_period_end_after_start"] = False

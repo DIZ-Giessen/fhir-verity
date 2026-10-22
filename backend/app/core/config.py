@@ -54,13 +54,13 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
-    # --- FHIR reports (TestScript / TestReport / VerificationResult) ---
-    # Name shown as publisher/tester/validator in every report.
+    # --- FHIR reports (TestScript / TestReport / List) ---
+    # Name shown as publisher/tester in every report.
     FHIR_REPORT_PUBLISHER: str = "FHIR Verity"
-    # Canonical base for report identifiers and extension URLs. Keep it stable
-    # once reports exist, otherwise old and new reports use different systems.
-    # Empty = derived from BACKEND_BASE_URL.
-    FHIR_REPORT_NAMING_SYSTEM: str = ""
+    # Canonical base for TestScript.url, identifier systems and extension
+    # URLs. Must be globally unique and stable, so it points to the project
+    # repository and is not derived from where Verity runs.
+    VERITY_CANONICAL_BASE: str = "https://github.com/fhir-verity/fhir-verity"
 
     @model_validator(mode="after")
     def _check_auth(self) -> "Settings":

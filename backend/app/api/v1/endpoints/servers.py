@@ -3,6 +3,7 @@ API endpoints for managing FHIR Servers.
 """
 
 import asyncio
+from datetime import datetime, timezone
 from time import monotonic
 from fastapi import APIRouter, Depends, HTTPException, status
 import httpx
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
 from app.core.security import get_current_user, server_access
+from app.models.audit_log import AuditAction, AuditLog, AuditStatus
 from app.models.fhir_server import FhirServer
 from app.models.validation_run import ValidationRun, ValidationStatus
 from app.models.user import User, UserRole
@@ -134,12 +136,14 @@ async def update_fhir_server(
 )
 async def delete_fhir_server(
     server: FhirServer = Depends(server_access()),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """
     Delete a FHIR server together with everything Verity stored for it:
-    validation runs, invalid resources (and their issues), server-specific
-    configs and audit log entries. All of it cascades in the database.
+    validation runs, invalid resources (and their issues) and server-specific
+    configs. All of it cascades in the database. Audit log entries are kept
+    (server_id is set to NULL) and a SERVER_DELETE entry is added.
     The FHIR server itself is not touched.
 
     Refused with 409 while a run is in progress, since the background task
@@ -160,7 +164,28 @@ async def delete_fhir_server(
             "Cancel it first, then delete the server.",
         )
 
+    snapshot = {
+        "name": server.name,
+        "base_url": server.base_url,
+        "project_id": server.project_id,
+        "is_active": server.is_active,
+        "write_fhir_reports": server.write_fhir_reports,
+        "owner_id": str(server.owner_id) if server.owner_id else None,
+    }
     await db.delete(server)
+    db.add(
+        AuditLog(
+            server_id=None,
+            server_base_url=server.base_url,
+            resource_type="Server",
+            resource_id=server.name,
+            action=AuditAction.SERVER_DELETE,
+            resource_before=snapshot,
+            status=AuditStatus.SUCCESS,
+            actor_id=user.id,
+            executed_at=datetime.now(timezone.utc),
+        )
+    )
     await db.commit()
 
 

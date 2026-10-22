@@ -47,6 +47,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
+import { apiErrorMessage } from "@/lib/api-client"
 import { filterEntries, hasActiveFilters } from "@/lib/filter-format"
 
 const DEFAULT_UNCHECKED_TYPES = new Set([
@@ -186,7 +187,7 @@ export function StartValidationDialog({
     },
     onError: (err) => {
       toast.error("Failed to start validation", {
-        description: err instanceof Error ? err.message : "Unknown error",
+        description: apiErrorMessage(err),
       })
     },
   })

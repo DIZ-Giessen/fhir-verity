@@ -60,11 +60,20 @@ wieder auf.
 
 ## FHIR-konforme Reports
 
-Nach Abschluss erzeugt Verity Report-Ressourcen im FHIR-Format (`VerificationResult`, `TestReport`, `TestScript`) und schreibt sie auf den
-geprüften Server zurück. Die Qualitätsbewertung wird dadurch selbst Teil des FHIR-Bestands und ist von anderen Systemen weiterverwendbar, statt nur in
-Veritys eigener Datenbank zu liegen.
+Nach Abschluss erzeugt Verity Report-Ressourcen im FHIR-Format und schreibt sie auf den geprüften Server zurück. Die Qualitätsbewertung wird dadurch
+selbst Teil des FHIR-Bestands und ist von anderen Systemen weiterverwendbar, statt nur in Veritys eigener Datenbank zu liegen.
 
-Das Zurückschreiben lässt sich pro Server in der Validierungskonfiguration abschalten („Write FHIR reports to the server“), etwa für schreibgeschützte oder produktive Server, auf denen Verity keine Ressourcen anlegen darf. Die Reports werden dann trotzdem berechnet; Score und Ergebnis jedes Laufs bleiben in Verity sichtbar. Herausgeber und kanonische URL der Reports kommen aus `FHIR_REPORT_PUBLISHER` und `FHIR_REPORT_NAMING_SYSTEM` in der `.env`, damit jeder Standort unter eigenem Namen veröffentlicht.
+| Ressource    | Anzahl                                  | Inhalt                                                                          |
+| ------------ | --------------------------------------- | ------------------------------------------------------------------------------- |
+| `TestScript` | eine je Ressourcentyp und Konfiguration | die aktiven Regeln mit Beschreibung, Kategorie und Schwere                      |
+| `TestReport` | eine je Ressourcentyp und Lauf          | Ergebnis je Regel mit Anzahl der Verstöße, Score (Anteil valider Ressourcen)    |
+| `List`       | eine je Lauf                            | verweist auf alle TestReports des Laufs; die Lauf-ID steht in `List.identifier` |
+
+Ein TestScript wird nicht bei jedem Lauf neu angelegt. Seine `version` ist ein Hash über die aktiven Regeln; vor dem Schreiben sucht Verity auf dem
+Server nach einem TestScript mit derselben `url` und `version` und verwendet es wieder. Erst wenn sich die Regelkonfiguration ändert, entsteht eine
+neue Version.
+
+Das Zurückschreiben lässt sich pro Server in der Validierungskonfiguration abschalten („Write FHIR reports to the server“), etwa für schreibgeschützte oder produktive Server, auf denen Verity keine Ressourcen anlegen darf. Die Reports werden dann trotzdem berechnet; Score und Ergebnis jedes Laufs bleiben in Verity sichtbar. Der Herausgeber der Reports kommt aus `FHIR_REPORT_PUBLISHER` in der `.env`. `TestScript.url`, Identifier-Systeme und Extension-URLs bauen auf `VERITY_CANONICAL_BASE` auf, standardmäßig die Projekt-URL. Diese Basis ist fest und hängt nicht davon ab, unter welcher Adresse Verity läuft.
 
 ## Bereinigungs-Workflow
 

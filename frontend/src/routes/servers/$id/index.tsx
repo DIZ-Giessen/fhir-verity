@@ -418,7 +418,7 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
         {summary?.by_resource_type.map((i) => i.resource_type).join(", ")}
       </span>
       {items.map((item) => (
-        <Card key={item.key} className="p-6 shadow-2xs">
+        <Card key={item.key} className="border-none! p-6 shadow-none! ring-0">
           <CardContent className="p-0">
             <dt className="text-sm font-medium text-muted-foreground">
               {item.name}

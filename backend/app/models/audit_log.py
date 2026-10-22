@@ -24,10 +24,10 @@ from app.models.base import Base, TimestampMixin
 class AuditAction(str, enum.Enum):
     DELETE = "DELETE"
     PATCH = "PATCH"
-    PURGE = "PURGE"  # DB-only removal from invalid_resources; no FHIR call made
     # One summary row per bulk operation instead of one row per resource
     BULK_DELETE = "BULK_DELETE"
     BULK_PATCH = "BULK_PATCH"
+    SERVER_DELETE = "SERVER_DELETE"
 
 
 class AuditStatus(str, enum.Enum):
@@ -36,17 +36,18 @@ class AuditStatus(str, enum.Enum):
 
 
 class AuditLog(Base, TimestampMixin):
-    """One row per modification attempt on a FHIR resource."""
+    """One row per modification attempt on a FHIR resource or a deleted server."""
 
     __tablename__ = "audit_logs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    # Target
+    # Target. Set to NULL when the server is deleted so its history survives;
+    # server_base_url still identifies it.
     server_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("fhir_servers.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("fhir_servers.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     server_base_url = Column(String, nullable=False)

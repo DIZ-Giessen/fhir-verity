@@ -149,7 +149,7 @@ Profil: MII KDS Fall, `Encounter` (Kontakt Gesundheitseinrichtung).
 | `period_start_required`     | completeness | error   |  an  |  –  | `period` oder `period.start` fehlt                                                            |
 | `servicetype_required`      | completeness | info    | aus  |  –  | **nicht implementiert**                                                                       |
 | `diagnosis_present`         | completeness | info    | aus  |  –  | **nicht implementiert**                                                                       |
-| `period_end_after_start`    | plausibility | error   |  an  |  –  | `period.end` vorhanden ist und nicht **nach** `period.start` liegt (gleich zählt als Verstoß) |
+| `period_end_after_start`    | plausibility | error   |  an  |  –  | `period.end` vor `period.start` liegt (gleich ist erlaubt, FHIR-Invariante per-1)            |
 | `period_not_future`         | plausibility | warning |  an  |  –  | **nicht implementiert** (obwohl standardmäßig aktiv)                                          |
 | `period_plausible_duration` | plausibility | warning |  an  |  –  | `period.end` vorhanden ist und der Aufenthalt länger als 730 Tage dauert                      |
 | `subject_reference_format`  | integrity    | error   |  an  |  –  | `subject.reference` nicht mit `Patient/` beginnt                                              |
@@ -229,7 +229,7 @@ Profil: MII KDS Medikation, `MedicationAdministration`.
 | `subject_required`                 | completeness | error   |  an  |  –  | `subject` fehlt                                                                      |
 | `effective_required`               | completeness | error   |  an  |  –  | weder `effectiveDateTime` noch `effectivePeriod` vorhanden ist                       |
 | `effective_not_future`             | plausibility | warning |  an  |  –  | `effectiveDateTime` in der Zukunft liegt; `effectivePeriod` wird ignoriert           |
-| `effective_period_end_after_start` | plausibility | error   |  an  |  –  | `effectivePeriod.end` vorhanden ist und nicht **nach** `effectivePeriod.start` liegt |
+| `effective_period_end_after_start` | plausibility | error   |  an  |  –  | `effectivePeriod.end` vor `effectivePeriod.start` liegt (gleich ist erlaubt)         |
 | `subject_reference_format`         | integrity    | error   |  an  |  –  | `subject.reference` nicht mit `Patient/` beginnt                                     |
 
 ## MedicationStatement
@@ -309,12 +309,11 @@ standardmäßig aktiv und erwecken so den Eindruck, geprüft zu werden:
 - **Muster-Regeln:** Die Beschreibung in der Konfiguration („matches the expected pseudonym format“) sagt das Gegenteil dessen, was geprüft wird. Das
   Muster beschreibt die _originale_ Kennung (siehe [Patient](#patient)).
 - **`Patient.address_forbidden`** prüft nur die erste Adresse. Der Auto-Fix bereinigt dagegen alle Adressen.
-- **Gemischte Zeitangaben:** Hat ein Zeitraum ein Datum ohne Zeitzone (`2024-01-01`) und einen Zeitpunkt mit Zeitzone (`2024-01-05T10:00:00+01:00`),
-  scheitert der Vergleich in `period_end_after_start`, `period_plausible_duration` (Encounter) und `effective_period_end_after_start`
-  (MedicationAdministration) mit einem Fehler, der den Lauf abbricht.
+- **Zeitangaben unterschiedlicher Genauigkeit:** `period_end_after_start` und `effective_period_end_after_start` vergleichen ein Datum
+  (`2024-01-01`) mit einem Zeitpunkt (`2024-01-01T10:00:00+01:00`) auf Tagesebene, also in der geringeren Genauigkeit. Zeitpunkte ohne
+  Zeitzone werden als UTC behandelt.
 - **Codes und ValueSets** werden nicht geprüft: Es wird nur festgestellt, ob `code`, `status` usw. vorhanden sind, nicht ob der Wert aus dem erwarteten
   CodeSystem (ICD-10-GM, OPS, LOINC, ATC/PZN) oder ValueSet stammt.
-- **Beschreibungstexte:** `Patient.photo_forbidden` hat den Beschreibungstext von `name_forbidden` („Checks whether the field 'name' is present“).
 
 ## Neue Regel hinzufügen
 

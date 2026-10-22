@@ -2,7 +2,7 @@
 
 Fhir Verity ist eine Server-weite Datenqualitäts-Validierung und Bereinigung für FHIR-Server.
 
-FHIR Verity liest den vollständigen Ressourcen-Bestand eines FHIR-Servers, prüft ihn gegen **konfigurierbare Qualitätsregeln** in vier Dimensionen (**Pseudonymisierung/Datenschutz, Vollständigkeit, Plausibilität, referentielle Integrität**), speichert die invaliden Ressourcen samt Befund und stellt einen Bereinigungs-Workflow bereit. Die Ergebnisse werden zusätzlich als FHIR-konforme Reports (`VerificationResult`, `TestReport`) auf den geprüften Server zurückgeschrieben.
+FHIR Verity liest den vollständigen Ressourcen-Bestand eines FHIR-Servers, prüft ihn gegen **konfigurierbare Qualitätsregeln** in vier Dimensionen (**Pseudonymisierung/Datenschutz, Vollständigkeit, Plausibilität, referentielle Integrität**), speichert die invaliden Ressourcen samt Befund und stellt einen Bereinigungs-Workflow bereit. Die Ergebnisse werden zusätzlich als FHIR-Ressourcen (`TestScript`, `TestReport`, `List`) auf den geprüften Server zurückgeschrieben.
 
 ## Ziel
 
@@ -77,6 +77,7 @@ Die ausführliche Dokumentation liegt im Ordner `documentation/`:
 - [features.md](documentation/features.md) — Validierungsdimensionen, Crawl, Reports, Bereinigung
 - [validierungsregeln.md](documentation/validierungsregeln.md) — Alle Ressourcentypen und Regeln im Detail, neue Regel hinzufügen
 - [datenbank.md](documentation/datenbank.md) — Die beiden DB-Wege, Migrationen, PostgreSQL-Rechte
+- [datenbank-bereinigung.md](documentation/datenbank-bereinigung.md) — Invalide Ressourcen per SQL aus Veritys Datenbank entfernen
 - [schema.md](documentation/schema.md) — Tabellen, Spalten, Beziehungen
 - [rollenverwaltung.md](documentation/rollenverwaltung.md) — RBAC, Server-Ownership, Audit
 - [deployment.md](documentation/deployment.md) — Vollständige Deployment-Anleitung

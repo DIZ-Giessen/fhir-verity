@@ -72,15 +72,6 @@ export const DeleteMessage = [
   "Loading",
 ]
 
-export const PurgeText = [
-  "Purging",
-  "Please wait",
-  "Purging data",
-  "Database connection",
-  "Network connection",
-  "Loading",
-]
-
 export const useLoadingText = (texts: Array<string>) => {
   const [loadingText, setLoadingText] = useState(texts[0])
   useEffect(() => {

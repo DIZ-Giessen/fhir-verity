@@ -189,7 +189,7 @@ export function ServerFormDialog({
             control={form.control}
             name="is_active"
             render={({ field, fieldState }) => (
-              <Field className="flex flex-row items-center justify-between rounded-lg border p-3">
+              <Field className="flex flex-row items-center justify-between rounded-lg p-3">
                 <div className="space-y-0.5">
                   <FieldLabel htmlFor="is_activate">Active</FieldLabel>
                   <FieldDescription>

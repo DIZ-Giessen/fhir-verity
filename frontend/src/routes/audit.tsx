@@ -53,11 +53,14 @@ const ACTION_LABELS: Record<string, string> = {
   PATCH: "Patch",
   BULK_DELETE: "Bulk delete",
   BULK_PATCH: "Bulk fix",
-  PURGE: "DB purge",
+  SERVER_DELETE: "Server deleted",
 }
 
-/** Summary rows written by bulk-delete/-fix and db-purge (one row per operation). */
-const SUMMARY_ACTIONS = new Set(["BULK_DELETE", "BULK_PATCH", "PURGE"])
+/** Summary rows written by bulk-delete/-fix (one row per operation). */
+const SUMMARY_ACTIONS = new Set(["BULK_DELETE", "BULK_PATCH"])
+
+/** Rows about Verity itself, not about a resource on the FHIR server. */
+const SERVER_ACTIONS = new Set(["SERVER_DELETE"])
 
 interface BulkPayload {
   bulk: true
@@ -124,7 +127,8 @@ function AuditPage() {
 
   const serverName = useMemo(() => {
     const m = new Map((serversQ.data ?? []).map((s) => [s.id, s.name]))
-    return (id: string) => m.get(id) ?? id
+    return (id: string | null | undefined, baseUrl: string) =>
+      (id && m.get(id)) ?? baseUrl
   }, [serversQ.data])
 
   const items = listQ.data?.items ?? []
@@ -146,8 +150,8 @@ function AuditPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
         <p className="text-sm text-muted-foreground">
-          Every delete and patch executed against a FHIR server. Bulk operations
-          and DB purges are logged as a single summary entry.
+          Every delete and patch executed against a FHIR server, and every
+          deleted server. Bulk operations are logged as a single summary entry.
         </p>
       </div>
 
@@ -286,11 +290,13 @@ function AuditPage() {
                             <span className="font-mono text-xs">
                               {SUMMARY_ACTIONS.has(a.action)
                                 ? `${a.resource_type === "*" ? "All types" : a.resource_type} · ${a.resource_id}`
-                                : `${a.resource_type}/${a.resource_id}`}
+                                : SERVER_ACTIONS.has(a.action)
+                                  ? a.resource_id
+                                  : `${a.resource_type}/${a.resource_id}`}
                             </span>
                           </TableCell>
                           <TableCell className="text-xs">
-                            {serverName(a.server_id)}
+                            {serverName(a.server_id, a.server_base_url)}
                           </TableCell>
 
                           <TableCell>
@@ -381,6 +387,7 @@ function AuditDetail({ auditId }: { auditId: string }) {
   const d = q.data
   const fhirUrl = `${d.server_base_url.replace(/\/$/, "")}/${d.resource_type}/${d.resource_id}`
   const isSummary = SUMMARY_ACTIONS.has(d.action)
+  const isServerAction = SERVER_ACTIONS.has(d.action)
   const bulk = isBulkPayload(d.fhir_request_payload)
     ? d.fhir_request_payload
     : null
@@ -412,10 +419,13 @@ function AuditDetail({ auditId }: { auditId: string }) {
         )
       )}
       {d.resource_before != null && (
-        <JsonBlock label="Resource before" value={d.resource_before} />
+        <JsonBlock
+          label={isServerAction ? "Server before deletion" : "Resource before"}
+          value={d.resource_before}
+        />
       )}
 
-      {!isSummary && (
+      {!isSummary && !isServerAction && (
         <Button asChild size="sm" variant="outline" className="gap-1">
           <a href={fhirUrl} target="_blank" rel="noopener noreferrer">
             <ExternalLink className="h-3.5 w-3.5" />
