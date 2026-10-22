@@ -41,6 +41,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { ServerPicker } from "@/components/server-picker"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -237,18 +238,12 @@ function CleanupPage() {
         <CardContent className="grid gap-4 sm:grid-cols-6">
           <div className="space-y-1.5">
             <Label>Server</Label>
-            <Select value={serverId} onValueChange={setServerId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a server" />
-              </SelectTrigger>
-              <SelectContent className="max-h-80 overflow-auto">
-                {(serversQ.data ?? []).map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ServerPicker
+              servers={serversQ.data ?? []}
+              value={serverId || undefined}
+              onChange={setServerId}
+              placeholder="Select a server"
+            />
           </div>
 
           <div className="space-y-1.5">

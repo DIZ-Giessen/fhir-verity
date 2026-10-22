@@ -667,6 +667,7 @@ function RecentRunsCard({
               <TableRow>
                 <TableHead>Status</TableHead>
                 <TableHead>Started</TableHead>
+                <TableHead>Started by</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead className="text-right">Processed</TableHead>
                 <TableHead className="text-right">Invalid</TableHead>
@@ -690,6 +691,11 @@ function RecentRunsCard({
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {dateFormatter.format(new Date(r.started_at))}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {r.triggered_by?.full_name ??
+                      r.triggered_by?.username ??
+                      "—"}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {formatDuration(r.started_at, r.finished_at)}

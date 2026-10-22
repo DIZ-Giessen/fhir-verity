@@ -5,13 +5,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import {
-  Check,
-  ChevronsUpDown,
-  ExternalLink,
-  Filter,
-  Loader2,
-} from "lucide-react"
+import { ExternalLink, Filter, Loader2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -20,19 +14,12 @@ import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import {
   resourceTypesQueryOptions,
   serverResourceConfigQueryOptions,
+  serverResourceCountsQueryOptions,
   serversQueryOptions,
   startValidation,
 } from "@/api/queries"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
 import {
   Dialog,
   DialogContent,
@@ -41,11 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
+import { ServerPicker } from "@/components/server-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import { apiErrorMessage } from "@/lib/api-client"
 import { filterEntries, hasActiveFilters } from "@/lib/filter-format"
@@ -62,6 +45,14 @@ const DEFAULT_UNCHECKED_TYPES = new Set([
   "Patient",
   "Encounter",
 ])
+
+/** Above this many resources a type is called out as a long-running run. */
+const LARGE_TYPE_THRESHOLD = 2_000_000
+
+const compactNumber = new Intl.NumberFormat("en", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+})
 
 interface StartValidationDialogProps {
   open: boolean
@@ -115,6 +106,20 @@ export function StartValidationDialog({
       enabled: Boolean(effectiveServerId) && allTypes.length > 0,
     })),
   })
+  const countsQ = useQuery({
+    ...serverResourceCountsQueryOptions(effectiveServerId ?? ""),
+    enabled: open && Boolean(effectiveServerId),
+  })
+  const counts = new Map(
+    (countsQ.data ?? [])
+      .filter((c) => c.ok)
+      .map((c) => [c.resource_type, c.total])
+  )
+  const largeSelectedTypes = allTypes
+    .filter((rt) => selected.has(rt))
+    .map((rt) => ({ resourceType: rt, total: counts.get(rt) ?? 0 }))
+    .filter((x) => x.total > LARGE_TYPE_THRESHOLD)
+
   const filteredSelectedTypes = allTypes
     .map((rt, i) => ({ resourceType: rt, filters: configQs[i]?.data?.filters }))
     .filter(
@@ -239,26 +244,37 @@ export function StartValidationDialog({
             </div>
           )}
 
-          {(Array.from(selected).includes("Condition") ||
-            Array.from(selected).includes("Observation")) && (
+          {largeSelectedTypes.length > 0 && (
             <Alert className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-50">
               <DangerTriangleIcon className="size-5" />
-              <AlertTitle>Attention</AlertTitle>
-
+              <AlertTitle>Large resource types selected</AlertTitle>
               <AlertDescription>
-                Validation runs for{" "}
-                <span className="font-medium text-foreground">Condition</span>{" "}
-                and{" "}
-                <span className="font-medium text-foreground">Observation</span>{" "}
-                can take{" "}
-                <span className="font-medium text-foreground">
-                  significantly longer
-                </span>
-                . We recommend starting validation for these types{" "}
-                <span className="font-medium text-foreground">
-                  one at a time
-                </span>
-                .
+                <p>
+                  {largeSelectedTypes.length === 1
+                    ? "This type has"
+                    : "These types have"}{" "}
+                  more than {compactNumber.format(LARGE_TYPE_THRESHOLD)}{" "}
+                  resources on this server, so the run can take{" "}
+                  <span className="font-medium text-foreground">
+                    significantly longer
+                  </span>
+                  .
+                  {largeSelectedTypes.length > 1 &&
+                    " We recommend validating them one at a time."}
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {largeSelectedTypes.map(({ resourceType, total }) => (
+                    <li
+                      key={resourceType}
+                      className="list-inside list-disc text-xs"
+                    >
+                      <span className="text-sm font-medium text-foreground">
+                        {resourceType}
+                      </span>
+                      : {total.toLocaleString()}
+                    </li>
+                  ))}
+                </ul>
               </AlertDescription>
             </Alert>
           )}
@@ -285,6 +301,11 @@ export function StartValidationDialog({
                         onCheckedChange={() => toggle(rt)}
                       />
                       <span>{rt}</span>
+                      {counts.has(rt) && (
+                        <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                          {compactNumber.format(counts.get(rt) ?? 0)}
+                        </span>
+                      )}
                     </label>
                   ))}
                 </div>
@@ -347,69 +368,5 @@ export function StartValidationDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function ServerPicker({
-  servers,
-  value,
-  onChange,
-}: {
-  servers: Array<{ id: string; name: string; base_url: string }>
-  value?: string
-  onChange: (id: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const selected = servers.find((s) => s.id === value)
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between font-normal"
-        >
-          {selected ? selected.name : "Select server…"}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="w-(--radix-popover-trigger-width) p-0"
-      >
-        <Command>
-          <CommandInput placeholder="Search server…" />
-          <CommandList className="overflow-y-auto!">
-            <CommandEmpty>No server found.</CommandEmpty>
-            <CommandGroup className="overflow-y-auto!">
-              {servers.map((s) => (
-                <CommandItem
-                  key={s.id}
-                  value={s.name}
-                  onSelect={() => {
-                    onChange(s.id)
-                    setOpen(false)
-                  }}
-                >
-                  <Check
-                    className={`mr-2 h-4 w-4 ${
-                      value === s.id ? "opacity-100" : "opacity-0"
-                    }`}
-                  />
-                  <div className="flex flex-col">
-                    <span>{s.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {s.base_url}
-                    </span>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
   )
 }
