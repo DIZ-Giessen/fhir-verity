@@ -28,7 +28,7 @@ function ConfigOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
+      <div className="mx-auto max-w-6xl space-y-2">
         <Link
           to="/servers/$id"
           params={{ id }}
@@ -39,17 +39,16 @@ function ConfigOverviewPage() {
         </Link>
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">
-            Validation configuration for the server:{" "}
+            Validation configuration for{" "}
             <span className="text-orange-500">{serverName}</span>
           </h1>
           <p className="text-sm text-muted-foreground">
             Select a resource type to review and adjust its validation rules.
-            Changes apply only to this server.
           </p>
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-6xl">
         {serverQ.data ? (
           <FhirReportsSetting server={serverQ.data} />
         ) : (
@@ -79,7 +78,7 @@ function ConfigOverviewPage() {
       )}
 
       {data && (
-        <div className="mx-auto max-w-7xl divide-y overflow-hidden rounded-lg border">
+        <div className="mx-auto max-w-6xl divide-y overflow-hidden rounded-lg border">
           {data.map((rt) => (
             <Link
               key={rt}
@@ -108,13 +107,9 @@ function FhirReportsSetting({ server }: { server: FhirServer }) {
         queryClient.setQueryData(serverKeys.detail(server.id), updated)
       queryClient.invalidateQueries({ queryKey: serverKeys.all })
       if (enabled) {
-        toast.success("FHIR reports enabled", {
-          description: `From the next completed run on, a TestReport per resource type and one List for the run are written to ${server.name}. TestScripts are only written when the rule configuration changed.`,
-        })
+        toast.success(`FHIR reports enabled to ${server.name}`)
       } else {
-        toast.success("FHIR reports disabled", {
-          description: `Nothing will be written to ${server.name} anymore. Scores and results of each run remain visible in Verity.`,
-        })
+        toast.success(`FHIR reports disabled to ${server.name}`)
       }
     },
     onError: (err) => {
@@ -130,8 +125,8 @@ function FhirReportsSetting({ server }: { server: FhirServer }) {
     : server.write_fhir_reports
 
   return (
-    <Card className="shadow-none">
-      <CardContent className="flex items-start justify-between gap-6">
+    <Card className="rounded-none p-0 shadow-none ring-0">
+      <CardContent className="flex items-start justify-between gap-6 px-0">
         <div className="space-y-1">
           <Label htmlFor="write-fhir-reports" className="text-base">
             Write FHIR reports to the server
@@ -140,10 +135,8 @@ function FhirReportsSetting({ server }: { server: FhirServer }) {
             After each completed run, Verity posts the results as FHIR resources
             to this server: one <b>TestReport</b> per validated resource type
             and one <b>List</b> referencing them for the whole run. The rules
-            are described by one <b>TestScript</b> per resource type, which is
-            reused as long as the configuration does not change. Turn this off
-            for read-only or production servers where Verity must not create any
-            resources. The results remain visible in Verity either way.
+            are described by one <b>TestScript</b> per resource type.r
+            production servers where Verity must not create any resources.
           </p>
         </div>
         <Switch

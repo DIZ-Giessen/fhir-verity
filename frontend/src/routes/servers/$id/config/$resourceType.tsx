@@ -1,8 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { CalendarIcon, ChevronLeft } from "lucide-react"
+import { ChevronLeft } from "lucide-react"
 
-import { RestartIcon } from "@solar-icons/react/line-duotone"
+import {
+  CalendarDateIcon,
+  FilterCloseIcon,
+} from "@solar-icons/react/line-duotone"
 import { useEffect, useState } from "react"
 import { format, parse } from "date-fns"
 import { de } from "date-fns/locale"
@@ -148,15 +151,20 @@ function ResourceConfigPage() {
           All resource types
         </Link>
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">
               {resourceType} rules for{" "}
               <span className="text-orange-500/70">{serverName}</span>
             </h1>
             {data?.is_server_specific ? (
-              <Badge variant="secondary">Server override</Badge>
+              <Badge variant="destructive" className="mt-1.5">
+                Server override
+              </Badge>
             ) : (
-              <Badge variant="outline">Global defaults</Badge>
+              /*    <Badge variant="secondary"></Badge> */
+              <Badge variant="secondary" className="mt-1.5">
+                Global defaults
+              </Badge>
             )}
           </div>
           {data?.is_server_specific && (
@@ -166,7 +174,7 @@ function ResourceConfigPage() {
               onClick={() => resetMutation.mutate()}
               disabled={resetMutation.isPending}
             >
-              <RestartIcon className="mr-2 h-4 w-4" />
+              <FilterCloseIcon className="mr-2 size-5" />
               {resetMutation.isPending
                 ? "Resetting..."
                 : "Reset to default Configuration"}
@@ -174,8 +182,7 @@ function ResourceConfigPage() {
           )}
         </div>
         <p className="mx-auto flex max-w-6xl text-sm text-muted-foreground">
-          Toggle rules, change their severity, and edit regex patterns. Each
-          change is saved immediately for this server.
+          Toggle rules, change their severity, and edit regex patterns.
         </p>
       </div>
 
@@ -378,11 +385,9 @@ function FilterCard({
           </h2>
           <p className="text-xs text-pretty text-muted-foreground">
             Restrict which resources are validated. Empty = validate everything.
-            Uses FHIR search on the source server, so the crawl only fetches
-            matching resources.
           </p>
         </div>
-        {active && <Badge variant="secondary">Filtered</Badge>}
+        {active && <Badge variant="destructive">Filtered</Badge>}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -469,7 +474,7 @@ function DateField({
           ) : (
             <span>{placeholder}</span>
           )}
-          <CalendarIcon className="h-3.5 w-3.5" data-icon="inline-end" />
+          <CalendarDateIcon className="size-4!" data-icon="inline-end" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">

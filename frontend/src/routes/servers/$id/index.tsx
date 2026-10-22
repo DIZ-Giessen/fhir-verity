@@ -55,6 +55,7 @@ import { cn } from "@/lib/utils"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
 import { Dots } from "@/components/dots"
 import { TextDots } from "@/components/text-dots"
+import { formatDistanceStrict, formatDistanceToNow } from "date-fns"
 
 export const Route = createFileRoute("/servers/$id/")({
   component: ServerDetailPage,
@@ -67,20 +68,6 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
   minute: "2-digit",
 })
-
-function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return "—"
-  const d = new Date(iso)
-  const diff = Date.now() - d.getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return "just now"
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  const days = Math.floor(h / 24)
-  if (days < 30) return `${days}d ago`
-  return dateFormatter.format(d)
-}
 
 function formatDuration(startISO: string, endISO: string | null): string {
   if (!endISO) return "—"
@@ -280,13 +267,16 @@ function KpiRow({ run }: { run: ValidationRunListItem | null }) {
     run && run.total_processed > 0
       ? (run.total_invalid / run.total_processed) * 100
       : null
-
+  /* dateFormatter.format(new Date(run.started_at))  */
+  /* relativeTime(run.started_at)  */
   const cards: Array<{ name: string; stat: string; sub?: string }> = [
     {
       name: "Last successful validation",
 
-      stat: run ? relativeTime(run.started_at) : "—",
-      sub: run ? dateFormatter.format(new Date(run.started_at)) : "No runs yet",
+      stat: run ? formatDistanceToNow(run.started_at) : "—",
+      sub: run
+        ? formatDistanceStrict(run.started_at, new Date())
+        : "No runs yet",
     },
     {
       name: "Processed",
@@ -303,16 +293,19 @@ function KpiRow({ run }: { run: ValidationRunListItem | null }) {
   ]
 
   return (
-    <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+    <dl className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((item) => (
-        <Card key={item.name} className="p-6 py-4 shadow-2xs">
-          <CardContent className="p-0">
+        <Card
+          key={item.name}
+          className="rounded-none border-l! p-6 py-4 shadow-none ring-0 first:border-none"
+        >
+          <CardContent className="items-center p-4">
             <dt
               className={cn(
-                "text-sm font-medium text-muted-foreground",
-                item.name === "Invalid"
+                "text-sm font-medium text-muted-foreground"
+                /*  item.name === "Invalid"
                   ? "text-rose-500"
-                  : item.name === "Invalid rate" && "text-orange-500"
+                  : item.name === "Invalid rate" && "text-orange-500" */
               )}
             >
               {item.name}
@@ -320,13 +313,16 @@ function KpiRow({ run }: { run: ValidationRunListItem | null }) {
             <dd className="mt-2 flex items-baseline space-x-2.5">
               <span
                 className={cn(
-                  "text-foregroundtabular-nums text-3xl font-semibold"
+                  "text-foregroundtabular-nums text-3xl font-semibold",
+                  item.name === "Invalid"
+                    ? "text-red-600"
+                    : item.name === "Invalid rate" && "text-orange-600"
                 )}
               >
                 {item.stat}
               </span>
             </dd>
-            {/* {item.sub && (
+            {/*   {item.sub && (
               <p className="mt-1 text-xs text-muted-foreground">{item.sub}</p>
             )} */}
           </CardContent>
@@ -418,7 +414,7 @@ function SeverityRow({ summary, loading, hasRun }: SeverityRowProps) {
         {summary?.by_resource_type.map((i) => i.resource_type).join(", ")}
       </span>
       {items.map((item) => (
-        <Card key={item.key} className="border-none! p-6 shadow-none! ring-0">
+        <Card key={item.key} className="! p-6 shadow">
           <CardContent className="p-0">
             <dt className="text-sm font-medium text-muted-foreground">
               {item.name}

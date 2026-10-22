@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { Plus } from "lucide-react"
 import { useState } from "react"
 
 import type { FhirServer } from "@/api/queries"
@@ -10,6 +9,7 @@ import { ServersTable } from "@/components/servers-table"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ApiError } from "@/lib/api-client"
+import { AddCircleIcon } from "@solar-icons/react/line-duotone"
 
 export const Route = createFileRoute("/servers/")({
   component: ServersPage,
@@ -31,7 +31,7 @@ function ServersPage() {
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
+          <AddCircleIcon className="mr-2 size-4" strokeWidth={3} />
           Add server
         </Button>
       </div>
@@ -45,10 +45,8 @@ function ServersPage() {
       )}
 
       {error && (
-        <div className="rounded-lg border p-8 text-center">
-          <p className="text-sm font-medium text-destructive">
-            Failed to load servers
-          </p>
+        <div className="p-8 text-center">
+          <p className="text-sm text-destructive">Failed to load servers</p>
           <p className="mt-1 font-mono text-xs text-muted-foreground">
             {error instanceof ApiError
               ? `HTTP ${error.status} — ${error.statusText}`

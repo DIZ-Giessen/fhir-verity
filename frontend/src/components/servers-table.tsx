@@ -105,7 +105,7 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
   })
 
   const columns: Array<ColumnDef<FhirServer>> = [
-    {
+    /* {
       id: "select",
       header: ({ table }) => (
         <Checkbox
@@ -126,7 +126,7 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
       ),
       enableSorting: false,
       enableHiding: false,
-    },
+    }, */
     {
       accessorKey: "name",
       header: "Name",
@@ -168,12 +168,7 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
             Active
           </Badge>
         ) : (
-          <Badge
-            variant="outline"
-            className="border-0 bg-zinc-500/15 text-zinc-700 dark:bg-zinc-500/10 dark:text-zinc-400"
-          >
-            Inactive
-          </Badge>
+          <Badge variant="secondary">Inactive</Badge>
         ),
     },
     {
@@ -260,6 +255,12 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <Input
+          placeholder="Search a server..."
+          value={globalFilter}
+          onChange={(e) => setGlobalFilter(e.target.value)}
+          className="h-8 w-full sm:w-92"
+        />
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Show</span>
           <Select
@@ -279,12 +280,6 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
           </Select>
           <span className="text-sm text-muted-foreground">entries</span>
         </div>
-        <Input
-          placeholder="Search a server..."
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          className="h-8 w-full sm:w-72"
-        />
       </div>
 
       <div className="rounded-lg border">
