@@ -17,10 +17,12 @@ import {
   Pencil,
   SlidersHorizontal,
   Trash2,
+  Users,
 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { ServerAuthDialog } from "./server-auth-dialog"
+import { ServerMembersDialog } from "./server-members-dialog"
 import type { ColumnDef, SortingState } from "@tanstack/react-table"
 
 import type { FhirServer } from "@/api/queries"
@@ -62,6 +64,14 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { apiErrorMessage } from "@/lib/api-client"
+import {
+  EyeIcon,
+  KeyIcon,
+  PenNewRoundIcon,
+  TrashBinMinimalisticIcon,
+  Tuning2Icon,
+  UsersGroupTwoRoundedIcon,
+} from "@solar-icons/react/line-duotone"
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
@@ -74,14 +84,21 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
 interface ServersTableProps {
   data: Array<FhirServer>
   onEdit: (server: FhirServer) => void
+  /** Shown when there are no servers at all */
+  emptyText?: string
 }
 
-export function ServersTable({ data, onEdit }: ServersTableProps) {
+export function ServersTable({
+  data,
+  onEdit,
+  emptyText = "No servers registered yet",
+}: ServersTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [rowSelection, setRowSelection] = useState({})
   const [globalFilter, setGlobalFilter] = useState("")
   const [deleteTarget, setDeleteTarget] = useState<FhirServer | null>(null)
   const [authTarget, setAuthTarget] = useState<FhirServer | null>(null)
+  const [shareTarget, setShareTarget] = useState<FhirServer | null>(null)
 
   const queryClient = useQueryClient()
 
@@ -93,7 +110,8 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
       queryClient.invalidateQueries({ queryKey: ["audit-log"] })
       setDeleteTarget(null)
       toast.success("Server deleted", {
-        description: "All runs, findings and audit entries were removed.",
+        description:
+          "All runs and findings were removed. Audit entries are kept.",
       })
     },
     onError: (err) => {
@@ -193,32 +211,57 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
             <DropdownMenuContent align="end">
               <DropdownMenuItem asChild>
                 <Link to="/servers/$id" params={{ id: row.original.id }}>
-                  <Eye className="mr-2 h-4 w-4" />
+                  <EyeIcon strokeWidth={2} className="mr-2 size-4.5" />
                   View details
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEdit(row.original)}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/servers/$id/config" params={{ id: row.original.id }}>
-                  <SlidersHorizontal className="mr-2 h-4 w-4" />
-                  Config
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setAuthTarget(row.original)}>
-                <KeyRound className="mr-2 h-4 w-4" />
-                Server auth
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => setDeleteTarget(row.original)}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
+              {row.original.can_write && (
+                <DropdownMenuItem asChild>
+                  <Link
+                    to="/servers/$id/config"
+                    params={{ id: row.original.id }}
+                  >
+                    <Tuning2Icon strokeWidth={2} className="mr-2 size-4.5" />
+                    Server config
+                  </Link>
+                </DropdownMenuItem>
+              )}
+              {row.original.can_manage && (
+                <>
+                  <DropdownMenuItem onClick={() => onEdit(row.original)}>
+                    <PenNewRoundIcon
+                      strokeWidth={2}
+                      className="mr-2 size-4.5"
+                    />
+                    Edit the Server
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setAuthTarget(row.original)}>
+                    <KeyIcon strokeWidth={2} className="mr-2 size-4.5" />
+                    Server auth
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setShareTarget(row.original)}
+                  >
+                    <UsersGroupTwoRoundedIcon
+                      /* secondaryColor="#2563eb" */
+                      strokeWidth={2}
+                      className="mr-2 size-4.5"
+                    />
+                    Share
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setDeleteTarget(row.original)}
+                  >
+                    <TrashBinMinimalisticIcon
+                      strokeWidth={2}
+                      className="mr-2 size-4.5"
+                    />
+                    Delete
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -322,9 +365,7 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
                   colSpan={columns.length}
                   className="h-24 text-center text-sm text-muted-foreground"
                 >
-                  {globalFilter
-                    ? "No servers match your search"
-                    : "No servers registered yet"}
+                  {globalFilter ? "No servers match your search" : emptyText}
                 </TableCell>
               </TableRow>
             )}
@@ -396,8 +437,7 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
                 {deleteTarget?.name}
               </span>{" "}
               will be removed from Verity together with all of its validation
-              runs, invalid resources, configuration overrides and audit log
-              entries. The FHIR server itself and its data are not touched. This
+              runs, invalid resources, configuration overrides and shares. This
               cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -421,6 +461,11 @@ export function ServersTable({ data, onEdit }: ServersTableProps) {
         open={authTarget !== null}
         onOpenChange={(open) => !open && setAuthTarget(null)}
         server={authTarget}
+      />
+      <ServerMembersDialog
+        open={shareTarget !== null}
+        onOpenChange={(open) => !open && setShareTarget(null)}
+        server={shareTarget}
       />
     </div>
   )

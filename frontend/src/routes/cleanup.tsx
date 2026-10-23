@@ -239,7 +239,7 @@ function CleanupPage() {
           <div className="space-y-1.5">
             <Label>Server</Label>
             <ServerPicker
-              servers={serversQ.data ?? []}
+              servers={(serversQ.data ?? []).filter((s) => s.can_write)}
               value={serverId || undefined}
               onChange={setServerId}
               placeholder="Select a server"

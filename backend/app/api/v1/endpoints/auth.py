@@ -6,13 +6,14 @@ Flow:
   3) Keycloak redirects to /api/v1/auth/callback with the code.
   4) We exchange the code (using the confidential client_secret, server-side),
      provision the user, set the session cookie, then redirect back to the SPA.
+  5) Logout clears the session and hands the SPA Keycloak's end-session URL.
 
 With AUTH_ENABLED=false there is no Keycloak: login/callback just send the
 browser back to the SPA, and /auth/me returns the built-in dev user.
 """
 
 import logging
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import httpx
 from authlib.integrations.starlette_client import OAuth, OAuthError
@@ -24,7 +25,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import get_current_user, provision_user
 from app.models.user import User
-from app.schemas.user import AuthConfigRead, UserRead
+from app.schemas.user import AuthConfigRead, LogoutResult, UserRead
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -95,11 +96,31 @@ async def callback(request: Request, db: AsyncSession = Depends(get_db)):
     return RedirectResponse(_frontend_url("/"))
 
 
-@router.post("/auth/logout")
+@router.post("/auth/logout", response_model=LogoutResult)
 async def logout(request: Request):
-    """Logs out the current user by clearing the session."""
+    """
+    Clear the Verity session. Also returns Keycloak's logout URL so the
+    browser can end the single sign-on session there; otherwise the next
+    "Sign in" would log the user straight back in without a password.
+    """
     request.session.clear()
-    return {"status": "ok"}
+    if not settings.AUTH_ENABLED:
+        return LogoutResult()
+    try:
+        metadata = await oauth.keycloak.load_server_metadata()
+    except httpx.HTTPError as exc:
+        logger.warning("Keycloak unreachable during logout: %s", exc)
+        return LogoutResult()
+    end_session = metadata.get("end_session_endpoint")
+    if not end_session:
+        return LogoutResult()
+    query = urlencode(
+        {
+            "client_id": settings.KEYCLOAK_CLIENT_ID,
+            "post_logout_redirect_uri": _frontend_url("/login"),
+        }
+    )
+    return LogoutResult(logout_url=f"{end_session}?{query}")
 
 
 @router.get("/auth/config", response_model=AuthConfigRead)

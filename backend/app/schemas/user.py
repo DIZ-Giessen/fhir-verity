@@ -20,10 +20,27 @@ class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserDirectoryEntry(BaseModel):
+    """Minimal user info for picking whom to share a server with."""
+
+    id: UUID
+    username: str | None = None
+    full_name: str | None = None
+    role: str
+    model_config = ConfigDict(from_attributes=True)
+
+
 class AuthConfigRead(BaseModel):
     """Public auth settings the frontend needs before anyone is signed in."""
 
     auth_enabled: bool
+
+
+class LogoutResult(BaseModel):
+    """logout_url: Keycloak end-session URL the browser should open next."""
+
+    status: str = "ok"
+    logout_url: str | None = None
 
 
 class UserRoleUpdate(BaseModel):

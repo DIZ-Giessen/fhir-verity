@@ -142,7 +142,8 @@ function FhirReportsSetting({ server }: { server: FhirServer }) {
         <Switch
           id="write-fhir-reports"
           checked={checked}
-          disabled={mutation.isPending}
+          // Writing into the FHIR server is the owner's decision
+          disabled={mutation.isPending || !server.can_manage}
           onCheckedChange={(value) => mutation.mutate(value)}
           aria-label="Write FHIR reports to the server"
         />

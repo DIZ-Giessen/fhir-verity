@@ -37,7 +37,12 @@ from app.services.fhir_report_service import generate_and_post_reports
 from app.models.invalid_resource import InvalidResource, InvalidResourceIssue
 from app.services.fhir_auth import build_httpx_auth
 
-from app.core.security import get_current_user, load_server_scoped
+from app.core.security import (
+    get_current_user,
+    load_server_scoped,
+    require_role,
+    visible_servers_clause,
+)
 from app.models.user import User, UserRole
 from app.core.config import get_settings
 from app.services.email_service import build_run_notification, send_email
@@ -46,6 +51,8 @@ from app.services.validation_filters import build_filter_params, validate_filter
 
 
 router = APIRouter()
+
+MAX_PAGE_SIZE = 500
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +100,7 @@ async def _load_run_scoped(run_id: UUID, user: User, db: AsyncSession) -> Valida
     ).scalar_one_or_none()
     if not run:
         raise HTTPException(status_code=404, detail="Validation run not found")
-    await load_server_scoped(run.server_id, user, db)  # raises 404 if not owned
+    await load_server_scoped(run.server_id, user, db)  # 404 if not visible
     return run
 
 
@@ -126,7 +133,7 @@ async def start_validation(
     request: ValidationStartRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(UserRole.editor.value)),
 ):
     """Start a new validation run asynchronously."""
 
@@ -179,7 +186,7 @@ async def resume_validation(
     run_id: UUID,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(UserRole.editor.value)),
 ):
     """
     Resume a run interrupted by a full process crash (status FAILED or
@@ -476,17 +483,16 @@ async def list_validation_runs(
 
     where_clause = and_(*filters) if filters else None
 
-    is_admin = user.role == UserRole.admin.value
-
     count_stmt = select(func.count(ValidationRun.id))
     page_stmt = select(ValidationRun)
-    if not is_admin:
+    visible = visible_servers_clause(user)
+    if visible is not None:
         count_stmt = count_stmt.join(
             FhirServer, FhirServer.id == ValidationRun.server_id
-        ).where(FhirServer.owner_id == user.id)
+        ).where(visible)
         page_stmt = page_stmt.join(
             FhirServer, FhirServer.id == ValidationRun.server_id
-        ).where(FhirServer.owner_id == user.id)
+        ).where(visible)
     if where_clause is not None:
         count_stmt = count_stmt.where(where_clause)
         page_stmt = page_stmt.where(where_clause)
@@ -494,7 +500,9 @@ async def list_validation_runs(
     total = (await db.execute(count_stmt)).scalar_one()
 
     page_stmt = (
-        page_stmt.order_by(desc(ValidationRun.started_at)).offset(skip).limit(limit)
+        page_stmt.order_by(desc(ValidationRun.started_at))
+        .offset(skip)
+        .limit(min(limit, MAX_PAGE_SIZE))
     )
     result = await db.execute(page_stmt)
     runs = result.scalars().all()
@@ -566,7 +574,7 @@ async def get_validation_run(
 async def cancel_validation(
     run_id: UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(UserRole.editor.value)),
 ):
     """Request cooperative cancellation of a running run. Sets a flag only; the
     background task stops at the next page boundary and writes the terminal
@@ -665,7 +673,7 @@ async def list_invalid_resources(
         .where(where_clause)
         .order_by(order_expr)
         .offset(skip)
-        .limit(limit)
+        .limit(min(limit, MAX_PAGE_SIZE))
     )
 
     result = await db.execute(stmt)

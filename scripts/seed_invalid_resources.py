@@ -4,7 +4,7 @@ resources to a FHIR server, covering all rules our validators check.
 
 Usage:
     python scripts/seed_invalid_resources.py \
-        --base-url https://dizfhir.med.uni-giessen.de/test/fhir \
+        --base-url https://fhir.example.org/test/fhir \
         --username myuser \
         --password mypass
 

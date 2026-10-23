@@ -127,3 +127,13 @@ Die ausführliche Dokumentation liegt im Ordner `documentation/`:
 ### User Management Page
 
 ![User Management Page](/documentation/images/users.png)
+
+## Lizenz
+
+Copyright (C) 2026 Justus-Liebig-Universität Gießen
+
+FHIR Verity ist freie Software unter der [GNU Affero General Public License v3.0](LICENSE) oder (nach Wahl) einer späteren Version.
+Wer Verity verändert und anderen als Dienst über ein Netzwerk anbietet, muss diesen Nutzern den Quellcode der veränderten Fassung
+zugänglich machen. Der Link „View the project“ auf der Startseite zeigt dafür auf das Repository (`VITE_PROJECT_URL`).
+
+Sicherheitslücken bitte nicht als öffentliches Issue melden, sondern wie in [SECURITY.md](SECURITY.md) beschrieben.

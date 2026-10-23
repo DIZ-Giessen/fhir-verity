@@ -3,7 +3,8 @@
 ## Anmeldung über Keycloak
 
 Die Authentifizierung läuft über Keycloak per OpenID Connect im Backend-for-Frontend-Muster (BFF). Das Backend führt den OIDC-Ablauf durch und
-hält eine serverseitige Session; das Frontend besitzt kein Token, sondern nur ein Session-Cookie. Der Ablauf im Einzelnen:
+hält die Session in einem signierten Cookie, das nur die Benutzer-ID enthält; das Frontend besitzt kein Token. Rolle und Rechte liest das Backend
+bei jeder Anfrage frisch aus der Datenbank, eine Rollenänderung wirkt also sofort. Der Ablauf im Einzelnen:
 
 1. Das Frontend ruft `/api/v1/auth/login` auf.
 2. Das Backend leitet zu Keycloak weiter.
@@ -15,6 +16,10 @@ hält eine serverseitige Session; das Frontend besitzt kein Token, sondern nur e
 kein Login stattgefunden hat, und kein Fehler.
 
 Das Session-Cookie wird im Produktionsmodus mit dem `Secure`-Flag gesetzt und erfordert damit HTTPS. Das ist der Grund, warum der Produktionsbetrieb zwingend über HTTPS läuft.
+
+„Sign out“ löscht die Verity-Session und leitet danach zu Keycloak weiter, um auch die Keycloak-Sitzung zu beenden. Ohne diesen Schritt würde ein
+erneutes „Sign in“ ohne Passwort sofort wieder anmelden. Dafür muss beim Keycloak-Client die Post-Logout-Redirect-URI eingetragen sein (siehe
+[deployment.md](deployment.md#keycloak)).
 
 Wer keinen eigenen Keycloak hat, nutzt den mitgelieferten (siehe [deployment.md](deployment.md#weg-2-mitgelieferter-keycloak)). Rollen, Ownership und
 Audit funktionieren damit genauso.
@@ -35,36 +40,54 @@ Admin. Server, die unter `dev` angelegt wurden, sind dann nur noch für Admins s
 
 ## Die drei Rollen
 
-Verity kennt drei Rollen mit aufsteigenden Rechten:
+Die globale Rolle legt fest, **was** jemand tun darf. **Auf welchen Servern** das gilt, regeln Eigentum und Freigaben (nächster Abschnitt).
 
-- **viewer** — Lesezugriff. Kann nur seine Server, Läufe und invalide Ressourcen einsehen
-  und Validierungen betrachten.
-- **editor** — zusätzlich Schreibzugriff auf die Konfiguration. Kann Validierungsregeln anpassen und die FHIR ressourcen fixen bzw reparieren aber auf dem Server, der er erstellt hat
-- **admin** — zusätzlich Benutzerverwaltung. Kann Rollen zuweisen und Benutzer verwalten. Alle Server sehen die erstellt wurden und auch kann auch die Ressourcen löschen fixen bzw reparieren für alle Server.
+| Aktion                                                     | viewer | editor | admin |
+| ---------------------------------------------------------- | :----: | :----: | :---: |
+| Server, Läufe, invalide Ressourcen und Regeln ansehen      |   ✓    |   ✓    |   ✓   |
+| Server anlegen                                             |        |   ✓    |   ✓   |
+| Läufe starten, fortsetzen, abbrechen                       |        |   ✓    |   ✓   |
+| Regeln und Filter ändern                                   |        |   ✓    |   ✓   |
+| Ressourcen löschen oder korrigieren (einzeln und gesammelt) |        |   ✓    |   ✓   |
+| Server bearbeiten, Authentifizierung, teilen, löschen      |        | Owner  |   ✓   |
+| alle Server sehen, Benutzer und Rollen verwalten, Audit-Log |        |        |   ✓   |
 
-Die Rechte werden im Backend beim Einbinden der jeweiligen Router durchgesetzt. Lesende Bereiche (Server, Validierung, Bereinigungsaktionen) verlangen
-mindestens viewer, die Konfiguration verlangt editor, die Benutzerverwaltung ist den Administratoren vorbehalten.
+Neue Benutzer sind beim ersten Login **viewer**. Die Rechte werden im Backend durchgesetzt; die Oberfläche blendet Aktionen, die jemand nicht
+ausführen darf, nur zusätzlich aus.
 
 ## Erste Administratoren
 
 Damit es überhaupt jemanden gibt, der Rollen vergeben kann, wird über die `.env`-Variable `INITIAL_ADMIN_USERS` festgelegt, welche Benutzer beim ersten
-Login automatisch die admin-Rolle erhalten. Verglichen wird mit dem Benutzernamen und der E-Mail-Adresse, die Keycloak zurückliefert, ohne Beachtung der
-Groß-/Kleinschreibung. Mehrere Einträge werden durch Komma getrennt. Beim mitgelieferten Keycloak ist das `verity-admin`.
+Login automatisch die admin-Rolle erhalten. Verglichen wird ohne Beachtung der Groß-/Kleinschreibung mit dem Benutzernamen und mit der E-Mail-Adresse,
+die Keycloak liefert. Die E-Mail-Adresse zählt nur, wenn Keycloak sie als verifiziert meldet (`email_verified`); sonst könnte jemand, der seine
+E-Mail-Adresse selbst ändern darf, eine gelistete Adresse übernehmen. Beim mitgelieferten Keycloak ist das `verity-admin`.
+
+Befördert wird beim Anlegen des Benutzers. Bereits bekannte Benutzer werden nur befördert, solange es noch gar keinen Admin gibt. Ein gelisteter Admin
+lässt sich also später in der Benutzerverwaltung herabstufen, ohne dass er beim nächsten Login wieder Admin wird.
 
 ```bash
 #  Beispiel: INITIAL_ADMIN_USERS=meine-email@institut.de,admin2@institut.de
-#  Um mehrere Benutzer als Administratoren festzulegen, können sie per Komma getrennt angegeben werden.
-#  Die Zuweisung weiterer Admins kann später komfortabel über die Benutzerverwaltung in der Oberfläche erfolgen.
+#  Weitere Admins werden danach über die Benutzerverwaltung in der Oberfläche ernannt.
 ```
 
-## Server-Ownership
+## Server-Eigentum und Freigaben
 
-Jeder registrierte FHIR-Server hat optional einen Eigentümer (`owner_id`). Der Zugriff auf einen Server ist an diese Ownership gebunden: Ein Benutzer(viewer/editor) sieht und bearbeitet nur die Server, für die er berechtigt ist.
+Wer einen Server anlegt, ist sein **Owner**. Ein Benutzer sieht einen Server, wenn er Admin ist, ihn besitzt oder der Server für ihn
+**freigegeben** wurde. Freigeben können der Owner (mit Rolle editor) und Admins über **Servers → ⋯ → Share**. Was der Benutzer auf dem
+freigegebenen Server tun darf, folgt aus seiner Rolle: ein viewer sieht ihn nur an, ein editor kann Läufe starten, Regeln ändern und Ressourcen
+korrigieren. Bearbeiten, Authentifizierung, weitere Freigaben und Löschen bleiben beim Owner und den Admins.
 
-Ein wichtiges Detail bei der Umsetzung: Greift ein Benutzer auf einen Server zu, für den er nicht berechtigt ist, antwortet das Backend mit **404 Not Found**, nicht mit 403 Forbidden. Der Grund ist bewusst gewählt — ein 403 würde verraten, dass der Server existiert, nur eben für diesen Benutzer gesperrt ist.
+Ein neuer viewer sieht deshalb zunächst keinen Server, sondern den Hinweis, sich an einen Admin oder Owner zu wenden.
 
-Ein 404 lässt offen, ob der Server überhaupt existiert, und vermeidet damit, Rückschlüsse auf fremde Ressourcen zu ermöglichen. Diese Logik ist zentral im
+Greift ein Benutzer auf einen Server zu, den er nicht sehen darf, antwortet das Backend mit **404 Not Found**, nicht mit 403 Forbidden. Ein 403 würde
+verraten, dass der Server existiert. Darf er den Server sehen, aber die Aktion nicht ausführen, antwortet es mit 403. Diese Logik ist zentral im
 Backend gebündelt, damit sie überall gleich greift.
+
+### Zugangsdaten und Server-URL
+
+Ändert jemand die Base-URL eines Servers auf einen anderen Host, verwirft Verity die gespeicherten Zugangsdaten. Sie wurden für den alten Host
+eingegeben und dürfen nicht an einen anderen geschickt werden; die Änderung steht im Audit-Log. Aus demselben Grund folgt Verity beim Blättern
+durch Suchergebnisse keinem `next`-Link auf einen fremden Host.
 
 ## Audit
 
@@ -73,5 +96,15 @@ durchgeführt hat.
 
 Sammelaktionen auf der Cleanup-Seite schreiben einen einzigen Eintrag pro Vorgang: Benutzer, Filter, Zeitpunkt, Begründung, die Liste aller geänderten Ressourcen und die Fehlschläge nach Fehlermeldung gruppiert. So bleibt das Audit-Log auch nach einer Bereinigung von 50.000 Ressourcen lesbar.
 
-Auch das Löschen eines Servers wird protokolliert, mit Benutzer, Zeitpunkt und den Stammdaten des Servers. Die bisherigen Audit-Einträge eines gelöschten Servers bleiben erhalten; sie sind danach über die Server-URL zuzuordnen.
-Struktur der Audit-Tabelle siehe [schema.md](schema.md).
+Außerdem protokolliert werden Änderungen an Verity selbst:
+
+| Aktion               | Inhalt                                                                  |
+| -------------------- | ----------------------------------------------------------------------- |
+| `SERVER_DELETE`      | Stammdaten des gelöschten Servers                                       |
+| `SERVER_AUTH_CHANGE` | alte und neue Auth-Art, Namen der geänderten Felder (nie die Werte)     |
+| `SERVER_SHARE`       | Freigabe für einen Benutzer                                             |
+| `SERVER_UNSHARE`     | Entzug einer Freigabe                                                   |
+| `USER_ROLE_CHANGE`   | betroffener Benutzer, alte und neue Rolle                               |
+
+Die Audit-Einträge eines gelöschten Servers bleiben erhalten; sie sind danach über die Server-URL zuzuordnen. Struktur der Audit-Tabelle siehe
+[schema.md](schema.md).

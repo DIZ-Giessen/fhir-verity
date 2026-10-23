@@ -1,4 +1,5 @@
-"""User administration: list users and manage roles (admin only)."""
+"""User administration: list users and manage roles (admin only), plus the
+user directory editors need for sharing servers."""
 
 import uuid
 
@@ -10,7 +11,8 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import DEV_USER_SUB, require_role
 from app.models.user import User, UserRole
-from app.schemas.user import UserRead, UserRoleUpdate
+from app.schemas.user import UserDirectoryEntry, UserRead, UserRoleUpdate
+from app.services.audit import role_change_entry
 from app.core.security import get_current_user
 from app.schemas.user import UserPreferencesUpdate
 
@@ -35,11 +37,30 @@ async def list_users(
     if settings.AUTH_ENABLED:
         stmt = stmt.where(User.keycloak_sub != DEV_USER_SUB)
     rows = (
-        (await db.execute(stmt.order_by(User.created_at).offset(skip).limit(limit)))
+        (
+            await db.execute(
+                stmt.order_by(User.created_at).offset(skip).limit(min(limit, 500))
+            )
+        )
         .scalars()
         .all()
     )
     return list(rows)
+
+
+@router.get("/users/directory", response_model=list[UserDirectoryEntry])
+async def user_directory(
+    _: User = Depends(require_role(UserRole.editor.value)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Names and roles of all users, for choosing whom to share a server with."""
+    stmt = (
+        select(User)
+        .where(User.keycloak_sub != DEV_USER_SUB)
+        .order_by(User.username)
+        .limit(1000)
+    )
+    return list((await db.execute(stmt)).scalars().all())
 
 
 @router.patch("/users/{user_id}/role", response_model=UserRead)
@@ -84,6 +105,8 @@ async def update_user_role(
                 status.HTTP_400_BAD_REQUEST, "Cannot demote the last remaining admin"
             )
 
+    if target.role != new_role:
+        db.add(role_change_entry(current, target, target.role, new_role))
     target.role = new_role
     await db.commit()
     await db.refresh(target)

@@ -17,7 +17,12 @@ import { XAxis } from "@/components/charts/x-axis"
 import { Grid } from "@/components/charts/grid"
 import { ChartTooltip } from "@/components/charts/tooltip"
 
-import { runsQueryOptions, serversQueryOptions } from "@/api/queries"
+import {
+  hasRole,
+  meQueryOptions,
+  runsQueryOptions,
+  serversQueryOptions,
+} from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -105,6 +110,7 @@ function bucketByMonth(
 function RunsPage() {
   const runsQ = useQuery(runsQueryOptions(500))
   const serversQ = useQuery(serversQueryOptions())
+  const { data: me } = useQuery(meQueryOptions())
 
   const [_setMenuOpen, setMenuOpen] = useState(false)
   const [startOpen, setStartOpen] = useState(false)
@@ -139,18 +145,19 @@ function RunsPage() {
               FHIR resources they produced.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              className=""
-              onClick={() => {
-                setMenuOpen(false)
-                setStartOpen(true)
-              }}
-            >
-              <Play className="size-4" />
-              Start a new run
-            </Button>
-          </div>
+          {hasRole(me?.role, "editor") && (
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => {
+                  setMenuOpen(false)
+                  setStartOpen(true)
+                }}
+              >
+                <Play className="size-4" />
+                Start a new run
+              </Button>
+            </div>
+          )}
         </div>
 
         <BarCard

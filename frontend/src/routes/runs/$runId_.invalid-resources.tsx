@@ -26,6 +26,7 @@ import {
   resourceTypesQueryOptions,
   runQueryOptions,
   runSummaryQueryOptions,
+  serverQueryOptions,
 } from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -126,6 +127,11 @@ function InvalidResourcesPage() {
   const runQ = useQuery(runQueryOptions(runId))
   const fixTemplatesQ = useQuery(fixTemplatesQueryOptions())
   const serverId = runQ.data?.server_id
+  const serverQ = useQuery({
+    ...serverQueryOptions(serverId ?? ""),
+    enabled: Boolean(serverId),
+  })
+  const canWrite = serverQ.data?.can_write ?? false
 
   const fixableSet = useMemo(
     () =>
@@ -445,7 +451,7 @@ function InvalidResourcesPage() {
                                     ))}
                                   </ul>
                                 </div>
-                                {serverId && (
+                                {serverId && canWrite && (
                                   <ResourceActions
                                     serverId={serverId}
                                     runId={runId}

@@ -11,6 +11,8 @@ from time import monotonic
 from uuid import UUID
 
 import re
+from urllib.parse import urljoin, urlsplit, urlunsplit
+
 import httpx
 from sqlalchemy import delete, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +22,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.models.invalid_resource import InvalidResource, InvalidResourceIssue
 from app.models.validation_run import ValidationRun
 from app.services.config_service import get_config_for_run, rule_enabled
+from app.services.url_policy import same_origin
 from app.api.v1.endpoints.websocket import broadcast_progress
 
 logger = logging.getLogger(__name__)
@@ -72,6 +75,7 @@ class BaseValidator:
         self.filter_params: dict = {}
         self._page_rule_counts: dict[tuple[str, str], int] = {}
         self.cancelled = False
+        self._foreign_next_logged = False
 
     def _merge_params(self, base: dict) -> dict:
         """Merge the configured filter params into a search param dict.
@@ -226,6 +230,34 @@ class BaseValidator:
         precision = min(len(start_date), len(end_date))
         return end_date[:precision] < start_date[:precision]
 
+    def _pin_to_base(self, link: str) -> str:
+        """
+        Keep paging on the configured server. The credentials are attached to
+        every request, so a next link to another host must not be followed.
+        Servers behind a proxy sometimes report their internal host; if the
+        path still lies below the base URL, the configured host is used.
+        """
+        absolute = urljoin(self.base_url + "/", link)
+        if same_origin(absolute, self.base_url):
+            return absolute
+        base = urlsplit(self.base_url)
+        parts = urlsplit(absolute)
+        if parts.path.startswith(base.path):
+            if not self._foreign_next_logged:
+                self._foreign_next_logged = True
+                logger.warning(
+                    "Next link host %s differs from %s, using the configured "
+                    "host. Check the base URL setting of the FHIR server.",
+                    parts.netloc,
+                    base.netloc,
+                )
+            return urlunsplit((base.scheme, base.netloc, parts.path, parts.query, ""))
+        raise ValueError(
+            f"The FHIR server returned a next link to {parts.scheme}://{parts.netloc}"
+            f"{parts.path}, which is outside {self.base_url}. Check the base URL "
+            "setting of the FHIR server."
+        )
+
     @staticmethod
     def _next_link(bundle: dict) -> str | None:
         return next(
@@ -316,7 +348,8 @@ class BaseValidator:
                             run_id, resource_type, watermark, db
                         )
                         pages_since_cp = 0
-                url = self._next_link(bundle)
+                next_link = self._next_link(bundle)
+                url = self._pin_to_base(next_link) if next_link else None
         finally:
             # persist even if the crawl raises, so resume starts from the last
             # processed page, not from the last periodic checkpoint.

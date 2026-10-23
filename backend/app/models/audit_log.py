@@ -27,7 +27,12 @@ class AuditAction(str, enum.Enum):
     # One summary row per bulk operation instead of one row per resource
     BULK_DELETE = "BULK_DELETE"
     BULK_PATCH = "BULK_PATCH"
+    # Changes to Verity itself rather than to a FHIR resource
     SERVER_DELETE = "SERVER_DELETE"
+    SERVER_AUTH_CHANGE = "SERVER_AUTH_CHANGE"
+    SERVER_SHARE = "SERVER_SHARE"
+    SERVER_UNSHARE = "SERVER_UNSHARE"
+    USER_ROLE_CHANGE = "USER_ROLE_CHANGE"
 
 
 class AuditStatus(str, enum.Enum):
@@ -36,7 +41,7 @@ class AuditStatus(str, enum.Enum):
 
 
 class AuditLog(Base, TimestampMixin):
-    """One row per modification attempt on a FHIR resource or a deleted server."""
+    """One row per modification of a FHIR resource, a server or a user's role."""
 
     __tablename__ = "audit_logs"
 
@@ -50,7 +55,7 @@ class AuditLog(Base, TimestampMixin):
         nullable=True,
         index=True,
     )
-    server_base_url = Column(String, nullable=False)
+    server_base_url = Column(String, nullable=True)  # NULL for USER_ROLE_CHANGE
     resource_type = Column(String(100), nullable=False, index=True)
     resource_id = Column(String, nullable=False, index=True)
 

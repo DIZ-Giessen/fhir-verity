@@ -237,7 +237,7 @@ export function StartValidationDialog({
                 Server
               </p>
               <ServerPicker
-                servers={serversQ.data ?? []}
+                servers={(serversQ.data ?? []).filter((s) => s.can_write)}
                 value={pickedServer}
                 onChange={setPickedServer}
               />

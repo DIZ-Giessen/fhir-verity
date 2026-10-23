@@ -86,6 +86,7 @@ function ResourceConfigPage() {
   )
   const serverQ = useQuery(serverQueryOptions(id))
   const serverName = serverQ.data?.name ?? id.slice(0, 8)
+  const canWrite = serverQ.data?.can_write ?? false
 
   const patchMutation = useMutation({
     mutationFn: ({
@@ -140,7 +141,11 @@ function ResourceConfigPage() {
     },
   })
   return (
-    <div className="space-y-6">
+    // Disabled fieldset makes every control read-only for viewers
+    <fieldset
+      disabled={!canWrite}
+      className="m-0 min-w-0 space-y-6 border-0 p-0"
+    >
       <div className="space-y-2">
         <Link
           to="/servers/$id/config"
@@ -182,7 +187,9 @@ function ResourceConfigPage() {
           )}
         </div>
         <p className="mx-auto flex max-w-6xl text-sm text-muted-foreground">
-          Toggle rules, change their severity, and edit regex patterns.
+          {canWrite
+            ? "Toggle rules, change their severity, and edit regex patterns."
+            : "Read only. Changing rules requires the editor role."}
         </p>
       </div>
 
@@ -305,7 +312,7 @@ function ResourceConfigPage() {
             </section>
           )
         })}
-    </div>
+    </fieldset>
   )
 }
 

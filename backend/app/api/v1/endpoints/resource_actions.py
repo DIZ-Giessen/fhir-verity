@@ -702,7 +702,7 @@ async def list_audit_log(
     stmt = select(AuditLog).order_by(desc(AuditLog.executed_at))
     if where_clause is not None:
         stmt = stmt.where(where_clause)
-    stmt = stmt.offset(skip).limit(limit)
+    stmt = stmt.offset(skip).limit(min(limit, 500))
     rows = (await db.execute(stmt)).scalars().all()
 
     return PaginatedAuditLog(

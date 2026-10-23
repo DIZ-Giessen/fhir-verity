@@ -17,6 +17,7 @@ import {
   ExpressionlessSquareIcon,
   RefreshIcon,
 } from "@solar-icons/react/line-duotone"
+import { formatDistanceStrict, formatDistanceToNow } from "date-fns"
 import type {
   ResourceCount,
   ServerMetadata,
@@ -55,7 +56,6 @@ import { cn } from "@/lib/utils"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
 import { Dots } from "@/components/dots"
 import { TextDots } from "@/components/text-dots"
-import { formatDistanceStrict, formatDistanceToNow } from "date-fns"
 
 export const Route = createFileRoute("/servers/$id/")({
   component: ServerDetailPage,
@@ -166,24 +166,30 @@ function ServerDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setStartOpen(true)}>
-            <Play className="mr-2 size-4" />
-            Start validation
-          </Button>
-          <Button variant="outline" onClick={() => setEditOpen(true)}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
+          {server.can_write && (
+            <Button onClick={() => setStartOpen(true)}>
+              <Play className="mr-2 size-4" />
+              Start validation
+            </Button>
+          )}
+          {server.can_manage && (
+            <Button variant="outline" onClick={() => setEditOpen(true)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+          )}
           <Button variant="outline" asChild>
             <Link to="/servers/$id/config" params={{ id }}>
               <Settings className="mr-2 h-4 w-4" />
               Config
             </Link>
           </Button>
-          <Button variant="outline" onClick={() => setAuthOpen(true)}>
-            <KeyRound className="mr-2 h-4 w-4" />
-            Server auth
-          </Button>
+          {server.can_manage && (
+            <Button variant="outline" onClick={() => setAuthOpen(true)}>
+              <KeyRound className="mr-2 h-4 w-4" />
+              Server auth
+            </Button>
+          )}
         </div>
       </div>
 

@@ -55,8 +55,9 @@ async def _load_effective_config(
     return base, False, {}
 
 
-# Role check (editor, enforced on the router) plus ownership: non-admins only
-# reach configs of their own servers, foreign ones answer 404.
+# Reading needs access to the server, changing it the editor role on top.
+# Servers outside the user's scope answer 404.
+viewer_server_access = server_access()
 editor_server_access = server_access(UserRole.editor.value)
 
 
@@ -98,7 +99,7 @@ async def get_server_config(
     server_id: UUID,
     resource_type: str,
     db: AsyncSession = Depends(get_db),
-    _server: FhirServer = Depends(editor_server_access),
+    _server: FhirServer = Depends(viewer_server_access),
 ):
     """Effective configuration: defaults merged with server-specific overrides."""
     if resource_type not in SUPPORTED_RESOURCE_TYPES:

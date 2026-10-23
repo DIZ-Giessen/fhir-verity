@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router"
 
+import { LoginIcon } from "@solar-icons/react/line-duotone"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { env } from "@/lib/env"
-import { LoginIcon } from "@solar-icons/react/line-duotone"
 
 export const Route = createFileRoute("/login")({ component: LoginPage })
 

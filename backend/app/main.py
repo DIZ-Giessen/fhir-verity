@@ -109,7 +109,10 @@ app = FastAPI(
     description=settings.PROJECT_DESCRIPTION,
     version=settings.PROJECT_VERSION,
     lifespan=lifespan,
-    license_info={"name": "MIT License"},
+    license_info={
+        "name": "AGPL-3.0-or-later",
+        "url": "https://www.gnu.org/licenses/agpl-3.0.html",
+    },
 )
 
 # Keyed by client IP (real IP via uvicorn --proxy-headers behind Caddy, see
@@ -172,7 +175,7 @@ app.include_router(
     config.router,
     prefix="/api/v1",
     tags=["config"],
-    dependencies=[Depends(require_role("editor"))],
+    dependencies=[Depends(require_role("viewer"))],
 )
 app.include_router(
     resource_actions.router,

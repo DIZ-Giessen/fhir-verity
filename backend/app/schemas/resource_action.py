@@ -49,7 +49,7 @@ class ActionResult(BaseModel):
 class AuditLogListItem(BaseModel):
     id: UUID
     server_id: Optional[UUID] = None
-    server_base_url: str
+    server_base_url: Optional[str] = None
     resource_type: str
     resource_id: str
     action: str
@@ -126,7 +126,7 @@ class AutoFixRequest(BaseModel):
 class AuditLogDetail(BaseModel):
     id: UUID
     server_id: Optional[UUID] = None
-    server_base_url: str
+    server_base_url: Optional[str] = None
     resource_type: str
     resource_id: str
     invalid_resource_id: Optional[UUID] = None
