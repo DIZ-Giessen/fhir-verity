@@ -269,7 +269,7 @@ function ResourceConfigPage() {
       )}
 
       {data && (
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3">
+        <div className="mx-auto mt-4 flex max-w-6xl flex-wrap items-center gap-3">
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
