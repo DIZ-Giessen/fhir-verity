@@ -8,17 +8,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import {
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  KeyRound,
-  MoreHorizontal,
-  Pencil,
-  SlidersHorizontal,
-  Trash2,
-  Users,
-} from "lucide-react"
+import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { ServerAuthDialog } from "./server-auth-dialog"

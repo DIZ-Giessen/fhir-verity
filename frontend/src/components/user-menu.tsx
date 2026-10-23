@@ -19,7 +19,7 @@ import {
   updateMyPreferences,
 } from "@/api/queries"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
-import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
