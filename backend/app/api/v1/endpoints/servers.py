@@ -39,7 +39,7 @@ from app.schemas.server import (
     ServerMetadata,
 )
 from app.services.audit import server_audit_entry
-from app.services.config_defaults import SUPPORTED_RESOURCE_TYPES
+from app.services.rules import RESOURCE_TYPES
 from app.services.fhir_auth import build_httpx_auth, normalize_auth_config
 from app.services.url_policy import check_outbound_url, same_origin
 
@@ -540,4 +540,4 @@ async def get_server_resource_counts(server: FhirServer = Depends(server_access(
                     error=str(exc)[:200],
                 )
 
-        return await asyncio.gather(*[fetch_one(rt) for rt in SUPPORTED_RESOURCE_TYPES])
+        return await asyncio.gather(*[fetch_one(rt) for rt in RESOURCE_TYPES])

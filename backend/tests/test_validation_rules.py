@@ -1,6 +1,7 @@
 import httpx
 import pytest
 
+from app.services.rules.fhir import end_before_start
 from app.services.validation_rules import BaseValidator
 
 
@@ -22,12 +23,12 @@ from app.services.validation_rules import BaseValidator
     ],
 )
 def test_end_before_start(start, end, expected):
-    assert BaseValidator._end_before_start(start, end) is expected
+    assert end_before_start(start, end) is expected
 
 
 def test_end_before_start_rejects_garbage():
     with pytest.raises(ValueError):
-        BaseValidator._end_before_start("yesterday", "2020-01-01")
+        end_before_start("yesterday", "2020-01-01")
 
 
 @pytest.fixture

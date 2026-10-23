@@ -3,6 +3,7 @@ import { ChevronsUpDown, Loader2, X } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
+import { Avatar, AvatarFallback } from "./ui/avatar"
 import type { FhirServer } from "@/api/queries"
 import {
   addServerMember,
@@ -36,7 +37,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { apiErrorMessage } from "@/lib/api-client"
 import { env } from "@/lib/env"
-import { Avatar, AvatarFallback } from "./ui/avatar"
 import { initials } from "@/lib/functions"
 
 interface ServerMembersDialogProps {

@@ -10,6 +10,8 @@ A template is either:
 
 from typing import Callable, Optional, Union
 
+from app.services.rules import REGISTRY
+
 
 # Type: either a static patch list, or a function that builds one from the resource
 TemplateFn = Callable[[dict], list[dict]]
@@ -24,13 +26,29 @@ _STATIC_TEMPLATES: dict[str, dict[str, list[dict]]] = {
         "name_forbidden": [{"op": "remove", "path": "/name"}],
         "telecom_forbidden": [{"op": "remove", "path": "/telecom"}],
         "photo_forbidden": [{"op": "remove", "path": "/photo"}],
+        "contact_forbidden": [{"op": "remove", "path": "/contact"}],
     },
     "Observation": {
         "value_string_cleartext_forbidden": [
             {"op": "remove", "path": "/valueString"},
         ],
     },
+    "ServiceRequest": {
+        "patient_instruction_forbidden": [
+            {"op": "remove", "path": "/patientInstruction"},
+        ],
+    },
+    "MedicationRequest": {
+        "do_not_perform_forbidden": [{"op": "remove", "path": "/doNotPerform"}],
+    },
 }
+
+# Every resource type with a text_forbidden rule: drop the narrative
+for _resource_type in REGISTRY.resource_types():
+    if REGISTRY.get(_resource_type, "text_forbidden"):
+        _STATIC_TEMPLATES.setdefault(_resource_type, {})["text_forbidden"] = [
+            {"op": "remove", "path": "/text"}
+        ]
 
 
 # ---------------------------------------------------------------------------

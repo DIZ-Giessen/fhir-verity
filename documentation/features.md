@@ -1,9 +1,12 @@
 # Features
 
+last Updated 23.10.2026
+
 ## Regelbasierte Validierung
 
-Der Kern von Verity ist eine konfigurierbare Regel-Engine. Für jeden Ressourcentyp lässt sich hinterlegen, welche Regeln geprüft werden. Die Regeln
-verteilen sich auf vier **Qualitätsdimensionen**. Jede einzelne Regel mit genauer Prüflogik steht in [validierungsregeln.md](validierungsregeln.md).
+Der Kern von Verity ist eine konfigurierbare Regel-Engine mit rund 290 Regeln für 14 Ressourcentypen, abgeleitet aus den Profilen des
+MII-Kerndatensatzes. Für jeden Server lässt sich festlegen, welche Regeln geprüft werden. Die Regeln verteilen sich auf fünf
+**Qualitätsdimensionen**. Jede einzelne Regel steht in [validierungsregeln.md](validierungsregeln.md).
 
 ### 1. Datenschutz und Pseudonymisierung
 
@@ -14,22 +17,38 @@ verbliebener Klarname ein echtes Datenschutzproblem ist und nicht nur ein formal
 
 Prüft, ob Pflichtfelder und für die Nachnutzung notwendige Angaben gefüllt sind. Eine Ressource kann formal gültig sein und trotzdem für Auswertungen unbrauchbar, wenn zentrale Felder fehlen.
 
-### 3. Plausibilität
+### 3. Codierung
+
+Prüft, ob Codes aus dem erwarteten Codesystem stammen und richtig aufgebaut sind: ICD-10-GM und OPS mit Katalogversion und gültigem Format, LOINC
+für Laborwerte, PZN und ATC für Medikamente, UCUM für Einheiten, SNOMED CT für Probenart und Körperstelle, erlaubte Statuswerte.
+
+### 4. Plausibilität
 
 Prüft, ob Werte inhaltlich sinnvoll sind — zum Beispiel, ob ein Zeitraum zeitlich stimmig ist (Ende nicht vor Beginn), ein Datum nicht in der Zukunft
-liegt oder ein Geburtsdatum in einem plausiblen Bereich.
+liegt oder ein Geburtsdatum in einem plausiblen Bereich. Dazu gehören die Invarianten der FHIR- und MII-Profile, etwa dass ein abgeschlossener
+Fall ein Ende hat.
 
-### 4. Referentielle Integrität
+### 5. Referentielle Integrität
 
 Prüft, ob Referenzen zwischen Ressourcen die erwartete Form haben, etwa `subject.reference` als `Patient/<id>`. Ob die verwiesene Ressource auf dem
 Server existiert, wird derzeit nicht geprüft.
 
 ## Unterstützte Ressourcentypen
 
-Die Regel-Engine deckt die für den MII-Kerndatensatz relevanten Typen ab: Patient, Encounter, Observation, Condition, Procedure, Medication,
-MedicationAdministration, MedicationRequest und DiagnosticReport. Für MedicationStatement sind Regeln konfiguriert, ein Validator fehlt aber noch
-(siehe [validierungsregeln.md](validierungsregeln.md#bekannte-lücken-und-einschränkungen)). Welche Regeln je Typ aktiv sind, ist über die
-Validierungskonfiguration steuerbar; beim ersten Start werden sinnvolle MII-KDS-Defaults als Grundkonfiguration angelegt.
+| Modul des MII-Kerndatensatzes | Ressourcentypen                                                              |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| Person                        | Patient                                                                      |
+| Fall                          | Encounter                                                                    |
+| Diagnose                      | Condition                                                                    |
+| Prozedur                      | Procedure                                                                    |
+| Laborbefund                   | Observation, DiagnosticReport, ServiceRequest                                |
+| Medikation                    | Medication, MedicationRequest, MedicationAdministration, MedicationStatement |
+| Biobank                       | Specimen                                                                     |
+| Consent                       | Consent                                                                      |
+| Bildgebung                    | ImagingStudy                                                                 |
+
+Ab Werk sind nur die grundlegenden Regeln aktiv. Alle weiteren, darunter die Prüfungen der Codierung und der MII-Invarianten, schaltet jeder
+Standort auf der Konfigurationsseite eines Servers ein; Regeln lassen sich dort suchen und kategorienweise an- und ausschalten.
 
 ```bash
 ## Sie möchten weitere Ressourcentypen oder Validierungsmetriken prüfen? Kein Problem – klonen Sie einfach das Repository und passen Sie die Konfiguration nach Ihren Anforderungen an. Oder erstellen Sie gerne ein Issue mit Ihrem Wunsch, damit wir ihn gemeinsam umsetzen können.
@@ -38,8 +57,9 @@ Validierungskonfiguration steuerbar; beim ersten Start werden sinnvolle MII-KDS-
 
 ## Konfigurierbarkeit
 
-Regeln sind nicht fest im Code verdrahtet, sondern als Konfiguration in der Datenbank hinterlegt. Es gibt eine globale Grundkonfiguration je Ressourcentyp
-und die Möglichkeit, sie pro Server zu überschreiben. Damit kann jede Institution eigene, einrichtungsspezifische Qualitätskriterien definieren, ohne den Code zu ändern.
+Jede Regel ist im Code einmal definiert, zusammen mit ihrer Prüflogik und ihren Standardwerten. Pro Server lässt sich jede Regel an- und
+ausschalten, ihre Schwere ändern und bei Muster-Regeln das Muster anpassen. Neue Regeln aus einem Update erscheinen sofort in der Oberfläche,
+ohne dass bestehende Einstellungen verloren gehen.
 
 ## Server-weiter Crawl
 

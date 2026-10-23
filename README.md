@@ -2,7 +2,7 @@
 
 Fhir Verity ist eine Server-weite Datenqualitäts-Validierung und Bereinigung für FHIR-Server.
 
-FHIR Verity liest den vollständigen Ressourcen-Bestand eines FHIR-Servers, prüft ihn gegen **konfigurierbare Qualitätsregeln** in vier Dimensionen (**Pseudonymisierung/Datenschutz, Vollständigkeit, Plausibilität, referentielle Integrität**), speichert die invaliden Ressourcen samt Befund und stellt einen Bereinigungs-Workflow bereit. Die Ergebnisse werden zusätzlich als FHIR-Ressourcen (`TestScript`, `TestReport`, `List`) auf den geprüften Server zurückgeschrieben.
+FHIR Verity liest den vollständigen Ressourcen-Bestand eines FHIR-Servers, prüft ihn gegen rund 290 **konfigurierbare Qualitätsregeln** aus den Profilen des MII-Kerndatensatzes in fünf Dimensionen (**Pseudonymisierung/Datenschutz, Vollständigkeit, Codierung, Plausibilität, referentielle Integrität**), speichert die invaliden Ressourcen samt Befund und stellt einen Bereinigungs-Workflow bereit. Die Ergebnisse werden zusätzlich als FHIR-Ressourcen (`TestScript`, `TestReport`, `List`) auf den geprüften Server zurückgeschrieben.
 
 ## Ziel
 
@@ -40,7 +40,7 @@ docker compose logs -f backend
 
 Die vollständige Anleitung inklusive Keycloak-Einrichtung, Zertifikaten und beiden Datenbank-Wegen steht in [documentation/deployment.md](documentation/deployment.md).
 
-### Lokal 
+### Lokal
 
 Voraussetzung: Python 3.12+, Node 22+, pnpm (oder ein anderer Paketmanager), eine PostgreSQL.
 
@@ -81,11 +81,13 @@ Die ausführliche Dokumentation liegt im Ordner `documentation/`:
 - [schema.md](documentation/schema.md) — Tabellen, Spalten, Beziehungen
 - [rollenverwaltung.md](documentation/rollenverwaltung.md) — RBAC, Server-Ownership, Audit
 - [deployment.md](documentation/deployment.md) — Vollständige Deployment-Anleitung
+<!--
 
 ## Screenshots
 
 ---
 
+```
 ### Login and Welcome Page
 
 ![Login Page](documentation/images/login.png)
@@ -127,13 +129,12 @@ Die ausführliche Dokumentation liegt im Ordner `documentation/`:
 ### User Management Page
 
 ![User Management Page](/documentation/images/users.png)
-
+ -->
 ## Lizenz
 
 Copyright (C) 2026 Justus-Liebig-Universität Gießen
 
-FHIR Verity ist freie Software unter der [GNU Affero General Public License v3.0](LICENSE) oder (nach Wahl) einer späteren Version.
-Wer Verity verändert und anderen als Dienst über ein Netzwerk anbietet, muss diesen Nutzern den Quellcode der veränderten Fassung
-zugänglich machen. Der Link „View the project“ auf der Startseite zeigt dafür auf das Repository (`VITE_PROJECT_URL`).
+FHIR Verity ist freie Software unter der [GNU Affero General Public License v3.0](LICENSE).
 
 Sicherheitslücken bitte nicht als öffentliches Issue melden, sondern wie in [SECURITY.md](SECURITY.md) beschrieben.
+```

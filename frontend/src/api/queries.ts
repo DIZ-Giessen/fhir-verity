@@ -122,6 +122,23 @@ export const serverResourceConfigQueryOptions = (
     },
   })
 
+export async function patchRules(
+  serverId: string,
+  resourceType: string,
+  rules: Record<string, RuleUpdate>
+) {
+  const { data } = await api.PATCH(
+    "/api/v1/config/servers/{server_id}/{resource_type}/rules",
+    {
+      params: {
+        path: { server_id: serverId, resource_type: resourceType },
+      },
+      body: { rules },
+    }
+  )
+  return data
+}
+
 export async function patchRule(
   serverId: string,
   resourceType: string,

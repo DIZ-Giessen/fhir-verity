@@ -39,6 +39,12 @@ class RuleUpdate(BaseModel):
     pattern: Optional[str] = None
 
 
+class RulesBulkUpdate(BaseModel):
+    """Payload to patch several rules at once, e.g. a whole category."""
+
+    rules: dict[str, RuleUpdate]
+
+
 class ResourceFilters(BaseModel):
     """Optional FHIR search filters scoping which resources get validated.
     All fields optional; empty = validate everything (unchanged behaviour)."""

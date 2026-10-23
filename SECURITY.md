@@ -1,7 +1,6 @@
 # Sicherheitslücken melden
 
-Bitte melde Sicherheitslücken **nicht** als öffentliches Issue, sondern vertraulich über GitHub:
-Reiter **Security** → **Report a vulnerability** in diesem Repository.
+Bitte melde Sicherheitslücken **nicht** als öffentliches Issue, sondern vertraulich über GitHub: Reiter **Security** → **Report a vulnerability** in diesem Repository.
 
 Hilfreich sind:
 

@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { ExternalLink, Filter, Loader2 } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { DangerTriangleIcon } from "@solar-icons/react/line-duotone"
@@ -32,19 +32,6 @@ import { ServerPicker } from "@/components/server-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import { apiErrorMessage } from "@/lib/api-client"
 import { filterEntries, hasActiveFilters } from "@/lib/filter-format"
-
-const DEFAULT_UNCHECKED_TYPES = new Set([
-  "Condition",
-  "Observation",
-  "Medication",
-  "MedicationAdministration",
-  "MedicationStatement",
-  "Procedure",
-  "DiagnosticReport",
-  "MedicationRequest",
-  "Patient",
-  "Encounter",
-])
 
 /** Above this many resources a type is called out as a long-running run. */
 const LARGE_TYPE_THRESHOLD = 2_000_000
@@ -77,21 +64,14 @@ export function StartValidationDialog({
   const allTypes = typesQ.data ?? []
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [pickedServer, setPickedServer] = useState<string>()
-  const seededRef = useRef(false)
 
-  // default-select all types except DEFAULT_UNCHECKED_TYPES when the dialog opens
+  // Every dialog starts without a selection; types are picked deliberately
   useEffect(() => {
-    if (open && allTypes.length && !seededRef.current) {
-      setSelected(
-        new Set(allTypes.filter((rt) => !DEFAULT_UNCHECKED_TYPES.has(rt)))
-      )
-      seededRef.current = true
-    }
     if (!open) {
-      seededRef.current = false
+      setSelected(new Set())
       setPickedServer(undefined)
     }
-  }, [open, allTypes])
+  }, [open])
 
   const effectiveServerId = serverId ?? pickedServer
   const effectiveName =

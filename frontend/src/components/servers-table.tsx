@@ -11,6 +11,14 @@ import {
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
+import {
+  EyeIcon,
+  KeyIcon,
+  PenNewRoundIcon,
+  TrashBinMinimalisticIcon,
+  Tuning2Icon,
+  UsersGroupTwoRoundedIcon,
+} from "@solar-icons/react/line-duotone"
 import { ServerAuthDialog } from "./server-auth-dialog"
 import { ServerMembersDialog } from "./server-members-dialog"
 import type { ColumnDef, SortingState } from "@tanstack/react-table"
@@ -54,14 +62,6 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { apiErrorMessage } from "@/lib/api-client"
-import {
-  EyeIcon,
-  KeyIcon,
-  PenNewRoundIcon,
-  TrashBinMinimalisticIcon,
-  Tuning2Icon,
-  UsersGroupTwoRoundedIcon,
-} from "@solar-icons/react/line-duotone"
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",

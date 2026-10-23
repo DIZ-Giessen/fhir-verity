@@ -1,0 +1,1324 @@
+{
+ "Condition": {
+  "c-bad-ref": {
+   "issues": [
+    {
+     "message": "Condition.clinicalStatus is missing.",
+     "rule": "clinicalstatus_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Condition.verificationStatus is missing.",
+     "rule": "verificationstatus_required",
+     "severity": "info"
+    },
+    {
+     "message": "Condition.subject.reference 'patient/1' must follow 'Patient/{id}' format.",
+     "rule": "subject_reference_format",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "clinicalstatus_required": false,
+    "code_required": true,
+    "note_cleartext_check": true,
+    "onset_present": true,
+    "subject_reference_format": false,
+    "subject_required": true,
+    "verificationstatus_required": false
+   }
+  },
+  "c-empty": {
+   "issues": [
+    {
+     "message": "Condition.code is missing.",
+     "rule": "code_required",
+     "severity": "error"
+    },
+    {
+     "message": "Condition.subject is missing.",
+     "rule": "subject_required",
+     "severity": "error"
+    },
+    {
+     "message": "Condition.clinicalStatus is missing.",
+     "rule": "clinicalstatus_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Condition.verificationStatus is missing.",
+     "rule": "verificationstatus_required",
+     "severity": "info"
+    },
+    {
+     "message": "Condition.onset[x] is missing.",
+     "rule": "onset_present",
+     "severity": "info"
+    }
+   ],
+   "metrics": {
+    "clinicalstatus_required": false,
+    "code_required": false,
+    "note_cleartext_check": true,
+    "onset_present": false,
+    "subject_reference_format": true,
+    "subject_required": false,
+    "verificationstatus_required": false
+   }
+  },
+  "c-note": {
+   "issues": [
+    {
+     "message": "Condition.note contains a long free-text string that may include personal data.",
+     "rule": "note_cleartext_check",
+     "severity": "warning"
+    },
+    {
+     "message": "Condition.clinicalStatus is missing.",
+     "rule": "clinicalstatus_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Condition.verificationStatus is missing.",
+     "rule": "verificationstatus_required",
+     "severity": "info"
+    }
+   ],
+   "metrics": {
+    "clinicalstatus_required": false,
+    "code_required": true,
+    "note_cleartext_check": false,
+    "onset_present": true,
+    "subject_reference_format": true,
+    "subject_required": true,
+    "verificationstatus_required": false
+   }
+  }
+ },
+ "DiagnosticReport": {
+  "dr-empty": {
+   "issues": [
+    {
+     "message": "DiagnosticReport.conclusion or text.div contains a long free-text string that may include personal data.",
+     "rule": "note_cleartext_check",
+     "severity": "warning"
+    },
+    {
+     "message": "DiagnosticReport.status is missing.",
+     "rule": "status_required",
+     "severity": "error"
+    },
+    {
+     "message": "DiagnosticReport.code is missing.",
+     "rule": "code_required",
+     "severity": "error"
+    },
+    {
+     "message": "DiagnosticReport.subject is missing.",
+     "rule": "subject_required",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "code_required": false,
+    "note_cleartext_check": false,
+    "status_required": false,
+    "subject_reference_format": true,
+    "subject_required": false
+   }
+  },
+  "dr-narrative": {
+   "issues": [
+    {
+     "message": "DiagnosticReport.conclusion or text.div contains a long free-text string that may include personal data.",
+     "rule": "note_cleartext_check",
+     "severity": "warning"
+    },
+    {
+     "message": "DiagnosticReport.subject.reference 'Location/1' must follow 'Patient/{id}' format.",
+     "rule": "subject_reference_format",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "code_required": true,
+    "note_cleartext_check": false,
+    "status_required": true,
+    "subject_reference_format": false,
+    "subject_required": true
+   }
+  }
+ },
+ "Encounter": {
+  "2012345678": {
+   "issues": [
+    {
+     "message": "Encounter.id '2012345678' is not pseudonymized.",
+     "rule": "pseudonym_format_check",
+     "severity": "error"
+    },
+    {
+     "message": "Encounter.identifier value '2098765432' is not pseudonymized.",
+     "rule": "pseudonym_format_check",
+     "severity": "error"
+    },
+    {
+     "message": "Encounter.status is missing.",
+     "rule": "status_required",
+     "severity": "error"
+    },
+    {
+     "message": "Encounter.class is missing.",
+     "rule": "class_required",
+     "severity": "error"
+    },
+    {
+     "message": "Encounter.subject is missing.",
+     "rule": "subject_required",
+     "severity": "error"
+    },
+    {
+     "message": "Encounter.period.start is missing.",
+     "rule": "period_start_required",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "class_required": false,
+    "period_end_after_start": true,
+    "period_plausible_duration": true,
+    "period_start_required": false,
+    "pseudonym_format_check": false,
+    "status_required": false,
+    "subject_reference_format": true,
+    "subject_required": false
+   }
+  },
+  "e-absolute-ref": {
+   "issues": [
+    {
+     "message": "Encounter.subject.reference 'https://fhir.example.org/Patient/1' must follow 'Patient/{id}' format.",
+     "rule": "subject_reference_format",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "class_required": true,
+    "period_end_after_start": true,
+    "period_plausible_duration": true,
+    "period_start_required": true,
+    "pseudonym_format_check": true,
+    "status_required": true,
+    "subject_reference_format": false,
+    "subject_required": true
+   }
+  },
+  "e-empty": {
+   "issues": [
+    {
+     "message": "Encounter.status is missing.",
+     "rule": "status_required",
+     "severity": "error"
+    },
+    {
+     "message": "Encounter.class is missing.",
+     "rule": "class_required",
+     "severity": "error"
+    },
+    {
+     "message": "Encounter.subject is missing.",
+     "rule": "subject_required",
+     "severity": "error"
+    },
+    {
+     "message": "Encounter.period.start is missing.",
+     "rule": "period_start_required",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "class_required": false,
+    "period_end_after_start": true,
+    "period_plausible_duration": true,
+    "period_start_required": false,
+    "pseudonym_format_check": true,
+    "status_required": false,
+    "subject_reference_format": true,
+    "subject_required": false
+   }
+  },
+  "e-end-before": {
+   "issues": [
+    {
+     "message": "Encounter.period.end '2024-01-01T08:00:00Z' is before period.start '2024-01-05T10:00:00Z'.",
+     "rule": "period_end_after_start",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "class_required": true,
+    "period_end_after_start": false,
+    "period_plausible_duration": true,
+    "period_start_required": true,
+    "pseudonym_format_check": true,
+    "status_required": true,
+    "subject_reference_format": true,
+    "subject_required": true
+   }
+  },
+  "e-group-ref": {
+   "issues": [
+    {
+     "message": "Encounter.subject.reference 'Group/1' must follow 'Patient/{id}' format.",
+     "rule": "subject_reference_format",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "class_required": true,
+    "period_end_after_start": true,
+    "period_plausible_duration": true,
+    "period_start_required": true,
+    "pseudonym_format_check": true,
+    "status_required": true,
+    "subject_reference_format": false,
+    "subject_required": true
+   }
+  },
+  "e-ident": {
+   "issues": [
+    {
+     "message": "Encounter.identifier value '2011111111' is not pseudonymized.",
+     "rule": "pseudonym_format_check",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "class_required": true,
+    "period_end_after_start": true,
+    "period_plausible_duration": true,
+    "period_start_required": true,
+    "pseudonym_format_check": false,
+    "status_required": true,
+    "subject_reference_format": true,
+    "subject_required": true
+   }
+  },
+  "e-long": {
+   "issues": [
+    {
+     "message": "Encounter duration is 1096 days, which exceeds 730 days.",
+     "rule": "period_plausible_duration",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "class_required": true,
+    "period_end_after_start": true,
+    "period_plausible_duration": false,
+    "period_start_required": true,
+    "pseudonym_format_check": true,
+    "status_required": true,
+    "subject_reference_format": true,
+    "subject_required": true
+   }
+  }
+ },
+ "Medication": {
+  "m-empty-code": {
+   "issues": [
+    {
+     "message": "Medication.code is missing or has neither coding nor text.",
+     "rule": "code_required",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "code_coding_present": true,
+    "code_required": false,
+    "ingredient_item_check": true
+   }
+  },
+  "m-ingredient": {
+   "issues": [
+    {
+     "message": "Medication.ingredient has no itemCodeableConcept or itemReference.",
+     "rule": "ingredient_item_check",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "code_coding_present": true,
+    "code_required": true,
+    "ingredient_item_check": false
+   }
+  },
+  "m-no-code": {
+   "issues": [
+    {
+     "message": "Medication.code is missing or has neither coding nor text.",
+     "rule": "code_required",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "code_coding_present": true,
+    "code_required": false,
+    "ingredient_item_check": true
+   }
+  },
+  "m-text-only": {
+   "issues": [
+    {
+     "message": "Medication.code.coding is missing.",
+     "rule": "code_coding_present",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "code_coding_present": false,
+    "code_required": true,
+    "ingredient_item_check": true
+   }
+  }
+ },
+ "MedicationAdministration": {
+  "ma-empty": {
+   "issues": [
+    {
+     "message": "MedicationAdministration.status is missing.",
+     "rule": "status_required",
+     "severity": "error"
+    },
+    {
+     "message": "MedicationAdministration.medication[x] is missing.",
+     "rule": "medication_required",
+     "severity": "error"
+    },
+    {
+     "message": "MedicationAdministration.subject is missing.",
+     "rule": "subject_required",
+     "severity": "error"
+    },
+    {
+     "message": "MedicationAdministration.effective[x] is missing.",
+     "rule": "effective_required",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "effective_not_future": true,
+    "effective_period_end_after_start": true,
+    "effective_required": false,
+    "medication_required": false,
+    "status_required": false,
+    "subject_reference_format": true,
+    "subject_required": false
+   }
+  },
+  "ma-future": {
+   "issues": [
+    {
+     "message": "MedicationAdministration.effectiveDateTime '2999-01-01' is in the future.",
+     "rule": "effective_not_future",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "effective_not_future": false,
+    "effective_period_end_after_start": true,
+    "effective_required": true,
+    "medication_required": true,
+    "status_required": true,
+    "subject_reference_format": true,
+    "subject_required": true
+   }
+  },
+  "ma-period": {
+   "issues": [
+    {
+     "message": "MedicationAdministration.effectivePeriod.end is before start.",
+     "rule": "effective_period_end_after_start",
+     "severity": "error"
+    },
+    {
+     "message": "MedicationAdministration.subject.reference 'Encounter/1' must follow 'Patient/{id}' format.",
+     "rule": "subject_reference_format",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "effective_not_future": true,
+    "effective_period_end_after_start": false,
+    "effective_required": true,
+    "medication_required": true,
+    "status_required": true,
+    "subject_reference_format": false,
+    "subject_required": true
+   }
+  }
+ },
+ "MedicationRequest": {
+  "mr-empty": {
+   "issues": [
+    {
+     "message": "MedicationRequest.status is missing.",
+     "rule": "status_required",
+     "severity": "error"
+    },
+    {
+     "message": "MedicationRequest.intent is missing.",
+     "rule": "intent_required",
+     "severity": "error"
+    },
+    {
+     "message": "MedicationRequest.medication[x] is missing.",
+     "rule": "medication_required",
+     "severity": "error"
+    },
+    {
+     "message": "MedicationRequest.subject is missing.",
+     "rule": "subject_required",
+     "severity": "error"
+    },
+    {
+     "message": "MedicationRequest.authoredOn is missing and no boundsPeriod in dosageInstruction.",
+     "rule": "authored_on_required",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "authored_not_future": true,
+    "authored_on_required": false,
+    "intent_required": false,
+    "medication_required": false,
+    "status_required": false,
+    "subject_reference_format": true,
+    "subject_required": false
+   }
+  },
+  "mr-future": {
+   "issues": [
+    {
+     "message": "MedicationRequest.authoredOn '2999-01-01' is in the future.",
+     "rule": "authored_not_future",
+     "severity": "warning"
+    },
+    {
+     "message": "MedicationRequest.subject.reference 'Patient' must follow 'Patient/{id}' format.",
+     "rule": "subject_reference_format",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "authored_not_future": false,
+    "authored_on_required": true,
+    "intent_required": true,
+    "medication_required": true,
+    "status_required": true,
+    "subject_reference_format": false,
+    "subject_required": true
+   }
+  }
+ },
+ "Observation": {
+  "o-bad-ref": {
+   "issues": [
+    {
+     "message": "Observation.subject.reference 'Device/1' must follow 'Patient/{id}' format.",
+     "rule": "subject_reference_format",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "code_required": true,
+    "effective_not_future": true,
+    "effective_required": true,
+    "status_required": true,
+    "subject_reference_format": false,
+    "subject_required": true,
+    "value_present": true,
+    "value_string_cleartext_forbidden": true
+   }
+  },
+  "o-empty": {
+   "issues": [
+    {
+     "message": "Observation.status is missing.",
+     "rule": "status_required",
+     "severity": "error"
+    },
+    {
+     "message": "Observation.code is missing.",
+     "rule": "code_required",
+     "severity": "error"
+    },
+    {
+     "message": "Observation.subject is missing.",
+     "rule": "subject_required",
+     "severity": "error"
+    },
+    {
+     "message": "Observation.effective[x] is missing.",
+     "rule": "effective_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Observation has no value[x] and no dataAbsentReason.",
+     "rule": "value_present",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "code_required": false,
+    "effective_not_future": true,
+    "effective_required": false,
+    "status_required": false,
+    "subject_reference_format": true,
+    "subject_required": false,
+    "value_present": false,
+    "value_string_cleartext_forbidden": true
+   }
+  },
+  "o-future": {
+   "issues": [
+    {
+     "message": "Observation.effectiveDateTime '2999-01-01' is in the future.",
+     "rule": "effective_not_future",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "code_required": true,
+    "effective_not_future": false,
+    "effective_required": true,
+    "status_required": true,
+    "subject_reference_format": true,
+    "subject_required": true,
+    "value_present": true,
+    "value_string_cleartext_forbidden": true
+   }
+  },
+  "o-future-instant": {
+   "issues": [
+    {
+     "message": "Observation.effectiveDateTime '2999-01-01T00:00:00Z' is in the future.",
+     "rule": "effective_not_future",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "code_required": true,
+    "effective_not_future": false,
+    "effective_required": true,
+    "status_required": true,
+    "subject_reference_format": true,
+    "subject_required": true,
+    "value_present": true,
+    "value_string_cleartext_forbidden": true
+   }
+  },
+  "o-value-string": {
+   "issues": [
+    {
+     "message": "Observation.valueString contains a long string that may include personal data.",
+     "rule": "value_string_cleartext_forbidden",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "code_required": true,
+    "effective_not_future": true,
+    "effective_required": true,
+    "status_required": true,
+    "subject_reference_format": true,
+    "subject_required": true,
+    "value_present": true,
+    "value_string_cleartext_forbidden": false
+   }
+  }
+ },
+ "Patient": {
+  "": {
+   "issues": [
+    {
+     "message": "Patient/ has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient/ has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.identifier is missing. At least one identifier is required.",
+     "rule": "identifier_required",
+     "severity": "error"
+    },
+    {
+     "message": "Patient.birthDate is missing.",
+     "rule": "birthdate_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.gender is missing.",
+     "rule": "gender_required",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": true,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": true,
+    "birthdate_required": false,
+    "gender_required": false,
+    "has_condition": false,
+    "has_observation": false,
+    "identifier_pseudonym_check": true,
+    "identifier_required": false,
+    "name_forbidden": true,
+    "photo_forbidden": true,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": true,
+    "text_forbidden": true
+   }
+  },
+  "201234567": {
+   "issues": [
+    {
+     "message": "Patient.id '201234567' is not pseudonymized.",
+     "rule": "pseudonym_format_check",
+     "severity": "error"
+    },
+    {
+     "message": "Patient/201234567 has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient/201234567 has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.identifier is missing. At least one identifier is required.",
+     "rule": "identifier_required",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": true,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": true,
+    "birthdate_required": true,
+    "gender_required": true,
+    "has_condition": false,
+    "has_observation": false,
+    "identifier_pseudonym_check": true,
+    "identifier_required": false,
+    "name_forbidden": true,
+    "photo_forbidden": true,
+    "pseudonym_format_check": false,
+    "telecom_forbidden": true,
+    "text_forbidden": true
+   }
+  },
+  "p-address": {
+   "issues": [
+    {
+     "message": "Patient.address contains forbidden fields (line, city, or text).",
+     "rule": "address_forbidden",
+     "severity": "error"
+    },
+    {
+     "message": "Patient/p-address has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient/p-address has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": false,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": true,
+    "birthdate_required": true,
+    "gender_required": true,
+    "has_condition": false,
+    "has_observation": false,
+    "identifier_pseudonym_check": true,
+    "identifier_required": true,
+    "name_forbidden": true,
+    "photo_forbidden": true,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": true,
+    "text_forbidden": true
+   }
+  },
+  "p-address-second": {
+   "issues": [
+    {
+     "message": "Patient/p-address-second has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient/p-address-second has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.identifier is missing. At least one identifier is required.",
+     "rule": "identifier_required",
+     "severity": "error"
+    },
+    {
+     "message": "Patient.birthDate is missing.",
+     "rule": "birthdate_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.gender is missing.",
+     "rule": "gender_required",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": true,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": true,
+    "birthdate_required": false,
+    "gender_required": false,
+    "has_condition": false,
+    "has_observation": false,
+    "identifier_pseudonym_check": true,
+    "identifier_required": false,
+    "name_forbidden": true,
+    "photo_forbidden": true,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": true,
+    "text_forbidden": true
+   }
+  },
+  "p-address-text": {
+   "issues": [
+    {
+     "message": "Patient.address contains forbidden fields (line, city, or text).",
+     "rule": "address_forbidden",
+     "severity": "error"
+    },
+    {
+     "message": "Patient/p-address-text has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient/p-address-text has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.identifier is missing. At least one identifier is required.",
+     "rule": "identifier_required",
+     "severity": "error"
+    },
+    {
+     "message": "Patient.birthDate is missing.",
+     "rule": "birthdate_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.gender is missing.",
+     "rule": "gender_required",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": false,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": true,
+    "birthdate_required": false,
+    "gender_required": false,
+    "has_condition": false,
+    "has_observation": false,
+    "identifier_pseudonym_check": true,
+    "identifier_required": false,
+    "name_forbidden": true,
+    "photo_forbidden": true,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": true,
+    "text_forbidden": true
+   }
+  },
+  "p-bad-date": {
+   "issues": [
+    {
+     "message": "Patient/p-bad-date has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient/p-bad-date has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.identifier is missing. At least one identifier is required.",
+     "rule": "identifier_required",
+     "severity": "error"
+    },
+    {
+     "message": "Patient.gender is missing.",
+     "rule": "gender_required",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": true,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": true,
+    "birthdate_required": true,
+    "gender_required": false,
+    "has_condition": false,
+    "has_observation": false,
+    "identifier_pseudonym_check": true,
+    "identifier_required": false,
+    "name_forbidden": true,
+    "photo_forbidden": true,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": true,
+    "text_forbidden": true
+   }
+  },
+  "p-empty-lists": {
+   "issues": [
+    {
+     "message": "Patient/p-empty-lists has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient/p-empty-lists has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.identifier is missing. At least one identifier is required.",
+     "rule": "identifier_required",
+     "severity": "error"
+    },
+    {
+     "message": "Patient.birthDate is missing.",
+     "rule": "birthdate_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.gender is missing.",
+     "rule": "gender_required",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": true,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": true,
+    "birthdate_required": false,
+    "gender_required": false,
+    "has_condition": false,
+    "has_observation": false,
+    "identifier_pseudonym_check": true,
+    "identifier_required": false,
+    "name_forbidden": true,
+    "photo_forbidden": true,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": true,
+    "text_forbidden": true
+   }
+  },
+  "p-future": {
+   "issues": [
+    {
+     "message": "Patient/p-future has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient/p-future has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.identifier is missing. At least one identifier is required.",
+     "rule": "identifier_required",
+     "severity": "error"
+    },
+    {
+     "message": "Patient.gender is missing.",
+     "rule": "gender_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.birthDate '2999-01-01' is in the future.",
+     "rule": "birthdate_not_future",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": true,
+    "birthdate_not_future": false,
+    "birthdate_plausible_range": true,
+    "birthdate_required": true,
+    "gender_required": false,
+    "has_condition": false,
+    "has_observation": false,
+    "identifier_pseudonym_check": true,
+    "identifier_required": false,
+    "name_forbidden": true,
+    "photo_forbidden": true,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": true,
+    "text_forbidden": true
+   }
+  },
+  "p-ident": {
+   "issues": [
+    {
+     "message": "Patient.identifier value '209876543' not pseudonymized.",
+     "rule": "identifier_pseudonym_check",
+     "severity": "error"
+    },
+    {
+     "message": "Patient/p-ident has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient/p-ident has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.birthDate is missing.",
+     "rule": "birthdate_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.gender is missing.",
+     "rule": "gender_required",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": true,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": true,
+    "birthdate_required": false,
+    "gender_required": false,
+    "has_condition": false,
+    "has_observation": false,
+    "identifier_pseudonym_check": false,
+    "identifier_required": true,
+    "name_forbidden": true,
+    "photo_forbidden": true,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": true,
+    "text_forbidden": true
+   }
+  },
+  "p-name": {
+   "issues": [
+    {
+     "message": "Patient.name is present. Cleartext names are forbidden in pseudonymized data.",
+     "rule": "name_forbidden",
+     "severity": "error"
+    },
+    {
+     "message": "Patient/p-name has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.identifier is missing. At least one identifier is required.",
+     "rule": "identifier_required",
+     "severity": "error"
+    },
+    {
+     "message": "Patient.birthDate is missing.",
+     "rule": "birthdate_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.gender is missing.",
+     "rule": "gender_required",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": true,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": true,
+    "birthdate_required": false,
+    "gender_required": false,
+    "has_condition": true,
+    "has_observation": false,
+    "identifier_pseudonym_check": true,
+    "identifier_required": false,
+    "name_forbidden": false,
+    "photo_forbidden": true,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": true,
+    "text_forbidden": true
+   }
+  },
+  "p-old": {
+   "issues": [
+    {
+     "message": "Patient/p-old has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient/p-old has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.identifier is missing. At least one identifier is required.",
+     "rule": "identifier_required",
+     "severity": "error"
+    },
+    {
+     "message": "Patient.gender is missing.",
+     "rule": "gender_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.birthDate '1800-02-03' is more than 150 years in the past.",
+     "rule": "birthdate_plausible_range",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": true,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": false,
+    "birthdate_required": true,
+    "gender_required": false,
+    "has_condition": false,
+    "has_observation": false,
+    "identifier_pseudonym_check": true,
+    "identifier_required": false,
+    "name_forbidden": true,
+    "photo_forbidden": true,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": true,
+    "text_forbidden": true
+   }
+  },
+  "p-photo": {
+   "issues": [
+    {
+     "message": "Patient.photo is present and must be removed.",
+     "rule": "photo_forbidden",
+     "severity": "error"
+    },
+    {
+     "message": "Patient/p-photo has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient/p-photo has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.identifier is missing. At least one identifier is required.",
+     "rule": "identifier_required",
+     "severity": "error"
+    },
+    {
+     "message": "Patient.birthDate is missing.",
+     "rule": "birthdate_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.gender is missing.",
+     "rule": "gender_required",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": true,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": true,
+    "birthdate_required": false,
+    "gender_required": false,
+    "has_condition": false,
+    "has_observation": false,
+    "identifier_pseudonym_check": true,
+    "identifier_required": false,
+    "name_forbidden": true,
+    "photo_forbidden": false,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": true,
+    "text_forbidden": true
+   }
+  },
+  "p-telecom": {
+   "issues": [
+    {
+     "message": "Patient.telecom is present. Contact data is forbidden in pseudonymized data.",
+     "rule": "telecom_forbidden",
+     "severity": "error"
+    },
+    {
+     "message": "Patient/p-telecom has no linked Observation.",
+     "rule": "has_observation",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient/p-telecom has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.identifier is missing. At least one identifier is required.",
+     "rule": "identifier_required",
+     "severity": "error"
+    },
+    {
+     "message": "Patient.birthDate is missing.",
+     "rule": "birthdate_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.gender is missing.",
+     "rule": "gender_required",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": true,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": true,
+    "birthdate_required": false,
+    "gender_required": false,
+    "has_condition": false,
+    "has_observation": false,
+    "identifier_pseudonym_check": true,
+    "identifier_required": false,
+    "name_forbidden": true,
+    "photo_forbidden": true,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": false,
+    "text_forbidden": true
+   }
+  },
+  "p-text": {
+   "issues": [
+    {
+     "message": "Patient.text is present. Cleartext are forbidden in pseudonymized data.",
+     "rule": "text_forbidden",
+     "severity": "info"
+    },
+    {
+     "message": "Patient/p-text has no linked Condition.",
+     "rule": "has_condition",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.identifier is missing. At least one identifier is required.",
+     "rule": "identifier_required",
+     "severity": "error"
+    },
+    {
+     "message": "Patient.birthDate is missing.",
+     "rule": "birthdate_required",
+     "severity": "warning"
+    },
+    {
+     "message": "Patient.gender is missing.",
+     "rule": "gender_required",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "address_forbidden": true,
+    "birthdate_not_future": true,
+    "birthdate_plausible_range": true,
+    "birthdate_required": false,
+    "gender_required": false,
+    "has_condition": false,
+    "has_observation": true,
+    "identifier_pseudonym_check": true,
+    "identifier_required": false,
+    "name_forbidden": true,
+    "photo_forbidden": true,
+    "pseudonym_format_check": true,
+    "telecom_forbidden": true,
+    "text_forbidden": false
+   }
+  }
+ },
+ "Procedure": {
+  "pr-empty": {
+   "issues": [
+    {
+     "message": "Procedure.note contains a long free-text string that may include personal data.",
+     "rule": "note_cleartext_check",
+     "severity": "warning"
+    },
+    {
+     "message": "Procedure.status is missing.",
+     "rule": "status_required",
+     "severity": "error"
+    },
+    {
+     "message": "Procedure.code is missing.",
+     "rule": "code_required",
+     "severity": "error"
+    },
+    {
+     "message": "Procedure.subject is missing.",
+     "rule": "subject_required",
+     "severity": "error"
+    },
+    {
+     "message": "Procedure.performed[x] is missing.",
+     "rule": "performed_required",
+     "severity": "warning"
+    }
+   ],
+   "metrics": {
+    "code_required": false,
+    "note_cleartext_check": false,
+    "performed_required": false,
+    "status_required": false,
+    "subject_reference_format": true,
+    "subject_required": false
+   }
+  },
+  "pr-period": {
+   "issues": [
+    {
+     "message": "Procedure.subject.reference 'Group/2' must follow 'Patient/{id}' format.",
+     "rule": "subject_reference_format",
+     "severity": "error"
+    }
+   ],
+   "metrics": {
+    "code_required": true,
+    "note_cleartext_check": true,
+    "performed_required": true,
+    "status_required": true,
+    "subject_reference_format": false,
+    "subject_required": true
+   }
+  }
+ }
+}

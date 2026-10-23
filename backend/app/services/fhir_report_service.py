@@ -113,7 +113,7 @@ async def get_active_rules(
     resource_type: str,
     db: AsyncSession,
 ) -> dict[str, dict]:
-    """Enabled rules of the effective config (global defaults + server override)."""
+    """Enabled rules of the effective config (rule defaults + server override)."""
     rules = await get_config_for_run(server_id, resource_type, db)
     return {k: v for k, v in rules.items() if v.get("enabled", False)}
 

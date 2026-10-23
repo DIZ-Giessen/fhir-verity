@@ -458,7 +458,7 @@ export interface paths {
         };
         /**
          * Get Defaults
-         * @description Global default configuration for a resource type (server_id IS NULL).
+         * @description Default configuration of a resource type, as defined by the rule registry.
          */
         get: operations["get_defaults_api_v1_config_defaults__resource_type__get"];
         put?: never;
@@ -483,13 +483,13 @@ export interface paths {
         get: operations["get_server_config_api_v1_config_servers__server_id___resource_type__get"];
         /**
          * Replace Server Config
-         * @description Replace the complete server-specific override.
+         * @description Replace the rule overrides of a server for one resource type.
          */
         put: operations["replace_server_config_api_v1_config_servers__server_id___resource_type__put"];
         post?: never;
         /**
          * Delete Server Config
-         * @description Remove server override entirely, falling back to global defaults.
+         * @description Remove the server override entirely, falling back to the defaults.
          */
         delete: operations["delete_server_config_api_v1_config_servers__server_id___resource_type__delete"];
         options?: never;
@@ -512,11 +512,29 @@ export interface paths {
         head?: never;
         /**
          * Patch Rule
-         * @description Update a single rule (enabled / severity / pattern).
-         *     Creates a server override on-the-fly if none exists yet,
-         *     starting from the default rule definition.
+         * @description Change enabled, severity or pattern of one rule for this server.
          */
         patch: operations["patch_rule_api_v1_config_servers__server_id___resource_type__rules__rule_key__patch"];
+        trace?: never;
+    };
+    "/api/v1/config/servers/{server_id}/{resource_type}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Rules
+         * @description Change several rules in one request, e.g. switch a whole category on or off.
+         */
+        patch: operations["patch_rules_api_v1_config_servers__server_id___resource_type__rules_patch"];
         trace?: never;
     };
     "/api/v1/config/resource-types": {
@@ -528,7 +546,7 @@ export interface paths {
         };
         /**
          * List Resource Types
-         * @description Alle Ressourcentypen, die konfiguriert werden können.
+         * @description All resource types Verity can validate.
          */
         get: operations["list_resource_types_api_v1_config_resource_types_get"];
         put?: never;
@@ -551,7 +569,6 @@ export interface paths {
          * Update Server Filters
          * @description Set the FHIR search filters for a resource type on a server.
          *     Empty filters clear the scope (validate everything again).
-         *     Creates a server override on-the-fly if none exists yet.
          */
         put: operations["update_server_filters_api_v1_config_servers__server_id___resource_type__filters_put"];
         post?: never;
@@ -1380,6 +1397,16 @@ export interface components {
             severity: string;
             /** Count */
             count: number;
+        };
+        /**
+         * RulesBulkUpdate
+         * @description Payload to patch several rules at once, e.g. a whole category.
+         */
+        RulesBulkUpdate: {
+            /** Rules */
+            rules: {
+                [key: string]: components["schemas"]["RuleUpdate"];
+            };
         };
         /**
          * RunSummary
@@ -2645,6 +2672,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RuleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceConfig"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_rules_api_v1_config_servers__server_id___resource_type__rules_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+                resource_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulesBulkUpdate"];
             };
         };
         responses: {
