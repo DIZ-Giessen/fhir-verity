@@ -19,6 +19,7 @@ import {
   Tuning2Icon,
   UsersGroupTwoRoundedIcon,
 } from "@solar-icons/react/line-duotone"
+import { ServerAccessAvatars } from "./server-access-avatars"
 import { ServerAuthDialog } from "./server-auth-dialog"
 import { ServerMembersDialog } from "./server-members-dialog"
 import type { ColumnDef, SortingState } from "@tanstack/react-table"
@@ -161,6 +162,13 @@ export function ServersTable({
         <span className="font-mono text-xs text-muted-foreground">
           {row.original.base_url}
         </span>
+      ),
+    },
+    {
+      id: "access",
+      header: "Access",
+      cell: ({ row }) => (
+        <ServerAccessAvatars users={row.original.access_users} />
       ),
     },
     {

@@ -1114,6 +1114,11 @@ export interface components {
              */
             can_manage: boolean;
             /**
+             * Access Users
+             * @default []
+             */
+            access_users: components["schemas"]["ServerAccessUser"][];
+            /**
              * Created At
              * Format: date-time
              */
@@ -1433,6 +1438,28 @@ export interface components {
             overall_invalid_rate: number;
             /** By Resource Type */
             by_resource_type: components["schemas"]["ResourceTypeSummary"][];
+        };
+        /**
+         * ServerAccessUser
+         * @description A user who can see a server, and why: owner, admin or shared member.
+         */
+        ServerAccessUser: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Username */
+            username?: string | null;
+            /** Full Name */
+            full_name?: string | null;
+            /** Role */
+            role: string;
+            /**
+             * Access
+             * @enum {string}
+             */
+            access: "owner" | "admin" | "member";
         };
         /**
          * ServerAuthRead
