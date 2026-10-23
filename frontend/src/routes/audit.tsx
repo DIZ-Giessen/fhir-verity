@@ -54,13 +54,23 @@ const ACTION_LABELS: Record<string, string> = {
   BULK_DELETE: "Bulk delete",
   BULK_PATCH: "Bulk fix",
   SERVER_DELETE: "Server deleted",
+  SERVER_AUTH_CHANGE: "Server auth changed",
+  SERVER_SHARE: "Server shared",
+  SERVER_UNSHARE: "Server unshared",
+  USER_ROLE_CHANGE: "Role changed",
 }
 
 /** Summary rows written by bulk-delete/-fix (one row per operation). */
 const SUMMARY_ACTIONS = new Set(["BULK_DELETE", "BULK_PATCH"])
 
 /** Rows about Verity itself, not about a resource on the FHIR server. */
-const SERVER_ACTIONS = new Set(["SERVER_DELETE"])
+const SERVER_ACTIONS = new Set([
+  "SERVER_DELETE",
+  "SERVER_AUTH_CHANGE",
+  "SERVER_SHARE",
+  "SERVER_UNSHARE",
+  "USER_ROLE_CHANGE",
+])
 
 interface BulkPayload {
   bulk: true
@@ -127,8 +137,8 @@ function AuditPage() {
 
   const serverName = useMemo(() => {
     const m = new Map((serversQ.data ?? []).map((s) => [s.id, s.name]))
-    return (id: string | null | undefined, baseUrl: string) =>
-      (id && m.get(id)) ?? baseUrl
+    return (id: string | null | undefined, baseUrl?: string | null) =>
+      (id && m.get(id)) || baseUrl || "—"
   }, [serversQ.data])
 
   const items = listQ.data?.items ?? []
@@ -150,8 +160,9 @@ function AuditPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
         <p className="text-sm text-muted-foreground">
-          Every delete and patch executed against a FHIR server, and every
-          deleted server. Bulk operations are logged as a single summary entry.
+          Every delete and patch executed against a FHIR server, plus changes to
+          servers, sharing and user roles. Bulk operations are logged as a
+          single summary entry.
         </p>
       </div>
 
@@ -385,7 +396,7 @@ function AuditDetail({ auditId }: { auditId: string }) {
   }
 
   const d = q.data
-  const fhirUrl = `${d.server_base_url.replace(/\/$/, "")}/${d.resource_type}/${d.resource_id}`
+  const fhirUrl = `${(d.server_base_url ?? "").replace(/\/$/, "")}/${d.resource_type}/${d.resource_id}`
   const isSummary = SUMMARY_ACTIONS.has(d.action)
   const isServerAction = SERVER_ACTIONS.has(d.action)
   const bulk = isBulkPayload(d.fhir_request_payload)
@@ -413,7 +424,13 @@ function AuditDetail({ auditId }: { auditId: string }) {
       ) : (
         d.fhir_request_payload != null && (
           <JsonBlock
-            label={isSummary ? "Operation" : "Patch payload"}
+            label={
+              isSummary
+                ? "Operation"
+                : isServerAction
+                  ? "Details"
+                  : "Patch payload"
+            }
             value={d.fhir_request_payload}
           />
         )

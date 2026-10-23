@@ -14,6 +14,8 @@ export type RuleDefinition = components["schemas"]["RuleDefinition"]
 export type RuleUpdate = components["schemas"]["RuleUpdate"]
 export type ServerAuthRead = components["schemas"]["ServerAuthRead"]
 export type ServerAuthUpdate = components["schemas"]["ServerAuthUpdate"]
+export type ServerMember = components["schemas"]["ServerMemberRead"]
+export type DirectoryUser = components["schemas"]["UserDirectoryEntry"]
 export type ServerMetadata = components["schemas"]["ServerMetadata"]
 export type ResourceCount = components["schemas"]["ResourceCount"]
 export type ValidationRunListItem =
@@ -50,6 +52,7 @@ export const serverKeys = {
   auth: (id: string) => ["servers", id, "auth"] as const,
   metadata: (id: string) => ["servers", id, "metadata"] as const,
   resourceCounts: (id: string) => ["servers", id, "resource-counts"] as const,
+  members: (id: string) => ["servers", id, "members"] as const,
 }
 
 export const serversQueryOptions = () =>
@@ -119,6 +122,23 @@ export const serverResourceConfigQueryOptions = (
     },
   })
 
+export async function patchRules(
+  serverId: string,
+  resourceType: string,
+  rules: Record<string, RuleUpdate>
+) {
+  const { data } = await api.PATCH(
+    "/api/v1/config/servers/{server_id}/{resource_type}/rules",
+    {
+      params: {
+        path: { server_id: serverId, resource_type: resourceType },
+      },
+      body: { rules },
+    }
+  )
+  return data
+}
+
 export async function patchRule(
   serverId: string,
   resourceType: string,
@@ -172,6 +192,31 @@ export async function updateServerAuth(
   return data
 }
 
+export const serverMembersQueryOptions = (serverId: string) =>
+  queryOptions({
+    queryKey: serverKeys.members(serverId),
+    queryFn: async () => {
+      const { data } = await api.GET("/api/v1/servers/{server_id}/members", {
+        params: { path: { server_id: serverId } },
+      })
+      return data ?? []
+    },
+  })
+
+export async function addServerMember(serverId: string, userId: string) {
+  const { data } = await api.POST("/api/v1/servers/{server_id}/members", {
+    params: { path: { server_id: serverId } },
+    body: { user_id: userId },
+  })
+  return data
+}
+
+export async function removeServerMember(serverId: string, userId: string) {
+  await api.DELETE("/api/v1/servers/{server_id}/members/{user_id}", {
+    params: { path: { server_id: serverId, user_id: userId } },
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
@@ -210,7 +255,8 @@ export const meQueryOptions = () =>
   })
 
 export async function logout() {
-  await api.POST("/api/v1/auth/logout")
+  const { data } = await api.POST("/api/v1/auth/logout")
+  return data
 }
 
 // SERVER IDS ====================
@@ -444,7 +490,18 @@ export function hasRole(role: string | null | undefined, min: Role): boolean {
 
 export const userKeys = {
   all: ["users"] as const,
+  directory: ["users", "directory"] as const,
 }
+
+/** All users (name and role only), for sharing a server. Editors and up. */
+export const userDirectoryQueryOptions = () =>
+  queryOptions({
+    queryKey: userKeys.directory,
+    queryFn: async () => {
+      const { data } = await api.GET("/api/v1/users/directory")
+      return data ?? []
+    },
+  })
 
 export const usersQueryOptions = () =>
   queryOptions({

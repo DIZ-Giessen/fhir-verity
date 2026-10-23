@@ -54,8 +54,19 @@ async def websocket_endpoint(websocket: WebSocket, run_id: str):
         logger.debug("WebSocket disconnected for run %s", run_id)
 
 
+def _allowed_origins() -> set[str]:
+    origins = {o.rstrip("/") for o in settings.cors_origins_list}
+    origins.add(settings.FRONTEND_BASE_URL.rstrip("/"))
+    return origins
+
+
 async def _may_watch(websocket: WebSocket, run_id: str) -> bool:
     """True if the connecting session may follow this run."""
+    # Browsers send the session cookie along with cross-site WebSocket
+    # handshakes from the same site, so only accept Verity's own pages.
+    origin = websocket.headers.get("origin")
+    if origin and origin.rstrip("/") not in _allowed_origins():
+        return False
     try:
         run_uuid = uuid.UUID(run_id)
     except ValueError:

@@ -17,9 +17,7 @@ from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
 from app.core.security import ensure_dev_user, require_role
 from app.models.user import User  # noqa: F401 - register table with Base
-from app.models.validation_config import ValidationConfig
 from app.models.validation_run import ValidationRun, ValidationStatus
-from app.services.config_defaults import MII_KDS_DEFAULTS
 from app.api.v1.endpoints import (
     auth,
     config,
@@ -32,32 +30,6 @@ from app.api.v1.endpoints import users
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
-
-
-async def seed_default_configs() -> None:
-    """Write MII KDS defaults to DB on startup. Idempotent."""
-    async with AsyncSessionLocal() as db:
-        try:
-            for resource_type, rules in MII_KDS_DEFAULTS.items():
-                stmt = select(ValidationConfig).where(
-                    ValidationConfig.server_id.is_(None),
-                    ValidationConfig.resource_type == resource_type,
-                )
-                existing = (await db.execute(stmt)).scalar_one_or_none()
-                if not existing:
-                    db.add(
-                        ValidationConfig(
-                            server_id=None,
-                            resource_type=resource_type,
-                            rules=rules,
-                        )
-                    )
-            await db.commit()
-            logger.info("Default config seeding complete")
-        except Exception as e:
-            await db.rollback()
-            logger.error("Failed to seed default configs: %s", e)
-            raise
 
 
 async def reconcile_orphaned_runs() -> None:
@@ -92,7 +64,6 @@ async def lifespan(application: FastAPI):
     """Default seed App"""
     logger.info("Starting FHIR Verity API")
     await reconcile_orphaned_runs()
-    await seed_default_configs()
     if not settings.AUTH_ENABLED:
         logger.warning(
             "AUTH_ENABLED=false: authentication is off, every request runs as "
@@ -109,7 +80,10 @@ app = FastAPI(
     description=settings.PROJECT_DESCRIPTION,
     version=settings.PROJECT_VERSION,
     lifespan=lifespan,
-    license_info={"name": "MIT License"},
+    license_info={
+        "name": "AGPL-3.0-or-later",
+        "url": "https://www.gnu.org/licenses/agpl-3.0.html",
+    },
 )
 
 # Keyed by client IP (real IP via uvicorn --proxy-headers behind Caddy, see
@@ -172,7 +146,7 @@ app.include_router(
     config.router,
     prefix="/api/v1",
     tags=["config"],
-    dependencies=[Depends(require_role("editor"))],
+    dependencies=[Depends(require_role("viewer"))],
 )
 app.include_router(
     resource_actions.router,

@@ -134,6 +134,7 @@ function RunDetailPage() {
     ...serverQueryOptions(run?.server_id ?? ""),
     enabled: Boolean(run?.server_id),
   })
+  const canWrite = serverQ.data?.can_write ?? false
 
   const [ruleSort, setRuleSort] = useState<{
     key: string
@@ -204,7 +205,8 @@ function RunDetailPage() {
           <ChevronLeft className="mr-1 h-4 w-4" />
           Back to runs
         </Link>
-        {run?.status === "failed" || run?.status === "cancelled" ? (
+        {canWrite &&
+        (run?.status === "failed" || run?.status === "cancelled") ? (
           <Button
             size="sm"
             onClick={() => resumeMutation.mutate()}
@@ -267,18 +269,22 @@ function RunDetailPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => cancelMutation.mutate()}
-                    disabled={cancelMutation.isPending || run.cancel_requested}
-                  >
-                    {run.cancel_requested ? (
-                      <TextDots>Stopping</TextDots>
-                    ) : (
-                      "Stop"
-                    )}
-                  </Button>
+                  {canWrite && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => cancelMutation.mutate()}
+                      disabled={
+                        cancelMutation.isPending || run.cancel_requested
+                      }
+                    >
+                      {run.cancel_requested ? (
+                        <TextDots>Stopping</TextDots>
+                      ) : (
+                        "Stop"
+                      )}
+                    </Button>
+                  )}
                   <Button
                     asChild
                     variant="outline"

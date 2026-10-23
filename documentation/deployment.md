@@ -63,6 +63,7 @@ Die wichtigsten Werte:
 | KEYCLOAK_DISCOVERY_URL                          | die OIDC-Discovery-URL des Realms                                               |
 | KEYCLOAK_CLIENT_ID / KEYCLOAK_CLIENT_SECRET     | Zugangsdaten des Keycloak-Clients                                               |
 | INITIAL_ADMIN_USERS                             | Kennungen, die beim ersten Login admin werden                                   |
+| FHIR_ALLOWED_HOSTS                              | Hosts, zu denen Verity sich verbinden darf (FHIR-Server, Token-Endpunkte)       |
 | COMPOSE_FILE / COMPOSE_PATH_SEPARATOR           | nur beim mitgelieferten Keycloak: schaltet `docker-compose.keycloak.yml` zu     |
 | KEYCLOAK_DB_PASSWORD / KEYCLOAK_ADMIN_PASSWORD  | nur beim mitgelieferten Keycloak: Datenbank und Admin-Konsole                   |
 | VERITY_ADMIN_EMAIL / VERITY_ADMIN_PASSWORD      | nur beim mitgelieferten Keycloak: erster Benutzer `verity-admin`                |
@@ -75,6 +76,17 @@ Den Session-Schlüssel mit einem echten Zufallswert setzen:
 ```bash
 openssl rand -hex 32
 ```
+
+### Zulässige Ziel-Hosts
+
+Server-URLs werden in der Oberfläche eingetragen. Ohne Einschränkung könnte ein Editor das Backend damit beliebige Adressen im internen Netz
+anfragen lassen. `FHIR_ALLOWED_HOSTS` begrenzt das auf die FHIR-Server und Token-Endpunkte des Standorts, zum Beispiel
+`fhir.dein-standort.de,*.diz.dein-standort.de,keycloak.dein-standort.de`. Link-local-Adressen (etwa Cloud-Metadaten unter `169.254.x.x`) sind
+unabhängig davon immer gesperrt.
+
+Das Backend vertraut den `X-Forwarded-*`-Headern jedes Absenders (`--forwarded-allow-ips=*`), damit Rate-Limit und Logs die echte Client-IP
+sehen. Das ist nur sicher, solange Port 8000 nicht veröffentlicht wird und ausschließlich Caddy das Backend erreicht; die
+`docker-compose.yml` ist so eingerichtet.
 
 ## Welche Datenbank?
 
@@ -132,8 +144,8 @@ Verity braucht einen Keycloak-Client im richtigen Realm. Der Realm ist der aus d
 - **Client authentication**
 - **Valid redirect URIs**: exakt `https://<DOMAIN>/api/v1/auth/callback`.
 - **Web origins**: `https://<DOMAIN>` (oder `+`).
-- **Valid post logout redirect URIs**: `https://<DOMAIN>`, sonst schlägt der
-  Logout-Redirect fehl.
+- **Valid post logout redirect URIs**: `https://<DOMAIN>/login`. „Sign out“ beendet auch die Keycloak-Sitzung und leitet danach
+  dorthin zurück; fehlt der Eintrag, zeigt Keycloak beim Abmelden eine Fehlerseite und die Keycloak-Sitzung bleibt bestehen.
 
 Der häufigste Fehler beim ersten Login ist „Ungültiger Parameter: redirect_uri". Das heißt fast immer: Die eingetragene Redirect-URI weicht vom gesendeten Wert ab, sie steht im falschen Realm oder Client, oder es wurde nach dem Eintragen nicht gespeichert. Zum Eingrenzen hilft, testweise zusätzlich `https://<DOMAIN>/*` als Redirect-URI einzutragen; klappt der Login damit, lag es am exakten Pfad. Für Produktion danach wieder auf den exakten Pfad zurück.
 

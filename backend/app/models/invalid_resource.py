@@ -7,7 +7,6 @@ from sqlalchemy import (
     Index,
     String,
     JSON,
-    Float,
     ForeignKey,
     DateTime,
     UniqueConstraint,
@@ -46,16 +45,6 @@ class InvalidResource(Base, TimestampMixin):
     # Validation findings (latest snapshot)
     issues = Column(JSON, nullable=False)
     metrics = Column(JSON, nullable=False)
-
-    # Optional: full FHIR resource body, used by LLM-Assistant (Block 3)
-    raw_resource = Column(JSON, nullable=True)
-
-    # ML scores (Block 2) — populated by scoring service after validation
-    anomaly_score = Column(Float, nullable=True)
-    risk_score = Column(Float, nullable=True)
-
-    # LLM-generated correction/deletion suggestions (Block 3)
-    llm_suggestions = Column(JSON, nullable=True)
 
     # Run-tracking — when first detected vs. when last confirmed
     first_seen_run_id = Column(UUID(as_uuid=True), nullable=False)

@@ -4,13 +4,15 @@ import logging
 import uuid
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import exists, or_, select
+from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.user import User, UserRole
 from app.models.fhir_server import FhirServer
+from app.models.server_member import ServerMember
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -43,6 +45,14 @@ def _dev_user() -> User:
     )
 
 
+async def _admin_exists(db: AsyncSession) -> bool:
+    stmt = select(User.id).where(
+        User.role == UserRole.admin.value,
+        User.keycloak_sub != DEV_USER_SUB,
+    )
+    return (await db.execute(stmt.limit(1))).first() is not None
+
+
 async def provision_user(claims: dict, db: AsyncSession) -> User:
     """Just-in-time provisioning from Keycloak userinfo / id_token claims."""
     sub = claims.get("sub")
@@ -57,10 +67,12 @@ async def provision_user(claims: dict, db: AsyncSession) -> User:
         await db.execute(select(User).where(User.keycloak_sub == sub))
     ).scalar_one_or_none()
 
+    # E-mail addresses only count when Keycloak has verified them, otherwise
+    # anyone who can set their own e-mail could claim a listed address.
     admins = _admin_bootstrap_set()
     is_bootstrap_admin = (username or "").lower() in admins or (
-        email or ""
-    ).lower() in admins
+        claims.get("email_verified") is True and (email or "").lower() in admins
+    )
 
     if user is None:
         user = User(
@@ -75,7 +87,13 @@ async def provision_user(claims: dict, db: AsyncSession) -> User:
         user.username = username or user.username
         user.email = email or user.email
         user.full_name = full_name or user.full_name
-        if is_bootstrap_admin and ROLE_ORDER.get(user.role, 0) < ROLE_ORDER["admin"]:
+        # Existing users are only promoted while there is no admin at all, so
+        # a listed admin can still be demoted later.
+        if (
+            is_bootstrap_admin
+            and user.role != UserRole.admin.value
+            and not await _admin_exists(db)
+        ):
             user.role = UserRole.admin.value
 
     await db.commit()
@@ -148,40 +166,75 @@ def require_roles_by_method(read_min: str, write_min: str):
     return _dep
 
 
+def has_role(user: User, min_role: str) -> bool:
+    return ROLE_ORDER.get(user.role, -1) >= ROLE_ORDER[min_role]
+
+
+def visible_servers_clause(user: User) -> ColumnElement | None:
+    """
+    SQL condition for the servers a user may see: their own and those shared
+    with them. None for admins, who see every server.
+    """
+    if user.role == UserRole.admin.value:
+        return None
+    return or_(
+        FhirServer.owner_id == user.id,
+        exists().where(
+            ServerMember.server_id == FhirServer.id,
+            ServerMember.user_id == user.id,
+        ),
+    )
+
+
+def can_manage_server(server: FhirServer, user: User) -> bool:
+    """Edit, authentication, sharing and delete: admins and editor owners."""
+    if user.role == UserRole.admin.value:
+        return True
+    return server.owner_id == user.id and has_role(user, UserRole.editor.value)
+
+
 async def load_server_scoped(
     server_id: uuid.UUID,
     user: User,
     db: AsyncSession,
+    *,
+    manage: bool = False,
 ) -> FhirServer:
-    """Load a server enforcing ownership: non-admins may only touch their own.
-
-    Returns 404 (not 403) for foreign servers so their existence is not leaked.
     """
-    server = (
-        await db.execute(select(FhirServer).where(FhirServer.id == server_id))
-    ).scalar_one_or_none()
+    Load a server the user may see. Returns 404 (not 403) for servers outside
+    their scope so their existence is not leaked. With manage=True the user
+    must also be allowed to manage it (403 otherwise).
+    """
+    stmt = select(FhirServer).where(FhirServer.id == server_id)
+    clause = visible_servers_clause(user)
+    if clause is not None:
+        stmt = stmt.where(clause)
+    server = (await db.execute(stmt)).scalar_one_or_none()
     if server is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "FHIR server not found")
-    if user.role != UserRole.admin.value and server.owner_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "FHIR server not found")
+    if manage and not can_manage_server(server, user):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Only the owner of this server or an admin can do this",
+        )
     return server
 
 
-def server_access(min_role: str = UserRole.viewer.value):
+def server_access(min_role: str = UserRole.viewer.value, *, manage: bool = False):
     """Dependency for path endpoints carrying `server_id`: checks role capability
-    AND ownership scope in one step, returning the resolved server."""
+    AND server scope in one step, returning the resolved server."""
 
     async def _dep(
         server_id: uuid.UUID,
         user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ) -> FhirServer:
-        if ROLE_ORDER.get(user.role, -1) < ROLE_ORDER[min_role]:
+        if not has_role(user, min_role):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 f"Requires '{min_role}' role or higher",
             )
-        return await load_server_scoped(server_id, user, db)
+        return await load_server_scoped(server_id, user, db, manage=manage)
 
     return _dep
 

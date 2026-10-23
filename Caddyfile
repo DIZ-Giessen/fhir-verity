@@ -1,4 +1,18 @@
 {$DOMAIN:localhost} {
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# No embedding in other sites (clickjacking); Keycloak frames itself
+		Content-Security-Policy "frame-ancestors 'self'"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+
+	# HSTS only for real domains, on localhost it would force HTTPS for
+	# every local port in the browser
+	@public not host localhost 127.0.0.1
+	header @public Strict-Transport-Security "max-age=31536000"
+
 	handle /api/* {
 		reverse_proxy backend:8000
 	}

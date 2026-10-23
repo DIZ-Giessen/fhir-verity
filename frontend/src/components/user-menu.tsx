@@ -19,7 +19,7 @@ import {
   updateMyPreferences,
 } from "@/api/queries"
 import { StartValidationDialog } from "@/components/start-validation-dialog"
-import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -31,6 +31,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { initials } from "@/lib/functions"
+import { cn } from "@/lib/utils"
 
 type ManagementItem = {
   to: "/audit" | "/users"
@@ -67,8 +68,13 @@ export function UserMenu() {
 
   const logoutMutation = useMutation({
     mutationFn: logout,
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       queryClient.clear()
+      // End the Keycloak session too; it redirects back to /login afterwards
+      if (result?.logout_url) {
+        window.location.href = result.logout_url
+        return
+      }
       await navigate({ to: "/login" })
     },
   })
@@ -104,15 +110,30 @@ export function UserMenu() {
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
         <PopoverTrigger asChild>
           <Button variant="ghost" className="h-auto gap-2 px-2 py-1.5">
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="text-xs">
+            <Avatar
+              className={cn(
+                "h-7.5 w-7.5",
+                user.role === "editor"
+                  ? "after:border-blue-200 dark:after:border-blue-600"
+                  : user.role === "admin"
+                    ? "after:border-destructive/10"
+                    : ""
+              )}
+            >
+              <AvatarFallback
+                className={cn(
+                  "text-xs",
+                  user.role === "editor"
+                    ? "bg-blue-50/50 text-blue-600 dark:bg-blue-900/40"
+                    : user.role === "admin"
+                      ? "bg-destructive/5 text-destructive dark:bg-destructive/10"
+                      : ""
+                )}
+              >
                 {initials(user.username)}
               </AvatarFallback>
-              {user.role === "admin" && (
-                <AvatarBadge className="bg-orange-600 dark:bg-orange-800" />
-              )}
             </Avatar>
-            <span className="hidden text-sm font-medium">
+            <span className="sr-only text-sm font-medium">
               {user.username ?? displayName}
             </span>
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -177,19 +198,23 @@ export function UserMenu() {
               </div>
             </>
           )}
-          <Separator />
-          <div className="p-1 px-3">
-            <Button
-              className="w-full"
-              onClick={() => {
-                setMenuOpen(false)
-                setStartOpen(true)
-              }}
-            >
-              <Play className="size-4" />
-              Start validation
-            </Button>
-          </div>
+          {hasRole(user.role, "editor") && (
+            <>
+              <Separator />
+              <div className="p-1 px-3">
+                <Button
+                  className="w-full"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    setStartOpen(true)
+                  }}
+                >
+                  <Play className="size-4" />
+                  Start validation
+                </Button>
+              </div>
+            </>
+          )}
           {canSignOut && (
             <>
               <Separator />

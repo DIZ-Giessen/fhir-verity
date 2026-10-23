@@ -54,13 +54,17 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    # Comma-separated hosts Verity may connect to as FHIR server or token
+    # endpoint, e.g. "fhir.example.org,*.diz.example.org". Empty = any host.
+    FHIR_ALLOWED_HOSTS: str = ""
+
     # --- FHIR reports (TestScript / TestReport / List) ---
     # Name shown as publisher/tester in every report.
     FHIR_REPORT_PUBLISHER: str = "FHIR Verity"
-    # Canonical base for TestScript.url, identifier systems and extension
-    # URLs. Must be globally unique and stable, so it points to the project
-    # repository and is not derived from where Verity runs.
-    VERITY_CANONICAL_BASE: str = "https://github.com/fhir-verity/fhir-verity"
+    # Canonical base for TestScript.url, identifier systems and extensionURLs.
+    VERITY_CANONICAL_BASE: str = (
+        "https://mirgitlab.med.uni-giessen.de/povoc1/fhir-verity"
+    )
 
     @model_validator(mode="after")
     def _check_auth(self) -> "Settings":

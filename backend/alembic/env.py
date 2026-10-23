@@ -16,6 +16,7 @@ from app.models import (
     invalid_resource,
     validation_config,
     audit_log,
+    server_member,
 )  # noqa: F401 # noqa: F401
 
 from app.models.user import User  # noqa: F401 - register with Base.metadata

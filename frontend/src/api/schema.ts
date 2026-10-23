@@ -76,7 +76,9 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description Logs out the current user by clearing the session.
+         * @description Clear the Verity session. Also returns Keycloak's logout URL so the
+         *     browser can end the single sign-on session there; otherwise the next
+         *     "Sign in" would log the user straight back in without a password.
          */
         post: operations["logout_api_v1_auth_logout_post"];
         delete?: never;
@@ -134,7 +136,7 @@ export interface paths {
         };
         /**
          * List Fhir Servers
-         * @description List FHIR servers. Admins see all, others only their own.
+         * @description List FHIR servers. Admins see all, others their own and shared ones.
          */
         get: operations["list_fhir_servers_api_v1_servers_get"];
         put?: never;
@@ -166,9 +168,9 @@ export interface paths {
         /**
          * Delete FHIR server
          * @description Delete a FHIR server together with everything Verity stored for it:
-         *     validation runs, invalid resources (and their issues) and server-specific
-         *     configs. All of it cascades in the database. Audit log entries are kept
-         *     (server_id is set to NULL) and a SERVER_DELETE entry is added.
+         *     validation runs, invalid resources (and their issues), server-specific
+         *     configs and shares. All of it cascades in the database. Audit log entries
+         *     are kept (server_id is set to NULL) and a SERVER_DELETE entry is added.
          *     The FHIR server itself is not touched.
          *
          *     Refused with 409 while a run is in progress, since the background task
@@ -179,7 +181,9 @@ export interface paths {
         head?: never;
         /**
          * Update FHIR server
-         * @description Update FHIR Server
+         * @description Update a FHIR server. When the base URL moves to another host, the stored
+         *     credentials are dropped so they are never sent to a host they were not
+         *     entered for.
          */
         patch: operations["update_fhir_server_api_v1_servers__server_id__patch"];
         trace?: never;
@@ -206,6 +210,50 @@ export interface paths {
          * @description Replace a server's auth. Omitted secrets keep their existing value.
          */
         patch: operations["update_server_auth_api_v1_servers__server_id__auth_patch"];
+        trace?: never;
+    };
+    "/api/v1/servers/{server_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Server Members
+         * @description Users the server is shared with (besides its owner).
+         */
+        get: operations["list_server_members_api_v1_servers__server_id__members_get"];
+        put?: never;
+        /**
+         * Add Server Member
+         * @description Share the server with a user.
+         */
+        post: operations["add_server_member_api_v1_servers__server_id__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/servers/{server_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Server Member
+         * @description Stop sharing the server with a user.
+         */
+        delete: operations["remove_server_member_api_v1_servers__server_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/servers/{server_id}/metadata": {
@@ -410,7 +458,7 @@ export interface paths {
         };
         /**
          * Get Defaults
-         * @description Global default configuration for a resource type (server_id IS NULL).
+         * @description Default configuration of a resource type, as defined by the rule registry.
          */
         get: operations["get_defaults_api_v1_config_defaults__resource_type__get"];
         put?: never;
@@ -435,13 +483,13 @@ export interface paths {
         get: operations["get_server_config_api_v1_config_servers__server_id___resource_type__get"];
         /**
          * Replace Server Config
-         * @description Replace the complete server-specific override.
+         * @description Replace the rule overrides of a server for one resource type.
          */
         put: operations["replace_server_config_api_v1_config_servers__server_id___resource_type__put"];
         post?: never;
         /**
          * Delete Server Config
-         * @description Remove server override entirely, falling back to global defaults.
+         * @description Remove the server override entirely, falling back to the defaults.
          */
         delete: operations["delete_server_config_api_v1_config_servers__server_id___resource_type__delete"];
         options?: never;
@@ -464,11 +512,29 @@ export interface paths {
         head?: never;
         /**
          * Patch Rule
-         * @description Update a single rule (enabled / severity / pattern).
-         *     Creates a server override on-the-fly if none exists yet,
-         *     starting from the default rule definition.
+         * @description Change enabled, severity or pattern of one rule for this server.
          */
         patch: operations["patch_rule_api_v1_config_servers__server_id___resource_type__rules__rule_key__patch"];
+        trace?: never;
+    };
+    "/api/v1/config/servers/{server_id}/{resource_type}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Rules
+         * @description Change several rules in one request, e.g. switch a whole category on or off.
+         */
+        patch: operations["patch_rules_api_v1_config_servers__server_id___resource_type__rules_patch"];
         trace?: never;
     };
     "/api/v1/config/resource-types": {
@@ -480,7 +546,7 @@ export interface paths {
         };
         /**
          * List Resource Types
-         * @description Alle Ressourcentypen, die konfiguriert werden können.
+         * @description All resource types Verity can validate.
          */
         get: operations["list_resource_types_api_v1_config_resource_types_get"];
         put?: never;
@@ -503,7 +569,6 @@ export interface paths {
          * Update Server Filters
          * @description Set the FHIR search filters for a resource type on a server.
          *     Empty filters clear the scope (validate everything again).
-         *     Creates a server override on-the-fly if none exists yet.
          */
         put: operations["update_server_filters_api_v1_config_servers__server_id___resource_type__filters_put"];
         post?: never;
@@ -694,6 +759,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/directory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * User Directory
+         * @description Names and roles of all users, for choosing whom to share a server with.
+         */
+        get: operations["user_directory_api_v1_users_directory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{user_id}/role": {
         parameters: {
             query?: never;
@@ -776,7 +861,7 @@ export interface components {
          * AuditAction
          * @enum {string}
          */
-        AuditAction: "DELETE" | "PATCH" | "BULK_DELETE" | "BULK_PATCH" | "SERVER_DELETE";
+        AuditAction: "DELETE" | "PATCH" | "BULK_DELETE" | "BULK_PATCH" | "SERVER_DELETE" | "SERVER_AUTH_CHANGE" | "SERVER_SHARE" | "SERVER_UNSHARE" | "USER_ROLE_CHANGE";
         /** AuditLogDetail */
         AuditLogDetail: {
             /**
@@ -787,7 +872,7 @@ export interface components {
             /** Server Id */
             server_id?: string | null;
             /** Server Base Url */
-            server_base_url: string;
+            server_base_url?: string | null;
             /** Resource Type */
             resource_type: string;
             /** Resource Id */
@@ -824,7 +909,7 @@ export interface components {
             /** Server Id */
             server_id?: string | null;
             /** Server Base Url */
-            server_base_url: string;
+            server_base_url?: string | null;
             /** Resource Type */
             resource_type: string;
             /** Resource Id */
@@ -963,7 +1048,8 @@ export interface components {
         };
         /**
          * FhirServerCreate
-         * @description Schema for creating a new FHIR server.
+         * @description Schema for creating a new FHIR server. Authentication is set afterwards
+         *     via PATCH /servers/{id}/auth.
          */
         FhirServerCreate: {
             /** Name */
@@ -974,11 +1060,12 @@ export interface components {
              */
             base_url: string;
             /** Project Id */
-            project_id?: string;
-            /** Auth Config */
-            auth_config?: {
-                [key: string]: unknown;
-            } | null;
+            project_id: string;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
         };
         /**
          * FhirServerRead
@@ -1017,6 +1104,16 @@ export interface components {
             /** Owner Id */
             owner_id?: string | null;
             /**
+             * Can Write
+             * @default false
+             */
+            can_write: boolean;
+            /**
+             * Can Manage
+             * @default false
+             */
+            can_manage: boolean;
+            /**
              * Created At
              * Format: date-time
              */
@@ -1038,10 +1135,6 @@ export interface components {
             base_url?: string | null;
             /** Project Id */
             project_id?: string | null;
-            /** Auth Config */
-            auth_config?: {
-                [key: string]: unknown;
-            } | null;
             /** Is Active */
             is_active?: boolean | null;
             /**
@@ -1112,6 +1205,19 @@ export interface components {
             severity: string;
             /** Message */
             message: string;
+        };
+        /**
+         * LogoutResult
+         * @description logout_url: Keycloak end-session URL the browser should open next.
+         */
+        LogoutResult: {
+            /**
+             * Status
+             * @default ok
+             */
+            status: string;
+            /** Logout Url */
+            logout_url?: string | null;
         };
         /**
          * PaginatedAuditLog
@@ -1293,6 +1399,16 @@ export interface components {
             count: number;
         };
         /**
+         * RulesBulkUpdate
+         * @description Payload to patch several rules at once, e.g. a whole category.
+         */
+        RulesBulkUpdate: {
+            /** Rules */
+            rules: {
+                [key: string]: components["schemas"]["RuleUpdate"];
+            };
+        };
+        /**
          * RunSummary
          * @description Summary of a run's validation results.
          *
@@ -1361,6 +1477,36 @@ export interface components {
             /** Scope */
             scope?: string | null;
         };
+        /** ServerMemberCreate */
+        ServerMemberCreate: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * ServerMemberRead
+         * @description A user a server is shared with.
+         */
+        ServerMemberRead: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Username */
+            username?: string | null;
+            /** Full Name */
+            full_name?: string | null;
+            /** Role */
+            role: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /**
          * ServerMetadata
          * @description Result of a CapabilityStatement read against a FHIR server.
@@ -1395,6 +1541,23 @@ export interface components {
             username?: string | null;
             /** Full Name */
             full_name?: string | null;
+        };
+        /**
+         * UserDirectoryEntry
+         * @description Minimal user info for picking whom to share a server with.
+         */
+        UserDirectoryEntry: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Username */
+            username?: string | null;
+            /** Full Name */
+            full_name?: string | null;
+            /** Role */
+            role: string;
         };
         /**
          * UserPreferencesUpdate
@@ -1702,7 +1865,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LogoutResult"];
                 };
             };
         };
@@ -1961,6 +2124,102 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ServerAuthRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_server_members_api_v1_servers__server_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerMemberRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_server_member_api_v1_servers__server_id__members_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServerMemberCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerMemberRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_server_member_api_v1_servers__server_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2436,6 +2695,42 @@ export interface operations {
             };
         };
     };
+    patch_rules_api_v1_config_servers__server_id___resource_type__rules_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+                resource_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulesBulkUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceConfig"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_resource_types_api_v1_config_resource_types_get: {
         parameters: {
             query?: never;
@@ -2785,6 +3080,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    user_directory_api_v1_users_directory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDirectoryEntry"][];
                 };
             };
         };

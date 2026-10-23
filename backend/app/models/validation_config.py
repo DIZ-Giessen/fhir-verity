@@ -8,11 +8,9 @@ from app.models.base import Base, TimestampMixin
 
 class ValidationConfig(Base, TimestampMixin):
     """
-    Validation rules per resource type, optionally scoped to a FHIR server
-
-    server_id = NULL ---> global default (MII KDS baseline)
-    server_id = UUID ---> serverspecific override
-
+    Server-specific override of the rule defaults for one resource type:
+    enabled/severity/pattern per rule and the crawl filters. The defaults
+    themselves are defined in app.services.rules.
     """
 
     __tablename__ = "validation_configs"

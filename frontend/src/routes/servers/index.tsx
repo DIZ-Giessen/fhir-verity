@@ -2,14 +2,14 @@ import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { useState } from "react"
 
+import { AddCircleIcon } from "@solar-icons/react/line-duotone"
 import type { FhirServer } from "@/api/queries"
-import { serversQueryOptions } from "@/api/queries"
+import { hasRole, meQueryOptions, serversQueryOptions } from "@/api/queries"
 import { ServerFormDialog } from "@/components/server-form-dialog"
 import { ServersTable } from "@/components/servers-table"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ApiError } from "@/lib/api-client"
-import { AddCircleIcon } from "@solar-icons/react/line-duotone"
 
 export const Route = createFileRoute("/servers/")({
   component: ServersPage,
@@ -17,6 +17,8 @@ export const Route = createFileRoute("/servers/")({
 
 function ServersPage() {
   const { data, isPending, error } = useQuery(serversQueryOptions())
+  const { data: me } = useQuery(meQueryOptions())
+  const canCreate = hasRole(me?.role, "editor")
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<FhirServer | null>(null)
@@ -30,10 +32,12 @@ function ServersPage() {
             FHIR servers registered for validation
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <AddCircleIcon className="mr-2 size-4" strokeWidth={3} />
-          Add server
-        </Button>
+        {canCreate && (
+          <Button onClick={() => setCreateOpen(true)}>
+            <AddCircleIcon className="mr-2 size-4" strokeWidth={3} />
+            Add server
+          </Button>
+        )}
       </div>
 
       {isPending && (
@@ -55,7 +59,17 @@ function ServersPage() {
         </div>
       )}
 
-      {data && <ServersTable data={data} onEdit={setEditTarget} />}
+      {data && (
+        <ServersTable
+          data={data}
+          onEdit={setEditTarget}
+          emptyText={
+            canCreate
+              ? "No servers registered yet"
+              : "No server has been shared with you yet. Ask an admin or the owner of a server to share it with you."
+          }
+        />
+      )}
 
       <ServerFormDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ServerFormDialog

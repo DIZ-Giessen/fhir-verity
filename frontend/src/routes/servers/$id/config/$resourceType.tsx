@@ -6,7 +6,7 @@ import {
   CalendarDateIcon,
   FilterCloseIcon,
 } from "@solar-icons/react/line-duotone"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { format, parse } from "date-fns"
 import { de } from "date-fns/locale"
 import type {
@@ -19,6 +19,7 @@ import {
   configKeys,
   deleteServerConfig,
   patchRule,
+  patchRules,
   serverQueryOptions,
   serverResourceConfigQueryOptions,
   updateServerFilters,
@@ -50,6 +51,7 @@ type Severity = "error" | "warning" | "info"
 const CATEGORY_ORDER = [
   "privacy",
   "completeness",
+  "coding",
   "plausibility",
   "integrity",
 ] as const
@@ -57,8 +59,29 @@ const CATEGORY_ORDER = [
 const CATEGORY_LABEL: Record<string, string> = {
   privacy: "Privacy & pseudonymization",
   completeness: "Structural completeness",
+  coding: "Coding & terminology",
   plausibility: "Plausibility",
   integrity: "Referential integrity",
+}
+
+const CATEGORY_COLOR: Record<string, string> = {
+  privacy: "text-rose-500",
+  completeness: "text-orange-500",
+  coding: "text-violet-500",
+  plausibility: "text-blue-500",
+  integrity: "text-teal-500",
+}
+
+type StateFilter = "all" | "enabled" | "disabled"
+
+function matchesSearch(key: string, rule: RuleDefinition, search: string) {
+  if (!search) return true
+  const haystack =
+    `${key} ${humanize(key)} ${rule.description ?? ""}`.toLowerCase()
+  return search
+    .toLowerCase()
+    .split(/\s+/)
+    .every((word) => haystack.includes(word))
 }
 
 const SEVERITY_TEXT: Record<Severity, string> = {
@@ -86,6 +109,7 @@ function ResourceConfigPage() {
   )
   const serverQ = useQuery(serverQueryOptions(id))
   const serverName = serverQ.data?.name ?? id.slice(0, 8)
+  const canWrite = serverQ.data?.can_write ?? false
 
   const patchMutation = useMutation({
     mutationFn: ({
@@ -132,6 +156,29 @@ function ResourceConfigPage() {
   const patch = (ruleKey: string, update: RuleUpdate) =>
     patchMutation.mutate({ ruleKey, update })
 
+  const bulkMutation = useMutation({
+    mutationFn: (rules: Record<string, RuleUpdate>) =>
+      patchRules(id, resourceType, rules),
+    onSuccess: (result) => {
+      if (result) queryClient.setQueryData(queryKey, result)
+    },
+  })
+
+  const setEnabled = (keys: Array<string>, enabled: boolean) =>
+    bulkMutation.mutate(Object.fromEntries(keys.map((k) => [k, { enabled }])))
+
+  const [search, setSearch] = useState("")
+  const [stateFilter, setStateFilter] = useState<StateFilter>("all")
+
+  const allRules = useMemo(() => Object.entries(data?.rules ?? {}), [data])
+  const visibleRules = allRules.filter(
+    ([key, rule]) =>
+      matchesSearch(key, rule, search.trim()) &&
+      (stateFilter === "all" ||
+        (stateFilter === "enabled" ? rule.enabled : !rule.enabled))
+  )
+  const enabledCount = allRules.filter(([, rule]) => rule.enabled).length
+
   const filtersMutation = useMutation({
     mutationFn: (filters: ResourceFilters) =>
       updateServerFilters(id, resourceType, filters),
@@ -161,13 +208,12 @@ function ResourceConfigPage() {
                 Server override
               </Badge>
             ) : (
-              /*    <Badge variant="secondary"></Badge> */
               <Badge variant="secondary" className="mt-1.5">
-                Global defaults
+                Defaults
               </Badge>
             )}
           </div>
-          {data?.is_server_specific && (
+          {data?.is_server_specific && canWrite && (
             <Button
               variant="outline"
               size="sm"
@@ -182,17 +228,22 @@ function ResourceConfigPage() {
           )}
         </div>
         <p className="mx-auto flex max-w-6xl text-sm text-muted-foreground">
-          Toggle rules, change their severity, and edit regex patterns.
+          {canWrite
+            ? "Toggle rules, change their severity, and edit regex patterns."
+            : "Read only. Changing rules requires the editor role."}
         </p>
       </div>
 
       {data && (
-        <FilterCard
-          initial={data.filters}
-          onSave={(f) => filtersMutation.mutate(f)}
-          saving={filtersMutation.isPending}
-          error={filtersMutation.error}
-        />
+        // A disabled fieldset makes every control inside read-only for viewers
+        <fieldset disabled={!canWrite} className="m-0 min-w-0 border-0 p-0">
+          <FilterCard
+            initial={data.filters}
+            onSave={(f) => filtersMutation.mutate(f)}
+            saving={filtersMutation.isPending}
+            error={filtersMutation.error}
+          />
+        </fieldset>
       )}
       {isPending && (
         <div className="space-y-2">
@@ -217,94 +268,161 @@ function ResourceConfigPage() {
         </div>
       )}
 
-      {data &&
-        CATEGORY_ORDER.map((category) => {
-          const entries = Object.entries(data.rules).filter(
-            ([, rule]) => rule.category === category
-          )
-          if (entries.length === 0) return null
+      {data && (
+        <div className="mx-auto mt-4 flex max-w-6xl flex-wrap items-center gap-3">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search rules by name or description…"
+            className="h-9 w-full sm:w-96"
+          />
+          <Select
+            value={stateFilter}
+            onValueChange={(value) => setStateFilter(value as StateFilter)}
+          >
+            <SelectTrigger className="h-9 w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All rules</SelectItem>
+              <SelectItem value="enabled">Enabled only</SelectItem>
+              <SelectItem value="disabled">Disabled only</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-muted-foreground">
+            {enabledCount} of {allRules.length} rules enabled
+            {visibleRules.length !== allRules.length &&
+              ` · ${visibleRules.length} shown`}
+          </p>
+        </div>
+      )}
 
-          return (
-            <section
-              key={category}
-              className="mx-auto max-w-6xl space-y-2 rounded-xl border bg-sidebar-accent/20 px-1 pt-5"
-            >
-              <h2
-                className={cn(
-                  "px-4 py-2 text-xs font-medium tracking-wide text-muted-foreground capitalize",
-                  category === "privacy"
-                    ? "text-rose-500"
-                    : category === "completeness"
-                      ? "text-orange-500"
-                      : "text-blue-500"
-                )}
+      {data && visibleRules.length === 0 && (
+        <p className="mx-auto max-w-6xl py-6 text-center text-sm text-muted-foreground">
+          No rules match the current search.
+        </p>
+      )}
+
+      <fieldset
+        disabled={!canWrite}
+        className="m-0 min-w-0 space-y-6 border-0 p-0"
+      >
+        {data &&
+          CATEGORY_ORDER.map((category) => {
+            const entries = visibleRules.filter(
+              ([, rule]) => rule.category === category
+            )
+            if (entries.length === 0) return null
+            const keys = entries.map(([key]) => key)
+            const allOn = entries.every(([, rule]) => rule.enabled)
+            const allOff = entries.every(([, rule]) => !rule.enabled)
+
+            return (
+              <section
+                key={category}
+                className="mx-auto max-w-6xl space-y-2 rounded-xl border bg-sidebar-accent/20 px-1 pt-5"
               >
-                {CATEGORY_LABEL[category] ?? category}
-              </h2>
-              <div className="divide-y overflow-hidden rounded-xl border bg-accent">
-                {entries.map(([key, rule]) => (
-                  <div key={key} className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-1">
-                        <p className="font-medium">{humanize(key)}</p>
-                        {rule.description && (
-                          <p className="text-sm text-pretty text-muted-foreground">
-                            {rule.description}
-                          </p>
+                <div className="flex items-center justify-between gap-2 px-4 py-2">
+                  <h2
+                    className={cn(
+                      "text-xs font-medium tracking-wide capitalize",
+                      CATEGORY_COLOR[category] ?? "text-muted-foreground"
+                    )}
+                  >
+                    {CATEGORY_LABEL[category] ?? category}
+                    <span className="ml-2 text-muted-foreground">
+                      {entries.filter(([, rule]) => rule.enabled).length}/
+                      {entries.length}
+                    </span>
+                  </h2>
+                  {canWrite && (
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={allOn || bulkMutation.isPending}
+                        onClick={() => setEnabled(keys, true)}
+                      >
+                        Enable all
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={allOff || bulkMutation.isPending}
+                        onClick={() => setEnabled(keys, false)}
+                      >
+                        Disable all
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <div className="divide-y overflow-hidden rounded-xl border bg-accent">
+                  {entries.map(([key, rule]) => (
+                    <div key={key} className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <p className="font-medium">{humanize(key)}</p>
+                          {rule.description && (
+                            <p className="text-sm text-pretty text-muted-foreground">
+                              {rule.description}
+                            </p>
+                          )}
+                        </div>
+                        <Switch
+                          checked={rule.enabled}
+                          onCheckedChange={(value) =>
+                            patch(key, { enabled: value })
+                          }
+                          aria-label={`Enable ${humanize(key)}`}
+                        />
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <Select
+                          value={rule.severity}
+                          onValueChange={(value) =>
+                            patch(key, { severity: value as Severity })
+                          }
+                        >
+                          <SelectTrigger
+                            className={cn(
+                              "h-8 w-32",
+                              SEVERITY_TEXT[rule.severity]
+                            )}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="error">Error</SelectItem>
+                            <SelectItem value="warning">Warning</SelectItem>
+                            <SelectItem value="info">Info</SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        {rule.pattern != null && (
+                          <Input
+                            key={`${key}-${rule.pattern}`}
+                            defaultValue={rule.pattern}
+                            placeholder="Regex pattern"
+                            spellCheck={false}
+                            className="h-8 w-full max-w-xs font-mono text-xs"
+                            onBlur={(e) => {
+                              const next = e.target.value
+                              if (next !== rule.pattern)
+                                patch(key, { pattern: next })
+                            }}
+                          />
                         )}
                       </div>
-                      <Switch
-                        checked={rule.enabled}
-                        onCheckedChange={(value) =>
-                          patch(key, { enabled: value })
-                        }
-                        aria-label={`Enable ${humanize(key)}`}
-                      />
                     </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-3">
-                      <Select
-                        value={rule.severity}
-                        onValueChange={(value) =>
-                          patch(key, { severity: value as Severity })
-                        }
-                      >
-                        <SelectTrigger
-                          className={cn(
-                            "h-8 w-32",
-                            SEVERITY_TEXT[rule.severity]
-                          )}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="error">Error</SelectItem>
-                          <SelectItem value="warning">Warning</SelectItem>
-                          <SelectItem value="info">Info</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      {rule.pattern != null && (
-                        <Input
-                          key={`${key}-${rule.pattern}`}
-                          defaultValue={rule.pattern}
-                          placeholder="Regex pattern"
-                          spellCheck={false}
-                          className="h-8 w-full max-w-xs font-mono text-xs"
-                          onBlur={(e) => {
-                            const next = e.target.value
-                            if (next !== rule.pattern)
-                              patch(key, { pattern: next })
-                          }}
-                        />
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )
-        })}
+                  ))}
+                </div>
+              </section>
+            )
+          })}
+      </fieldset>
     </div>
   )
 }
