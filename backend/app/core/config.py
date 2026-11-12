@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     # Comma-separated hosts Verity may connect to as FHIR server or token
-    # endpoint, e.g. "fhir.example.org,*.diz.example.org". Empty = any host.
+    # endpoint, e.g. "fhir.example.org,*.diz.example.org".
     FHIR_ALLOWED_HOSTS: str = ""
 
     # --- FHIR reports (TestScript / TestReport / List) ---
