@@ -22,6 +22,16 @@ class FhirServerCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ServerAccessUser(BaseModel):
+    """A user who can see a server, and why: owner, admin or shared member."""
+
+    user_id: UUID
+    username: str | None = None
+    full_name: str | None = None
+    role: str
+    access: Literal["owner", "admin", "member"]
+
+
 class FhirServerRead(BaseModel):
     """Schema for reading a FHIR server."""
 
@@ -37,6 +47,8 @@ class FhirServerRead(BaseModel):
     # What the requesting user may do on this server
     can_write: bool = False
     can_manage: bool = False
+    # Everyone who can see this server: owner first, then admins, then members
+    access_users: list[ServerAccessUser] = []
     created_at: datetime
     updated_at: datetime
 

@@ -3,6 +3,7 @@ API endpoints for managing FHIR Servers.
 """
 
 import asyncio
+from collections.abc import Sequence
 from time import monotonic
 from uuid import UUID
 
@@ -12,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import (
     DEV_USER_SUB,
@@ -33,6 +35,7 @@ from app.schemas.server import (
     FhirServerUpdate,
     ResourceCount,
     ServerAuthRead,
+    ServerAccessUser,
     ServerAuthUpdate,
     ServerMemberCreate,
     ServerMemberRead,
@@ -44,6 +47,7 @@ from app.services.fhir_auth import build_httpx_auth, normalize_auth_config
 from app.services.url_policy import check_outbound_url, same_origin
 
 router = APIRouter()
+settings = get_settings()
 
 manage_access = server_access(UserRole.editor.value, manage=True)
 
@@ -55,7 +59,73 @@ def _check_url(url: str) -> None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
 
-def _to_read(server: FhirServer, user: User) -> FhirServerRead:
+def _access_list(
+    owner: User | None, admins: Sequence[User], members: Sequence[User]
+) -> list[ServerAccessUser]:
+    """Owner first, then admins, then members; each user is listed once."""
+    entries: list[ServerAccessUser] = []
+    seen: set[UUID] = set()
+    groups = (
+        ([owner] if owner else [], "owner"),
+        (admins, "admin"),
+        (members, "member"),
+    )
+    for users, access in groups:
+        for u in users:
+            if u.id in seen:
+                continue
+            seen.add(u.id)
+            entries.append(
+                ServerAccessUser(
+                    user_id=u.id,
+                    username=u.username,
+                    full_name=u.full_name,
+                    role=u.role,
+                    access=access,
+                )
+            )
+    return entries
+
+
+async def _access_users(
+    db: AsyncSession, servers: Sequence[FhirServer]
+) -> dict[UUID, list[ServerAccessUser]]:
+    """Who can see each server. Three queries, however many servers."""
+    if not servers:
+        return {}
+
+    admin_stmt = select(User).where(User.role == UserRole.admin.value)
+    if settings.AUTH_ENABLED:
+        admin_stmt = admin_stmt.where(User.keycloak_sub != DEV_USER_SUB)
+    admins = (await db.execute(admin_stmt.order_by(User.username))).scalars().all()
+
+    owner_ids = {s.owner_id for s in servers if s.owner_id}
+    owners: dict[UUID, User] = {}
+    if owner_ids:
+        rows = await db.execute(select(User).where(User.id.in_(owner_ids)))
+        owners = {u.id: u for u in rows.scalars().all()}
+
+    members: dict[UUID, list[User]] = {}
+    member_rows = await db.execute(
+        select(ServerMember.server_id, User)
+        .join(User, User.id == ServerMember.user_id)
+        .where(ServerMember.server_id.in_([s.id for s in servers]))
+        .order_by(User.username)
+    )
+    for server_id, u in member_rows.all():
+        members.setdefault(server_id, []).append(u)
+
+    return {
+        s.id: _access_list(owners.get(s.owner_id), admins, members.get(s.id, []))
+        for s in servers
+    }
+
+
+def _to_read(
+    server: FhirServer,
+    user: User,
+    access_users: list[ServerAccessUser] | None = None,
+) -> FhirServerRead:
     cfg = normalize_auth_config(server.auth_config)
     return FhirServerRead(
         id=server.id,
@@ -69,6 +139,7 @@ def _to_read(server: FhirServer, user: User) -> FhirServerRead:
         owner_id=server.owner_id,
         can_write=has_role(user, UserRole.editor.value),
         can_manage=can_manage_server(server, user),
+        access_users=access_users or [],
         created_at=server.created_at,
         updated_at=server.updated_at,
     )
@@ -105,7 +176,8 @@ async def create_fhir_server(
     db.add(new_server)
     await db.commit()
     await db.refresh(new_server)
-    return _to_read(new_server, user)
+    access = await _access_users(db, [new_server])
+    return _to_read(new_server, user, access[new_server.id])
 
 
 @router.get("/servers", response_model=list[FhirServerRead])
@@ -121,8 +193,9 @@ async def list_fhir_servers(
     if clause is not None:
         stmt = stmt.where(clause)
     stmt = stmt.offset(skip).limit(min(limit, 500))
-    result = await db.execute(stmt)
-    return [_to_read(s, user) for s in result.scalars().all()]
+    servers = (await db.execute(stmt)).scalars().all()
+    access = await _access_users(db, servers)
+    return [_to_read(s, user, access[s.id]) for s in servers]
 
 
 @router.patch(
@@ -177,7 +250,8 @@ async def update_fhir_server(
         ) from exc
 
     await db.refresh(server)
-    return _to_read(server, user)
+    access = await _access_users(db, [server])
+    return _to_read(server, user, access[server.id])
 
 
 @router.delete(
@@ -462,9 +536,11 @@ async def remove_server_member(
 async def get_fhir_server(
     server: FhirServer = Depends(server_access()),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Single FHIR server details."""
-    return _to_read(server, user)
+    access = await _access_users(db, [server])
+    return _to_read(server, user, access[server.id])
 
 
 @router.get("/servers/{server_id}/metadata", response_model=ServerMetadata)

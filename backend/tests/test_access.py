@@ -32,3 +32,17 @@ def test_viewer_owner_cannot_manage():
     owner = _user("viewer")
     server = FhirServer(id=uuid.uuid4(), owner_id=owner.id)
     assert not can_manage_server(server, owner)
+
+
+def test_access_list_owner_admins_members_once_each():
+    from app.api.v1.endpoints.servers import _access_list
+
+    owner, admin, member = _user("editor"), _user("admin"), _user("viewer")
+    # The owner and an admin are also members; each appears only once
+    entries = _access_list(owner, [admin], [owner, admin, member])
+    assert [(e.user_id, e.access) for e in entries] == [
+        (owner.id, "owner"),
+        (admin.id, "admin"),
+        (member.id, "member"),
+    ]
+    assert [e.access for e in _access_list(None, [], [member])] == ["member"]
