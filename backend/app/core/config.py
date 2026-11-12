@@ -62,9 +62,7 @@ class Settings(BaseSettings):
     # Name shown as publisher/tester in every report.
     FHIR_REPORT_PUBLISHER: str = "FHIR Verity"
     # Canonical base for TestScript.url, identifier systems and extensionURLs.
-    VERITY_CANONICAL_BASE: str = (
-        "https://mirgitlab.med.uni-giessen.de/povoc1/fhir-verity"
-    )
+    VERITY_CANONICAL_BASE: str = "https://github.com/diz-giessen/fhir-verity"
 
     @model_validator(mode="after")
     def _check_auth(self) -> "Settings":

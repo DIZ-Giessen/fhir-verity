@@ -2,7 +2,7 @@
 // Set VITE_API_URL only for split-origin development.
 const PROJECT_URL: string =
   import.meta.env.VITE_PROJECT_URL ??
-  "https://github.com/fhir-verity/fhir-verity"
+  "https://github.com/DIZ-Giessen/fhir-verity"
 
 export const env = {
   API_URL: import.meta.env.VITE_API_URL ?? "",
