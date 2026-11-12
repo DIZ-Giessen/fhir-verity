@@ -26,21 +26,21 @@
 
 services:
   # --- Weg B: mitgelieferte Datenbank (einkommentieren) ----------------------
-  db:
-    image: postgres:17
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-    # kein "ports:" - die Datenbank ist nur für das Backend im Compose-Netz erreichbar
+  # db:
+  #   image: postgres:17
+  #   environment:
+  #     POSTGRES_USER: ${POSTGRES_USER}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #     POSTGRES_DB: ${POSTGRES_DB}
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
+  #   restart: unless-stopped
+  #   # kein "ports:" - die Datenbank ist nur für das Backend im Compose-Netz erreichbar
 
   backend:
     build: ./backend
@@ -48,9 +48,9 @@ services:
     expose:
       - "8000"
     # --- Weg B: erst starten, wenn die Datenbank bereit ist (einkommentieren)
-    depends_on:
-      db:
-        condition: service_healthy
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -83,4 +83,4 @@ volumes:
   caddy_data:
   caddy_config:
   # --- Weg B: Datenbank-Volume (einkommentieren)
-  pgdata:
+  # pgdata:
